@@ -1,14 +1,14 @@
 _base_ = [
-    './_base_/models/cascade-rcnn_r50_fpn.py',
-    './_base_/datasets/coco_detection.py',
-    './_base_/schedules/schedule_2x.py',
-    './_base_/default_runtime.py'
+    '../_base_/models/cascade-rcnn_r50_fpn.py',
+    '../_base_/datasets/coco_detection.py',
+    '../_base_/schedules/schedule_2x.py',
+    '../_base_/default_runtime.py'
 ]
 
-# Enhanced COCO dataset (UWNR output) - 修改为你的实际路径
-data_root = '/path/to/data/coco_uwnr/'
-train_ann = data_root + 'annotations/instances_train50k_uwnr.json'
-test_ann = data_root + 'annotations/instances_val.json'
+# Enhanced COCO dataset (UWNR output)
+data_root = '/media/HDD0/XCX/COCO/coco_convert_uwnr/'
+train_ann = data_root + 'annotations/instances_train50000.json'
+test_ann = '/media/HDD0/XCX/COCO/annotations/instances_val2017.json'
 num_classes = 80
 
 # Override bbox head num_classes from base (base has 80)

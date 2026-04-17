@@ -6,9 +6,9 @@ _base_ = [
 ]
 
 # RUOD dataset
-data_root = '/media/HDD0/XCX/RUOD/'
-train_ann = '/media/HDD0/XCX/Environmet_ANN/instances_train.json'
-test_ann = '/media/HDD0/XCX/Environmet_ANN/instances_test.json'
+data_root = '/media/HDD0/XCX/RUOD/RUOD_pic/'
+train_ann = '/media/HDD0/XCX/RUOD/RUOD_ANN/instances_train.json'
+test_ann = '/media/HDD0/XCX/RUOD/RUOD_ANN/instances_test.json'
 classes = [
     'holothurian', 'echinus', 'scallop', 'starfish', 'fish', 'corals',
     'diver', 'cuttlefish', 'turtle', 'jellyfish'

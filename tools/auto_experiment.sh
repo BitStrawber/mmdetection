@@ -35,6 +35,7 @@ COCO_IMG="/media/HDD0/XCX/COCO/train2017"
 COCO_UWNR_DIR="/media/HDD0/XCX/COCO/coco_uwnr"
 COCO_CONVERT_DIR="/media/HDD0/XCX/COCO/coco_convert_uwnr"
 UWNR_MODEL="/home/fcp/xcx/UWNR/UWNR.pk"
+RUOD_IMG_DIR="/media/HDD0/XCX/RUOD/RUOD_pic/train"
 
 # 环境名称
 UWNR_ENV="uwnr"
@@ -160,6 +161,7 @@ wait_uwnr_complete() {
     log "      --output-dir ${COCO_CONVERT_DIR} \\"
     log "      --uwnr-dir ${UWNR_DIR} \\"
     log "      --uwnr-model ${UWNR_MODEL} \\"
+    log "      --uw-img-dir ${RUOD_IMG_DIR} \\"
     log "      --gpu 6 --start 0 --end 25000 &"
     log ""
     log "  # 进程2: GPU 7, 后25000张"
@@ -169,6 +171,7 @@ wait_uwnr_complete() {
     log "      --output-dir ${COCO_CONVERT_DIR} \\"
     log "      --uwnr-dir ${UWNR_DIR} \\"
     log "      --uwnr-model ${UWNR_MODEL} \\"
+    log "      --uw-img-dir ${RUOD_IMG_DIR} \\"
     log "      --gpu 7 --start 25000 --end 50000 &"
     log ""
     

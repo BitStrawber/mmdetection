@@ -112,3 +112,9 @@ data = dict(
 # LR: 8 GPUs, total BS=16
 auto_scale_lr = dict(enable=False, base_batch_size=16)
 evaluation = dict(interval=1, save_best='auto', classwise=True)
+
+# 调整学习率（BS=8时，LR=0.01）
+optim_wrapper = dict(
+    type='OptimWrapper',
+    optimizer=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+)

@@ -111,3 +111,8 @@ data = dict(
 
 auto_scale_lr = dict(enable=False, base_batch_size=16)
 evaluation = dict(interval=1, save_best='auto', classwise=True)
+
+optim_wrapper = dict(
+    type='OptimWrapper',
+    optimizer=dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+)

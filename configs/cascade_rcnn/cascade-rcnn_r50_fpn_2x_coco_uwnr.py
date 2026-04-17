@@ -66,12 +66,15 @@ data = dict(
     samples_per_gpu=2,
     workers_per_gpu=4,
     train=dict(
+        type='CocoDataset',
         ann_file=train_ann,
         img_prefix=data_root + 'images/'),
     val=dict(
+        type='CocoDataset',
         ann_file=test_ann,
         img_prefix=data_root + 'images/'),
     test=dict(
+        type='CocoDataset',
         ann_file=test_ann,
         img_prefix=data_root + 'images/'))
 

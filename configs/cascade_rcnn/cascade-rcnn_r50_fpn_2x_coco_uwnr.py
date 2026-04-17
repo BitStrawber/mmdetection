@@ -71,11 +71,11 @@ data = dict(
     val=dict(
         type='CocoDataset',
         ann_file=test_ann,
-        img_prefix=data_root + 'images/'),
+        img_prefix='/media/HDD0/XCX/COCO/val2017/'),
     test=dict(
         type='CocoDataset',
         ann_file=test_ann,
-        img_prefix=data_root + 'images/'))
+        img_prefix='/media/HDD0/XCX/COCO/val2017/'))
 
 auto_scale_lr = dict(enable=False, base_batch_size=16)
 evaluation = dict(interval=1, save_best='auto', classwise=True)

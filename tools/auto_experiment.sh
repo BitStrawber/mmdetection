@@ -1,6 +1,9 @@
 #!/bin/bash
 # =============================================================================
 # auto_experiment.sh - 自动化UWNR转换 + 实验A/B全流程
+#
+# 重要：使用前请修改下方的"配置区域"路径
+#
 # 
 # 功能：
 #   1. 监控UWNR转换进度（使用GPU 6,7）
@@ -48,6 +51,34 @@ STATUS_FILE="${WORK_DIR}/experiment_status.json"
 
 # 创建workspace目录
 mkdir -p "${WORK_DIR}"
+
+# ======================== Conda初始化 ========================
+# 自动检测conda路径并初始化
+if [ -z "$CONDA_EXE" ]; then
+    # 尝试常见conda安装位置
+    if [ -f "$HOME/anaconda3/etc/profile.d/conda.sh" ]; then
+        source "$HOME/anaconda3/etc/profile.d/conda.sh"
+    elif [ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]; then
+        source "$HOME/miniconda3/etc/profile.d/conda.sh"
+    elif [ -f "/media/SSD1/conda_envs/etc/profile.d/conda.sh" ]; then
+        source "/media/SSD1/conda_envs/etc/profile.d/conda.sh"
+    elif [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
+        source "/opt/conda/etc/profile.d/conda.sh"
+    else
+        log "错误: 无法找到conda安装，请手动修改脚本添加conda.sh路径"
+        exit 1
+    fi
+fi
+
+# 激活环境的辅助函数
+activate_env() {
+    local env_name=$1
+    log "激活conda环境: ${env_name}"
+    conda activate "${env_name}" || {
+        log "错误: 无法激活环境 ${env_name}"
+        exit 1
+    }
+}
 mkdir -p "${WORK_DIR}/logs"
 mkdir -p "${WORK_DIR}/results"
 
@@ -108,93 +139,59 @@ wait_gpu_free() {
     done
 }
 
-# ======================== 阶段1: UWNR转换 ========================
-run_uwnr_conversion() {
-    log "========== 阶段1: UWNR数据转换 =========="
+# ======================== 阶段1: 监控UWNR转换 ========================
+wait_uwnr_complete() {
+    log "========== 阶段1: 监控UWNR数据转换 =========="
     
     # 检查是否已完成
     if check_uwnr_complete; then
-        log "UWNR转换已完成，跳过"
+        log "UWNR转换已完成"
         save_status "UWNRDONE"
         return 0
     fi
     
-    # 步骤1.1: 抽样50k COCO图片
-    if [ ! -f "${COCO_UWNR_DIR}/annotations/instances_train50000.json" ]; then
-        log "开始抽样50k COCO图片..."
-        cd "${UWNR_DIR}" || exit 1
-        
-        conda activate "${UWNR_ENV}"
-        python sample_coco.py \
-            --ann "${COCO_ANN}" \
-            --img-dir "${COCO_IMG}" \
-            --output-dir "${COCO_UWNR_DIR}" \
-            --num 50000 \
-            2>&1 | tee "${WORK_DIR}/logs/01_sample_coco.log"
-        
-        conda deactivate
-        log "抽样完成"
-    else
-        log "抽样文件已存在，跳过"
-    fi
+    log "请手动启动UWNR转换（使用GPU 6,7），脚本将自动检测完成状态"
+    log ""
+    log "手动启动命令示例（在UWNR目录下，激活uwnr环境后执行）："
+    log "  # 进程1: GPU 6, 前25000张"
+    log "  CUDA_VISIBLE_DEVICES=6 python convert_coco_uwnr.py \\"
+    log "      --ann ${COCO_UWNR_DIR}/annotations/instances_train50000.json \\"
+    log "      --img-dir ${COCO_UWNR_DIR}/images \\"
+    log "      --output-dir ${COCO_CONVERT_DIR} \\"
+    log "      --uwnr-dir ${UWNR_DIR} \\"
+    log "      --uwnr-model ${UWNR_MODEL} \\"
+    log "      --gpu 6 --start 0 --end 25000 &"
+    log ""
+    log "  # 进程2: GPU 7, 后25000张"
+    log "  CUDA_VISIBLE_DEVICES=7 python convert_coco_uwnr.py \\"
+    log "      --ann ${COCO_UWNR_DIR}/annotations/instances_train50000.json \\"
+    log "      --img-dir ${COCO_UWNR_DIR}/images \\"
+    log "      --output-dir ${COCO_CONVERT_DIR} \\"
+    log "      --uwnr-dir ${UWNR_DIR} \\"
+    log "      --uwnr-model ${UWNR_MODEL} \\"
+    log "      --gpu 7 --start 25000 --end 50000 &"
+    log ""
     
-    # 步骤1.2: UWNR转换（使用GPU 6,7双进程）
-    log "开始UWNR转换（双GPU并行）..."
-    cd "${UWNR_DIR}" || exit 1
-    
-    conda activate "${UWNR_ENV}"
-    
-    # 进程1: GPU 6, 前25000张
-    log "启动UWNR进程1 (GPU 6, 0-25000)..."
-    CUDA_VISIBLE_DEVICES=6 python convert_coco_uwnr.py \
-        --ann "${COCO_UWNR_DIR}/annotations/instances_train50000.json" \
-        --img-dir "${COCO_UWNR_DIR}/images" \
-        --output-dir "${COCO_CONVERT_DIR}" \
-        --uwnr-dir "${UWNR_DIR}" \
-        --uwnr-model "${UWNR_MODEL}" \
-        --gpu 6 \
-        --start 0 --end 25000 \
-        2>&1 | tee "${WORK_DIR}/logs/02_uwnr_gpu6.log" &
-    UWNR_PID1=$!
-    
-    # 进程2: GPU 7, 后25000张
-    log "启动UWNR进程2 (GPU 7, 25000-50000)..."
-    CUDA_VISIBLE_DEVICES=7 python convert_coco_uwnr.py \
-        --ann "${COCO_UWNR_DIR}/annotations/instances_train50000.json" \
-        --img-dir "${COCO_UWNR_DIR}/images" \
-        --output-dir "${COCO_CONVERT_DIR}" \
-        --uwnr-dir "${UWNR_DIR}" \
-        --uwnr-model "${UWNR_MODEL}" \
-        --gpu 7 \
-        --start 25000 --end 50000 \
-        2>&1 | tee "${WORK_DIR}/logs/03_uwnr_gpu7.log" &
-    UWNR_PID2=$!
-    
-    conda deactivate
-    
-    # 监控转换进度
-    log "监控UWNR转换进度..."
+    # 持续监控进度
+    log "等待UWNR转换完成..."
+    local check_count=0
     while true; do
-        sleep 300  # 每5分钟检查一次
-        
-        if ! ps -p $UWNR_PID1 > /dev/null 2>&1 && ! ps -p $UWNR_PID2 > /dev/null 2>&1; then
-            log "UWNR进程均已结束"
-            break
-        fi
+        sleep 60  # 每分钟检查一次
+        check_count=$((check_count + 1))
         
         local current_count=$(ls -1 "${COCO_CONVERT_DIR}/images" 2>/dev/null | wc -l)
-        log "UWNR进度: ${current_count}/50000"
+        
+        # 每10分钟显示一次详细进度
+        if [ $((check_count % 10)) -eq 0 ]; then
+            log "UWNR进度: ${current_count}/50000 (已等待 $((check_count/60)) 小时)"
+        fi
+        
+        if check_uwnr_complete; then
+            log "UWNR转换完成！共转换 50000 张图片"
+            save_status "UWNRDONE"
+            return 0
+        fi
     done
-    
-    # 验证完成
-    if check_uwnr_complete; then
-        log "UWNR转换完成！"
-        save_status "UWNRDONE"
-        return 0
-    else
-        log "UWNR转换未完成，请检查日志"
-        return 1
-    fi
 }
 
 # ======================== 阶段2: 实验A ========================
@@ -202,7 +199,7 @@ run_experiment_a() {
     log "========== 阶段2: 实验A (ImageNet+RUOD) =========="
     
     cd "${MMDET_DIR}" || exit 1
-    conda activate "${MMDET_ENV}"
+    activate_env "${MMDET_ENV}"
     
     # 等待GPU空闲
     log "等待GPU ${GPU_TRAIN} 空闲..."
@@ -220,7 +217,7 @@ run_experiment_a() {
         2>&1 | tee "${WORK_DIR}/logs/04_expA_train.log"
     
     local exit_code=$?
-    conda deactivate
+    conda deactivate || true
     
     if [ $exit_code -eq 0 ]; then
         log "实验A训练完成"
@@ -234,7 +231,7 @@ run_experiment_a() {
         
         # 运行测试
         log "开始实验A测试..."
-        conda activate "${MMDET_ENV}"
+        activate_env "${MMDET_ENV}"
         CUDA_VISIBLE_DEVICES="${GPU_TRAIN}" \
         python tools/test.py \
             configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py \
@@ -242,7 +239,7 @@ run_experiment_a() {
             --eval bbox \
             --cfg-options model.init_cfg=None \
             2>&1 | tee "${WORK_DIR}/logs/05_expA_test.log"
-        conda deactivate
+        conda deactivate || true
         
         save_status "EXPADONE"
         return 0
@@ -257,7 +254,7 @@ run_experiment_b1() {
     log "========== 阶段3: 实验B-1 (COCO-UWNR预训练) =========="
     
     cd "${MMDET_DIR}" || exit 1
-    conda activate "${MMDET_ENV}"
+    activate_env "${MMDET_ENV}"
     
     # 等待GPU空闲
     for gpu in $(echo $GPU_TRAIN | tr ',' ' '); do
@@ -274,7 +271,7 @@ run_experiment_b1() {
         2>&1 | tee "${WORK_DIR}/logs/06_expB1_train.log"
     
     local exit_code=$?
-    conda deactivate
+    conda deactivate || true
     
     if [ $exit_code -eq 0 ]; then
         log "实验B-1训练完成"
@@ -299,7 +296,7 @@ extract_backbone() {
     log "========== 阶段4: 提取Backbone权重 =========="
     
     cd "${MMDET_DIR}" || exit 1
-    conda activate "${MMDET_ENV}"
+    activate_env "${MMDET_ENV}"
     
     local input_weight="${MMDET_DIR}/work_dirs/cascade-rcnn_r50_fpn_2x_coco_uwnr/latest.pth"
     local output_dir="${MMDET_DIR}/work_dirs/cascade-rcnn_r50_fpn_2x_coco_uwnr"
@@ -331,7 +328,7 @@ run_experiment_b3() {
     log "========== 阶段5: 实验B-3 (COCO-UWNR+RUOD微调) =========="
     
     cd "${MMDET_DIR}" || exit 1
-    conda activate "${MMDET_ENV}"
+    activate_env "${MMDET_ENV}"
     
     # 等待GPU空闲
     for gpu in $(echo $GPU_TRAIN | tr ',' ' '); do
@@ -348,7 +345,7 @@ run_experiment_b3() {
         2>&1 | tee "${WORK_DIR}/logs/08_expB3_train.log"
     
     local exit_code=$?
-    conda deactivate
+    conda deactivate || true
     
     if [ $exit_code -eq 0 ]; then
         log "实验B-3训练完成"
@@ -362,7 +359,7 @@ run_experiment_b3() {
         
         # 运行测试
         log "开始实验B-3测试..."
-        conda activate "${MMDET_ENV}"
+        activate_env "${MMDET_ENV}"
         CUDA_VISIBLE_DEVICES="${GPU_TRAIN}" \
         python tools/test.py \
             configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain.py \
@@ -370,7 +367,7 @@ run_experiment_b3() {
             --eval bbox \
             --cfg-options model.init_cfg=None \
             2>&1 | tee "${WORK_DIR}/logs/09_expB3_test.log"
-        conda deactivate
+        conda deactivate || true
         
         save_status "EXPB3DONE"
         return 0
@@ -434,7 +431,7 @@ main() {
     # 状态机
     case "$status" in
         "INIT"|"")
-            run_uwnr_conversion && run_experiment_a && run_experiment_b1 && extract_backbone && run_experiment_b3 && summarize_results
+            wait_uwnr_complete && run_experiment_a && run_experiment_b1 && extract_backbone && run_experiment_b3 && summarize_results
             ;;
         "UWNRDONE")
             run_experiment_a && run_experiment_b1 && extract_backbone && run_experiment_b3 && summarize_results
@@ -451,12 +448,9 @@ main() {
         "EXPB3DONE")
             summarize_results
             ;;
-        "ALLDONE")
-            log "所有实验已完成！"
-            ;;
         *)
             log "未知状态: ${status}，从头开始"
-            run_uwnr_conversion && run_experiment_a && run_experiment_b1 && extract_backbone && run_experiment_b3 && summarize_results
+            wait_uwnr_complete && run_experiment_a && run_experiment_b1 && extract_backbone && run_experiment_b3 && summarize_results
             ;;
     esac
     

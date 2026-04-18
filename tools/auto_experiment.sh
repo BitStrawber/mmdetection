@@ -15,6 +15,7 @@ COCO_CONVERT_DIR="/media/HDD0/XCX/COCO/coco_convert_uwnr"
 MMDET_DIR="/home/fcp/xcx/mmdetection"
 RUOD_ANN="/media/HDD0/XCX/RUOD/RUOD_ANN"
 NUM_GPUS=2
+GPU_IDS="6,7"
 
 LOG_DIR="${WORK_DIR}/logs"
 RESULT_DIR="${WORK_DIR}/results"
@@ -54,7 +55,7 @@ run_experiment_a() {
     log "========== 阶段2: 实验A (ImageNet+RUOD baseline) =========="
     cd "${MMDET_DIR}" || exit 1
 
-    bash tools/dist_train.sh \
+    CUDA_VISIBLE_DEVICES=${GPU_IDS} bash tools/dist_train.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py \
         ${NUM_GPUS} \
         --work-dir work_dirs/cascade-rcnn_r50_fpn_2x_ruod \
@@ -69,7 +70,7 @@ run_experiment_a() {
        "${RESULT_DIR}/expA_best.pth" 2>/dev/null || true
 
     log "实验A测试..."
-    bash tools/dist_test.sh \
+    CUDA_VISIBLE_DEVICES=${GPU_IDS} bash tools/dist_test.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py \
         work_dirs/cascade-rcnn_r50_fpn_2x_ruod/best_coco_bbox_mAP*.pth \
         ${NUM_GPUS} \
@@ -83,7 +84,7 @@ run_experiment_b1() {
     log "========== 阶段3: 实验B-1 (COCO-UWNR预训练) =========="
     cd "${MMDET_DIR}" || exit 1
 
-    bash tools/dist_train.sh \
+    CUDA_VISIBLE_DEVICES=${GPU_IDS} bash tools/dist_train.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_coco_uwnr.py \
         ${NUM_GPUS} \
         --work-dir work_dirs/cascade-rcnn_r50_fpn_2x_coco_uwnr \
@@ -125,7 +126,7 @@ run_experiment_b3() {
     log "========== 阶段5: 实验B-3 (COCO-UWNR+RUOD微调) =========="
     cd "${MMDET_DIR}" || exit 1
 
-    bash tools/dist_train.sh \
+    CUDA_VISIBLE_DEVICES=${GPU_IDS} bash tools/dist_train.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain.py \
         ${NUM_GPUS} \
         --work-dir work_dirs/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain \
@@ -140,7 +141,7 @@ run_experiment_b3() {
        "${RESULT_DIR}/expB3_best.pth" 2>/dev/null || true
 
     log "实验B-3测试..."
-    bash tools/dist_test.sh \
+    CUDA_VISIBLE_DEVICES=${GPU_IDS} bash tools/dist_test.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain.py \
         work_dirs/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain/best_coco_bbox_mAP*.pth \
         ${NUM_GPUS} \
@@ -172,6 +173,7 @@ summarize() {
 log "========================================"
 log "自动化实验脚本启动"
 log "工作目录: ${WORK_DIR}"
+log "GPU: ${GPU_IDS} (${NUM_GPUS}卡)"
 log "========================================"
 
 wait_uwnr_complete && \

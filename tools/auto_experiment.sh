@@ -14,6 +14,7 @@ WORK_DIR="/home/fcp/xcx/experiment_workspace"
 COCO_CONVERT_DIR="/media/HDD0/XCX/COCO/coco_convert_uwnr"
 MMDET_DIR="/home/fcp/xcx/mmdetection"
 RUOD_ANN="/media/HDD0/XCX/RUOD/RUOD_ANN"
+NUM_GPUS=2
 
 LOG_DIR="${WORK_DIR}/logs"
 RESULT_DIR="${WORK_DIR}/results"
@@ -53,8 +54,9 @@ run_experiment_a() {
     log "========== 阶段2: 实验A (ImageNet+RUOD baseline) =========="
     cd "${MMDET_DIR}" || exit 1
 
-    python tools/train.py \
+    bash tools/dist_train.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py \
+        ${NUM_GPUS} \
         --work-dir work_dirs/cascade-rcnn_r50_fpn_2x_ruod \
         2>&1 | tee "${LOG_DIR}/02_expA_train.log"
 
@@ -67,9 +69,10 @@ run_experiment_a() {
        "${RESULT_DIR}/expA_best.pth" 2>/dev/null || true
 
     log "实验A测试..."
-    python tools/test.py \
+    bash tools/dist_test.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py \
         work_dirs/cascade-rcnn_r50_fpn_2x_ruod/best_coco_bbox_mAP*.pth \
+        ${NUM_GPUS} \
         --eval bbox --cfg-options model.init_cfg=None \
         2>&1 | tee "${LOG_DIR}/03_expA_test.log"
     log "实验A完成"
@@ -80,8 +83,9 @@ run_experiment_b1() {
     log "========== 阶段3: 实验B-1 (COCO-UWNR预训练) =========="
     cd "${MMDET_DIR}" || exit 1
 
-    python tools/train.py \
+    bash tools/dist_train.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_coco_uwnr.py \
+        ${NUM_GPUS} \
         --work-dir work_dirs/cascade-rcnn_r50_fpn_2x_coco_uwnr \
         2>&1 | tee "${LOG_DIR}/04_expB1_train.log"
 
@@ -121,8 +125,9 @@ run_experiment_b3() {
     log "========== 阶段5: 实验B-3 (COCO-UWNR+RUOD微调) =========="
     cd "${MMDET_DIR}" || exit 1
 
-    python tools/train.py \
+    bash tools/dist_train.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain.py \
+        ${NUM_GPUS} \
         --work-dir work_dirs/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain \
         2>&1 | tee "${LOG_DIR}/06_expB3_train.log"
 
@@ -135,9 +140,10 @@ run_experiment_b3() {
        "${RESULT_DIR}/expB3_best.pth" 2>/dev/null || true
 
     log "实验B-3测试..."
-    python tools/test.py \
+    bash tools/dist_test.sh \
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain.py \
         work_dirs/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain/best_coco_bbox_mAP*.pth \
+        ${NUM_GPUS} \
         --eval bbox --cfg-options model.init_cfg=None \
         2>&1 | tee "${LOG_DIR}/07_expB3_test.log"
     log "实验B-3完成"

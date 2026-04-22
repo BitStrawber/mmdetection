@@ -229,9 +229,9 @@ val_dataloader = dict(
     sampler=dict(type='DefaultSampler', shuffle=False),
     dataset=dict(
         type=dataset_type,
-        data_root='/media/HDD0/XCX/COCO/',
-        ann_file='annotations/instances_val2017.json',
-        data_prefix=dict(img='val2017/'),
+        data_root=data_root,
+        ann_file='annotations/instances_train50000.json',
+        data_prefix=dict(img='images/'),
         test_mode=True,
         pipeline=test_pipeline,
         backend_args=backend_args))
@@ -240,7 +240,7 @@ test_dataloader = val_dataloader
 
 val_evaluator = dict(
     type='CocoMetric',
-    ann_file='/media/HDD0/XCX/COCO/annotations/instances_val2017.json',
+    ann_file=data_root + 'annotations/instances_train50000.json',
     metric='bbox',
     format_only=False,
     backend_args=backend_args)

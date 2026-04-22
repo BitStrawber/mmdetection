@@ -273,7 +273,7 @@ param_scheduler = [
 
 optim_wrapper = dict(
     type='OptimWrapper',
-    optimizer=dict(type='SGD', lr=0.015, momentum=0.9, weight_decay=0.0001))
+    optimizer=dict(type='SGD', lr=0.002, momentum=0.9, weight_decay=0.0001))
 
 # 其他
 default_scope = 'mmdet'

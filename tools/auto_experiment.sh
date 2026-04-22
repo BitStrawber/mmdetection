@@ -74,7 +74,7 @@ run_experiment_a() {
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py \
         work_dirs/cascade-rcnn_r50_fpn_2x_ruod/best_coco_bbox_mAP*.pth \
         ${NUM_GPUS} \
-        --eval bbox --cfg-options model.init_cfg=None \
+        --cfg-options model.init_cfg=None \
         2>&1 | tee "${LOG_DIR}/03_expA_test.log"
     log "实验A完成"
 }
@@ -145,7 +145,7 @@ run_experiment_b3() {
         configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain.py \
         work_dirs/cascade-rcnn_r50_fpn_2x_ruod_uwnr_pretrain/best_coco_bbox_mAP*.pth \
         ${NUM_GPUS} \
-        --eval bbox --cfg-options model.init_cfg=None \
+        --cfg-options model.init_cfg=None \
         2>&1 | tee "${LOG_DIR}/07_expB3_test.log"
     log "实验B-3完成"
 }

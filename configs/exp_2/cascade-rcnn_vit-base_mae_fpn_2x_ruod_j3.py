@@ -9,12 +9,12 @@ data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 # 导入ViTDet模块
 custom_imports = dict(imports=['projects.ViTDet.vitdet'])
 
-# 修改backbone为ViT (使用_delete_完全替换)
+# 修改backbone为ViT (完全替换整个backbone)
 model = dict(
     backbone=dict(
         _delete_=True,
         type='ViT',
-        img_size=1024,
+        img_size=800,  # 减小image size
         patch_size=16,
         embed_dim=768,
         depth=12,
@@ -28,7 +28,15 @@ model = dict(
         use_rel_pos=True,
         init_cfg=dict(
             type='Pretrained', 
-            checkpoint='../pretrained_weights/mae_pretrain_vit_base.pth')))
+            checkpoint='../pretrained_weights/mae_pretrain_vit_base.pth')),
+    # 替换neck为适配ViT的SimpleFPN
+    neck=dict(
+        _delete_=True,
+        type='SimpleFPN',
+        backbone_channel=768,
+        in_channels=[192, 384, 768, 768],
+        out_channels=256,
+        num_outs=5))
 
 # 2 GPU配置 (与J2/J4保持一致)
 train_dataloader = dict(

@@ -17,7 +17,7 @@ model = dict(
     backbone=dict(
         _delete_=True,
         type='ViT',
-        img_size=1024,
+        img_size=800,
         patch_size=16,
         embed_dim=768,
         depth=12,
@@ -32,6 +32,13 @@ model = dict(
         init_cfg=dict(
             type='Pretrained', 
             checkpoint='../pretrained_weights/mae_pretrain_vit_base.pth')),
+    neck=dict(
+        _delete_=True,
+        type='SimpleFPN',
+        backbone_channel=768,
+        in_channels=[192, 384, 768, 768],
+        out_channels=256,
+        num_outs=5),
     roi_head=dict(
         bbox_head=dict(num_classes=10),
         mask_head=dict(num_classes=10)))

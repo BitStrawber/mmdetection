@@ -21,6 +21,7 @@ model = dict(
         pad_mask=True,
         pad_size_divisor=32),
     backbone=dict(
+        _delete_=True,
         type='ViT',
         img_size=1024,
         patch_size=16,
@@ -36,6 +37,7 @@ model = dict(
         use_rel_pos=True,
         init_cfg=dict(type='Pretrained', checkpoint='../pretrained_weights/mae_pretrain_vit_base.pth')),
     neck=dict(
+        _delete_=True,
         type='SimpleFPN',
         backbone_channel=768,
         in_channels=[192, 384, 768, 768],

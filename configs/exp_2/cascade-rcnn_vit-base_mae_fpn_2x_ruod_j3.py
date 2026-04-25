@@ -1,22 +1,16 @@
 # J3: ImageNet MAE + ViT-Base + Cascade R-CNN -> RUOD (2 GPU, 总BS=12)
 # 使用MAE预训练的ViT-Base权重
 
-_base_ = [
-    '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py',
-]
+_base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 
+# 数据集路径配置 (与J2/J4保持一致)
+data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
+
+# 导入ViTDet模块
 custom_imports = dict(imports=['projects.ViTDet.vitdet'])
 
-backbone_norm_cfg = dict(type='LN', requires_grad=True)
-norm_cfg = dict(type='LN2d', requires_grad=True)
-image_size = (1024, 1024)
-batch_augments = [
-    dict(type='BatchFixedSizePad', size=image_size, pad_mask=True)
-]
-
-# 模型配置 - 参考ViTDet官方配置
+# 修改backbone为ViT (使用_delete_完全替换)
 model = dict(
-    data_preprocessor=dict(pad_size_divisor=32, batch_augments=batch_augments),
     backbone=dict(
         _delete_=True,
         type='ViT',
@@ -29,35 +23,14 @@ model = dict(
         window_size=14,
         mlp_ratio=4,
         qkv_bias=True,
-        norm_cfg=backbone_norm_cfg,
+        norm_cfg=dict(type='LN', requires_grad=True),
         window_block_indexes=[0, 1, 3, 4, 6, 7, 9, 10],
         use_rel_pos=True,
         init_cfg=dict(
             type='Pretrained', 
-            checkpoint='../pretrained_weights/mae_pretrain_vit_base.pth')),
-    neck=dict(
-        _delete_=True,
-        type='SimpleFPN',
-        backbone_channel=768,
-        in_channels=[192, 384, 768, 768],
-        out_channels=256,
-        num_outs=5,
-        norm_cfg=norm_cfg),
-    rpn_head=dict(num_convs=2),
-    roi_head=dict(
-        type='CascadeRoIHead',
-        num_stages=3,
-        stage_loss_weights=[1, 0.5, 0.25],
-        bbox_head=dict(
-            type='Shared4Conv1FCBBoxHead',
-            conv_out_channels=256,
-            norm_cfg=norm_cfg,
-            num_classes=10)))
+            checkpoint='../pretrained_weights/mae_pretrain_vit_base.pth')))
 
-# 数据集路径配置
-data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
-
-# 2 GPU配置 (总BS=12)
+# 2 GPU配置 (与J2/J4保持一致)
 train_dataloader = dict(
     batch_size=6, 
     num_workers=2,
@@ -76,18 +49,3 @@ test_dataloader = val_dataloader
 
 val_evaluator = dict(ann_file='annotations/instances_val.json')
 test_evaluator = val_evaluator
-
-# 使用LayerDecay优化器 (参考官方ViTDet)
-optim_wrapper = dict(
-    type='OptimWrapper',
-    constructor='LayerDecayOptimizerConstructor',
-    paramwise_cfg={
-        'decay_rate': 0.7,
-        'decay_type': 'layer_wise',
-        'num_layers': 12,
-    },
-    optimizer=dict(
-        type='AdamW',
-        lr=0.0001,
-        betas=(0.9, 0.999),
-        weight_decay=0.1))

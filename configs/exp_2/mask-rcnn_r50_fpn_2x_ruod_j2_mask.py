@@ -6,10 +6,11 @@ _base_ = [
     '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py',
 ]
 
-# 数据集路径配置
+# 数据集路径配置 (绝对路径)
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
+ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 修改backbone使用DINO预训练权重
+# 移除默认backbone init
 model = dict(
     backbone=dict(init_cfg=None),
     roi_head=dict(
@@ -32,6 +33,6 @@ val_dataloader = dict(
 test_dataloader = val_dataloader
 
 val_evaluator = dict(
-    ann_file='annotations/instances_val.json',
+    ann_file=ann_root + 'instances_val.json',
     metric=['bbox', 'segm'])
 test_evaluator = val_evaluator

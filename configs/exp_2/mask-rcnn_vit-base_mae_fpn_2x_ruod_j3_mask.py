@@ -59,8 +59,9 @@ model = dict(
             norm_cfg=norm_cfg,
             num_classes=10)))
 
-# 数据集路径配置
+# 数据集路径配置 (绝对路径)
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
+ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
 # 2 GPU配置
 train_dataloader = dict(
@@ -78,7 +79,7 @@ val_dataloader = dict(
 test_dataloader = val_dataloader
 
 val_evaluator = dict(
-    ann_file='annotations/instances_val.json',
+    ann_file=ann_root + 'instances_val.json',
     metric=['bbox', 'segm'])
 test_evaluator = val_evaluator
 

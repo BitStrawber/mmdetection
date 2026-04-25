@@ -56,8 +56,9 @@ model = dict(
             norm_cfg=norm_cfg,
             num_classes=10)))
 
-# 数据集路径配置
+# 数据集路径配置 (绝对路径)
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
+ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
 # 2 GPU配置
 train_dataloader = dict(
@@ -66,17 +67,17 @@ train_dataloader = dict(
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='train/'),
-        ann_file='annotations/instances_train.json'))
+        ann_file=ann_root + 'instances_train.json'))
 val_dataloader = dict(
     batch_size=1, 
     num_workers=2,
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='val/'),
-        ann_file='annotations/instances_val.json'))
+        ann_file=ann_root + 'instances_val.json'))
 test_dataloader = val_dataloader
 
-val_evaluator = dict(ann_file='annotations/instances_val.json')
+val_evaluator = dict(ann_file=ann_root + 'instances_val.json')
 test_evaluator = val_evaluator
 
 # LayerDecay优化器 (官方标准)

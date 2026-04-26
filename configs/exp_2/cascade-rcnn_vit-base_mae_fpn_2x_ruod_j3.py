@@ -52,19 +52,16 @@ model = dict(
         stage_loss_weights=[1, 0.5, 0.25],
         bbox_head=[
             dict(
-                _delete_=True,
                 type='Shared4Conv1FCBBoxHead',
                 conv_out_channels=256,
                 norm_cfg=norm_cfg,
                 num_classes=10),
             dict(
-                _delete_=True,
                 type='Shared4Conv1FCBBoxHead',
                 conv_out_channels=256,
                 norm_cfg=norm_cfg,
                 num_classes=10),
             dict(
-                _delete_=True,
                 type='Shared4Conv1FCBBoxHead',
                 conv_out_channels=256,
                 norm_cfg=norm_cfg,

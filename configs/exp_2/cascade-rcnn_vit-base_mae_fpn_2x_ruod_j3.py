@@ -13,7 +13,7 @@ backbone_norm_cfg = dict(type='LN', requires_grad=True)
 norm_cfg = dict(type='LN2d', requires_grad=True)
 image_size = (1024, 1024)
 batch_augments = [
-    dict(type='BatchFixedSizePad', size=image_size, pad_mask=True)
+    dict(type='BatchFixedSizePad', size=image_size, pad_mask=False)
 ]
 
 # 模型配置 (完全参考官方ViTDet)

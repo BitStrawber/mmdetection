@@ -49,6 +49,7 @@ model = dict(
     rpn_head=dict(num_convs=2),
     roi_head=dict(
         bbox_head=dict(
+            _delete_=True,
             type='Shared4Conv1FCBBoxHead',
             conv_out_channels=256,
             norm_cfg=norm_cfg,

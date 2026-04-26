@@ -29,6 +29,7 @@ run_task() {
     echo "GPU: $GPU_IDS"
     mkdir -p $WORK_DIR/$name
     
+    export PORT
     CUDA_VISIBLE_DEVICES=$GPU_IDS bash tools/dist_train.sh \
         configs/exp_2/$config \
         $NUM_GPUS \

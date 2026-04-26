@@ -7,14 +7,27 @@ _base_ = '../_base_/models/mask-rcnn_r50_fpn.py'
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# RUOD 10类
-num_classes = 10
-
 # 修改num_classes
 model = dict(
     roi_head=dict(
-        bbox_head=dict(num_classes=num_classes),
-        mask_head=dict(num_classes=num_classes)))
+        bbox_head=dict(num_classes=10),
+        mask_head=dict(num_classes=10)))
+
+# 训练配置
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=24, val_interval=1)
+val_cfg = dict(type='ValLoop')
+test_cfg = dict(type='TestLoop')
+
+optim_wrapper = dict(
+    optimizer=dict(type='SGD', lr=0.015, momentum=0.9, weight_decay=0.0001))
+
+param_scheduler = dict(
+    type='MultiStepLR',
+    begin=0,
+    end=24,
+    by_epoch=True,
+    milestones=[16, 22],
+    gamma=0.1)
 
 # 2 GPU配置 (总BS=12)
 train_dataloader = dict(

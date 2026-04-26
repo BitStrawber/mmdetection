@@ -63,9 +63,9 @@ model = dict(
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 2 GPU配置 (官方batch_size=4 per GPU)
+# 2 GPU配置 (batch_size=1 for ViT)
 train_dataloader = dict(
-    batch_size=4, 
+    batch_size=1, 
     num_workers=4,
     persistent_workers=True,
     dataset=dict(

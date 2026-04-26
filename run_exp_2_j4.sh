@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# exp_2_j2 训练脚本 (ResNet-50 + torchvision)
+# exp_2_j1 训练脚本 (ResNet-50 + torchvision)
 # 自动顺序执行: cascade → mask
 # GPU: 0,1
 
@@ -13,7 +13,7 @@ RESULT_DIR="results"
 mkdir -p "$LOG_DIR" "$RESULT_DIR"
 
 echo "========================================="
-echo "exp_2_j2 (ResNet-50 + torchvision)"
+echo "exp_2_j1 (ResNet-50 + torchvision)"
 echo "========================================="
 echo "GPU: $GPU_IDS"
 echo "任务: cascade → mask"

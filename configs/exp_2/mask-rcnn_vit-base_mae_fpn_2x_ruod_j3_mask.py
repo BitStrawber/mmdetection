@@ -66,7 +66,7 @@ ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
 # 2 GPU配置
 train_dataloader = dict(
-    batch_size=4, 
+    batch_size=2, 
     num_workers=2,
     dataset=dict(
         data_root=data_root,

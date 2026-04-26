@@ -23,6 +23,7 @@ train_dataloader = dict(
     batch_size=6, 
     num_workers=2,
     dataset=dict(
+        type='CocoDataset',
         data_root=data_root,
         data_prefix=dict(img='train/'),
         ann_file=ann_root + 'instances_train.json'))
@@ -31,9 +32,11 @@ val_dataloader = dict(
     batch_size=1, 
     num_workers=2,
     dataset=dict(
+        type='CocoDataset',
         data_root=data_root,
         data_prefix=dict(img='val/'),
-        ann_file=ann_root + 'instances_val.json'))
+        ann_file=ann_root + 'instances_val.json',
+        test_mode=True))
 
 test_dataloader = val_dataloader
 

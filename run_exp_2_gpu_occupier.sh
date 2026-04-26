@@ -26,11 +26,12 @@ python -c "
 import torch
 import time
 print('开始分配GPU显存...')
-# 分配GPU 0,1 各10GB
+# 分配GPU 0,1 各约15GB (2000x2000x1000x4 ≈ 16GB)
 for i in range(2):
     torch.cuda.set_device(i)
-    x = torch.zeros(10, 10, 10, 10, device=f'cuda:{i}') * 1.0
-    print(f'GPU {i}: 已分配 {x.element_size() * x.nelement() / 1e9:.1f} GB')
+    x = torch.zeros(2000, 2000, 1000, device=f'cuda:{i}') * 1.0
+    mem = x.element_size() * x.nelement() / 1e9
+    print(f'GPU {i}: 已分配 {mem:.1f} GB')
 while True:
     time.sleep(60)
 "

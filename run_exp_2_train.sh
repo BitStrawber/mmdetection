@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# exp_2 训练脚本 - 使用GPU 0,1运行一个任务
-# 手动逐个运行，避免显存冲突
+# exp_2 训练脚本
+# 使用方法: bash run_exp_2_train.sh [task]
 
 CONFIG_DIR="configs/exp_2"
 PORT=29500
@@ -15,12 +15,12 @@ echo "  bash run_exp_2_train.sh [task]"
 echo ""
 echo "可用任务:"
 echo "  j2_det    - J2 Detection (ResNet-50 Supervised)"
-echo "  j3_det    - J3 Detection (ViT-Base MAE)"
-echo "  j4_det    - J4 Detection (ResNet-50 DINO)"
-echo "  j2_mask   - J2 Mask (ResNet-50 Supervised)"
-echo "  j3_mask   - J3 Mask (ViT-Base MAE)"
-echo "  j4_mask   - J4 Mask (ResNet-50 DINO)"
-echo "  all       - 顺序运行所有任务"
+echo "  j3_det   - J3 Detection (ViT-Base MAE)"
+echo "  j4_det   - J4 Detection (ResNet-50 DINO)"
+echo "  j2_mask  - J2 Mask (ResNet-50 Supervised)"
+echo "  j3_mask  - J3 Mask (ViT-Base MAE)"
+echo "  j4_mask  - J4 Mask (ResNet-50 DINO)"
+echo "  all      - 顺序运行所有任务"
 echo ""
 
 TASK=${1:-all}
@@ -32,7 +32,7 @@ run_j2_det() {
 
 run_j3_det() {
     echo "[J3 Detection] Cascade R-CNN (ViT-Base MAE)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+1)) tools_train.py $CONFIG_DIR/cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+1)) tools/train.py $CONFIG_DIR/cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py
 }
 
 run_j4_det() {

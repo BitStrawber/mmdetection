@@ -7,6 +7,7 @@
 CONFIG_DIR="configs/exp_2"
 PORT=29500
 WORK_DIR="work_dirs"
+SCRIPT_LOG="train_all.log"
 
 echo "========================================="
 echo "exp_2 训练脚本"
@@ -15,7 +16,8 @@ echo "使用方法: bash run_exp_2_train.sh [task]"
 echo ""
 echo "可用任务: j2_det j3_det j4_det j2_mask j3_mask j4_mask all"
 echo ""
-echo "Log保存在: $WORK_DIR/<任务名>/"
+echo "脚本Log: $SCRIPT_LOG"
+echo "任务Log: $WORK_DIR/<任务名>/training.log"
 echo ""
 
 TASK=${1:-all}
@@ -37,20 +39,24 @@ run_task() {
     echo "<<< 完成: $name"
 }
 
+echo "开始时间: $(date)" | tee -a $SCRIPT_LOG
+
 case $TASK in
-    j2_det)    run_task "j2_det"    "cascade-rcnn_r50_fpn_2x_ruod_j2.py"        "0,1" ;;
-    j3_det)    run_task "j3_det"    "cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py"   "2,3" ;;
-    j4_det)    run_task "j4_det"    "cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py"    "4,5" ;;
-    j2_mask)  run_task "j2_mask"  "mask-rcnn_r50_fpn_2x_ruod_j2_mask.py"     "0,1" ;;
-    j3_mask)  run_task "j3_mask"  "mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py" "2,3" ;;
-    j4_mask)  run_task "j4_mask"  "mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py"  "4,5" ;;
+    j2_det)    run_task "j2_det"    "cascade-rcnn_r50_fpn_2x_ruod_j2.py"        "0,1" | tee -a $SCRIPT_LOG ;;
+    j3_det)    run_task "j3_det"    "cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py"   "2,3" | tee -a $SCRIPT_LOG ;;
+    j4_det)    run_task "j4_det"    "cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py"    "4,5" | tee -a $SCRIPT_LOG ;;
+    j2_mask)  run_task "j2_mask"  "mask-rcnn_r50_fpn_2x_ruod_j2_mask.py"     "0,1" | tee -a $SCRIPT_LOG ;;
+    j3_mask)  run_task "j3_mask"  "mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py" "2,3" | tee -a $SCRIPT_LOG ;;
+    j4_mask)  run_task "j4_mask"  "mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py"  "4,5" | tee -a $SCRIPT_LOG ;;
     all)
-        run_task "j2_det"    "cascade-rcnn_r50_fpn_2x_ruod_j2.py"        "0,1"
-        run_task "j3_det"    "cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py"   "2,3"
-        run_task "j4_det"    "cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py"    "4,5"
-        run_task "j2_mask"  "mask-rcnn_r50_fpn_2x_ruod_j2_mask.py"     "0,1"
-        run_task "j3_mask"  "mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py" "2,3"
-        run_task "j4_mask"  "mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py"  "4,5"
-        echo "所有任务完成!" ;;
-    *) echo "未知任务: $TASK" ;;
+        run_task "j2_det"    "cascade-rcnn_r50_fpn_2x_ruod_j2.py"        "0,1" | tee -a $SCRIPT_LOG
+        run_task "j3_det"    "cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py"   "2,3" | tee -a $SCRIPT_LOG
+        run_task "j4_det"    "cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py"    "4,5" | tee -a $SCRIPT_LOG
+        run_task "j2_mask"  "mask-rcnn_r50_fpn_2x_ruod_j2_mask.py"     "0,1" | tee -a $SCRIPT_LOG
+        run_task "j3_mask"  "mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py" "2,3" | tee -a $SCRIPT_LOG
+        run_task "j4_mask"  "mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py"  "4,5" | tee -a $SCRIPT_LOG
+        echo "所有任务完成!" | tee -a $SCRIPT_LOG ;;
+    *) echo "未知任务: $TASK" | tee -a $SCRIPT_LOG ;;
 esac
+
+echo "结束时间: $(date)" | tee -a $SCRIPT_LOG

@@ -11,7 +11,7 @@ custom_imports = dict(imports=['projects.ViTDet.vitdet'])
 # Norm配置 (官方标准)
 backbone_norm_cfg = dict(type='LN', requires_grad=True)
 norm_cfg = dict(type='LN2d', requires_grad=True)
-image_size = (1024, 1024)
+image_size = (800, 800)
 batch_augments = [
     dict(type='BatchFixedSizePad', size=image_size, pad_mask=False)
 ]
@@ -22,7 +22,7 @@ model = dict(
     backbone=dict(
         _delete_=True,
         type='ViT',
-        img_size=1024,
+        img_size=800,
         patch_size=16,
         embed_dim=768,
         depth=12,

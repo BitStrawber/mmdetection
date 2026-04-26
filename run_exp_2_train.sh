@@ -33,7 +33,7 @@ run_task() {
     CUDA_VISIBLE_DEVICES=$gpus python -m torch.distributed.launch \
         --nproc_per_node=2 \
         --master_port=$PORT \
-        tools/train.py $CONFIG_DIR/$config.py \
+        tools/train.py $CONFIG_DIR/$config \
         --cfg-options work_dir=$WORK_DIR/$name 2>&1 | tee $WORK_DIR/$name/training.log
     PORT=$((PORT+1))
     echo "<<< 完成: $name"

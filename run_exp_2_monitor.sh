@@ -1,56 +1,40 @@
 #!/bin/bash
 
-# exp_2 监测脚本
-# 查看 j2 j3 j4 运行状态
+# GPU Watcher - 监测GPU使用情况
+# 用法: bash run_exp_2_watcher.sh
 
 echo "========================================="
-echo "exp_2 任务监测"
+echo "GPU Watcher - $(date)"
 echo "========================================="
 echo ""
 
-check_task() {
-    local name=$1
-    local log="logs/${name}.log"
-    local work="work_dirs/$name"
-    
-    echo "--- $name ---"
-    
+# 查看每个任务的GPU
+echo "--- 任务GPU分配 ---"
+echo "j2: GPU 0,1"
+echo "j3: GPU 2,3"
+echo "j4: GPU 4,5"
+echo ""
+
+# 查看GPU状态
+echo "--- GPU状态 ---"
+nvidia-smi --query-gpu=index,name,temperature,utilization.gpu,utilization.memory,memory.used,memory.free --format=csv
+echo ""
+
+# 查看进程
+echo "--- 训练进程 ---"
+ps aux | grep -E "tools/train.py|dist_train.sh" | grep -v grep | head -10
+echo ""
+
+# 查看当前epoch
+echo "--- 最新Epoch ---"
+for task in j2_det j2_mask j3_det j3_mask j4_det j4_mask; do
+    log="logs/${task}.log"
     if [ -f "$log" ]; then
-        # 获取最后几行
-        local last=$(tail -20 "$log" | grep -E "epoch|loss|AP|bbox_mAP" | tail -3)
-        if [ -n "$last" ]; then
-            echo "$last"
-        fi
-        
-        # 检查是否在运行
-        if pgrep -f "configs/exp_2/.*${name}.*.py" > /dev/null 2>&1; then
-            echo "状态: 运行中 ✓"
-        else
-            echo "状态: 已结束"
-        fi
-    else
-        echo "日志: 不存在"
-    fi
-    
-    # 查看checkpoint
-    if [ -d "$work" ]; then
-        local ckpt=$(ls -t "$work"/*.pth 2>/dev/null | head -1)
-        if [ -n "$ckpt" ]; then
-            echo "最新: $(basename $ckpt)"
+        epoch=$(tail -50 "$log" | grep -oP 'epoch.*\K[0-9]+' | tail -1)
+        if [ -n "$epoch" ]; then
+            echo "$task: epoch $epoch"
         fi
     fi
-    
-    echo ""
-}
-
-check_task "j2_det"
-check_task "j2_mask"
-check_task "j3_det"
-check_task "j3_mask"
-check_task "j4_det"
-check_task "j4_mask"
+done
 
 echo "========================================="
-echo "GPU 状态"
-echo "========================================="
-nvidia-smi --query-gpu=index,name,memory.used,memory.free --format=csv

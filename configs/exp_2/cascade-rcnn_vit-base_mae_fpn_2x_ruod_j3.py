@@ -81,6 +81,9 @@ test_dataloader = val_dataloader
 val_evaluator = dict(ann_file=ann_root + 'instances_val.json')
 test_evaluator = val_evaluator
 
+# 100 epoch (官方ViTDet配置)
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=100, val_interval=10)
+
 # LayerDecay优化器 (官方标准)
 optim_wrapper = dict(
     _delete_=True,

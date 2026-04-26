@@ -85,6 +85,9 @@ val_evaluator = dict(
     metric=['bbox', 'segm'])
 test_evaluator = val_evaluator
 
+# 100 epoch (官方ViTDet配置)
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=100, val_interval=10)
+
 # LayerDecay优化器 (官方标准)
 optim_wrapper = dict(
     _delete_=True,

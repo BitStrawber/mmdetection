@@ -86,6 +86,7 @@ test_evaluator = val_evaluator
 
 # LayerDecay优化器 (官方标准)
 optim_wrapper = dict(
+    _delete_=True,
     type='OptimWrapper',
     constructor='LayerDecayOptimizerConstructor',
     paramwise_cfg={

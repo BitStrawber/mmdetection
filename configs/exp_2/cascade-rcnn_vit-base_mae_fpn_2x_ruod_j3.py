@@ -71,9 +71,9 @@ model = dict(
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 2 GPU配置
+# 2 GPU配置 (ViT需要更小batch)
 train_dataloader = dict(
-    batch_size=6, 
+    batch_size=4, 
     num_workers=2,
     dataset=dict(
         data_root=data_root,

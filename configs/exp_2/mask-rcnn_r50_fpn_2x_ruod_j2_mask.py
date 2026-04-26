@@ -7,8 +7,10 @@ _base_ = '../_base_/models/mask-rcnn_r50_fpn.py'
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 修改num_classes
+# 修改num_classes (不需要type，让base提供)
 model = dict(
+    backbone=dict(
+        init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     roi_head=dict(
         bbox_head=dict(num_classes=10),
         mask_head=dict(num_classes=10)))

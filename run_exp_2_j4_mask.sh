@@ -40,7 +40,7 @@ mkdir -p $WORK_DIR/j4_mask
 
 export PORT
 CUDA_VISIBLE_DEVICES=$GPU_IDS bash tools/dist_train.sh \
-    configs/exp_2/mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py \
+    configs/exp_2/mask-rcnn_r50_dino_fpn_2x_uiis10k_j4_mask.py \
     $NUM_GPUS \
     --work-dir $WORK_DIR/j4_mask \
     2>&1 | tee "$LOG_DIR/j4_mask.log"

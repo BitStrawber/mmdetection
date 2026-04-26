@@ -7,11 +7,13 @@ _base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 移除默认backbone init (torchvision权重)
+# 替换整个roi_head (base中是cascade的bbox_head是list)
 model = dict(
     backbone=dict(
         init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet50')),
     roi_head=dict(
+        _delete_=True,
+        type='StandardRoIHead',
         bbox_head=dict(num_classes=10),
         mask_head=dict(num_classes=10)))
 

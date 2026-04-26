@@ -7,15 +7,17 @@ _base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 修改backbone使用DINO预训练权重
+# 替换整个roi_head (base中是cascade的bbox_head是list)
 model = dict(
     backbone=dict(
         init_cfg=dict(type='Pretrained', checkpoint='../pretrained_weights/dino_resnet50_pretrain.pth')),
     roi_head=dict(
+        _delete_=True,
+        type='StandardRoIHead',
         bbox_head=dict(num_classes=10),
         mask_head=dict(num_classes=10)))
 
-# 2 GPU配置 (总BS=12)
+# 2 GPU配置
 train_dataloader = dict(
     batch_size=6, 
     num_workers=2,

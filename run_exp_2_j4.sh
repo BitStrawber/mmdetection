@@ -7,7 +7,7 @@
 WORK_DIR="work_dirs"
 NUM_GPUS=2
 GPU_IDS="4,5"
-PORT=29520
+PORT=29506
 LOG_DIR="logs"
 RESULT_DIR="results"
 mkdir -p "$LOG_DIR" "$RESULT_DIR"

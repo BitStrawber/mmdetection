@@ -1,7 +1,7 @@
-# J4: ImageNet DINO + ResNet-50 + Mask R-CNN -> UWIS10K (10类)
+# J4: ImageNet DINO + ResNet-50 + Mask R-CNN -> UIIS10K (10类)
 # 使用DINO预训练的ResNet-50权重
 
-_base_ = '../mask_rcnn/mask-rcnn_r50_fpn_2x_uwis10k.py'
+_base_ = '../mask_rcnn/mask-rcnn_r50_fpn_2x_uiis10k.py'
 
 # backbone修改为DINO预训练权重
 model = dict(

@@ -1,4 +1,4 @@
-# UWIS10K Mask R-CNN: ImageNet预训练 + UWIS10K训练与测试
+# UIIS10K Mask R-CNN: ImageNet预训练 + UIIS10K训练与测试
 # 配置: 8 GPUs, BS=4/GPU, LR=0.02, Epoch=24
 
 # 模型配置

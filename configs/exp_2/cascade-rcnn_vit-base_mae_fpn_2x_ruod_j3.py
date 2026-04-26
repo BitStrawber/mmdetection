@@ -50,12 +50,25 @@ model = dict(
         type='CascadeRoIHead',
         num_stages=3,
         stage_loss_weights=[1, 0.5, 0.25],
-        bbox_head=dict(
-            _delete_=True,
-            type='Shared4Conv1FCBBoxHead',
-            conv_out_channels=256,
-            norm_cfg=norm_cfg,
-            num_classes=10)))
+        bbox_head=[
+            dict(
+                _delete_=True,
+                type='Shared4Conv1FCBBoxHead',
+                conv_out_channels=256,
+                norm_cfg=norm_cfg,
+                num_classes=10),
+            dict(
+                _delete_=True,
+                type='Shared4Conv1FCBBoxHead',
+                conv_out_channels=256,
+                norm_cfg=norm_cfg,
+                num_classes=10),
+            dict(
+                _delete_=True,
+                type='Shared4Conv1FCBBoxHead',
+                conv_out_channels=256,
+                norm_cfg=norm_cfg,
+                num_classes=10)]))
 
 # 数据集路径配置 (绝对路径)
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'

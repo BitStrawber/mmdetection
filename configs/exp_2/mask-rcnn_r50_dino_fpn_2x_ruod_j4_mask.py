@@ -40,5 +40,5 @@ val_dataloader = dict(
 
 test_dataloader = val_dataloader
 
-val_evaluator = dict(ann_file=ann_root + 'instances_val.json')
+val_evaluator = dict(type='CocoMetric', ann_file=ann_root + 'instances_val.json')
 test_evaluator = val_evaluator

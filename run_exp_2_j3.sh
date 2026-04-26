@@ -25,8 +25,19 @@ run_task() {
     echo ">>> 启动: $name"
     echo "GPU: $GPUS"
     mkdir -p $WORK_DIR/$name
-    export CUDA_VISIBLE_DEVICES=$GPUS
-    python -m torch.distributed.launch \
+    
+    # 等待GPU空闲
+    echo "等待GPU $GPUS 空闲..."
+    while true; do
+        available=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits -i $GPUS | awk '{sum+=$1} END {print sum}')
+        if [ "$available" -gt 20000 ]; then
+            break
+        fi
+        sleep 5
+    done
+    echo "GPU $GPUS 可用，开始训练..."
+    
+    env CUDA_VISIBLE_DEVICES=$GPUS python -m torch.distributed.launch \
         --nproc_per_node=2 \
         --master_port=$PORT \
         tools/train.py $CONFIG_DIR/$config \

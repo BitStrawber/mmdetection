@@ -32,11 +32,11 @@ run_parallel() {
     echo "GPU: $gpus"
     echo "Log: $log"
     mkdir -p $WORK_DIR/$name
-    CUDA_VISIBLE_DEVICES=$gpus python -m torch.distributed.launch \
+    (CUDA_VISIBLE_DEVICES=$gpus python -m torch.distributed.launch \
         --nproc_per_node=2 \
         --master_port=$PORT \
         tools/train.py $CONFIG_DIR/$config \
-        --cfg-options work_dir=$WORK_DIR/$name > $log 2>&1 &
+        --cfg-options work_dir=$WORK_DIR/$name > $log 2>&1) &
     PIDS[$name]=$!
     echo "PID: ${PIDS[$name]}"
     PORT=$((PORT+1))

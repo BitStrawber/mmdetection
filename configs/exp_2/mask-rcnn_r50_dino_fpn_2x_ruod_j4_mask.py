@@ -12,6 +12,7 @@ ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
 # 修改backbone使用DINO预训练权重
 model = dict(
+    _delete_=True,
     backbone=dict(
         init_cfg=dict(type='Pretrained', checkpoint='../pretrained_weights/dino_resnet50_pretrain.pth')),
     roi_head=dict(

@@ -12,6 +12,7 @@ ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
 # 移除默认backbone init
 model = dict(
+    _delete_=True,
     backbone=dict(init_cfg=None),
     roi_head=dict(
         bbox_head=dict(num_classes=10),

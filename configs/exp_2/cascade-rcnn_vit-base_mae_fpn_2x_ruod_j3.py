@@ -1,17 +1,17 @@
-# J3: ImageNet MAE + ViT-Base + Cascade R-CNN -> RUOD (2 GPU, 总BS=12)
-# 使用MAE预训练的ViT-Base权重
+# J3: ImageNet MAE + ViT-Base + Cascade R-CNN -> RUOD (2 GPU)
+# 使用mmdet官方ViTDet配置
 
 _base_ = [
     '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py',
 ]
 
-# 导入ViTDet模块 (官方方式)
+# 导入ViTDet模块
 custom_imports = dict(imports=['projects.ViTDet.vitdet'])
 
 # Norm配置 (官方标准)
 backbone_norm_cfg = dict(type='LN', requires_grad=True)
 norm_cfg = dict(type='LN2d', requires_grad=True)
-image_size = (800, 800)
+image_size = (1024, 1024)
 batch_augments = [
     dict(type='BatchFixedSizePad', size=image_size, pad_mask=False)
 ]
@@ -22,7 +22,7 @@ model = dict(
     backbone=dict(
         _delete_=True,
         type='ViT',
-        img_size=800,
+        img_size=1024,
         patch_size=16,
         embed_dim=768,
         depth=12,
@@ -51,30 +51,19 @@ model = dict(
         num_stages=3,
         stage_loss_weights=[1, 0.5, 0.25],
         bbox_head=[
-            dict(
-                type='Shared4Conv1FCBBoxHead',
-                conv_out_channels=256,
-                norm_cfg=norm_cfg,
-                num_classes=10),
-            dict(
-                type='Shared4Conv1FCBBoxHead',
-                conv_out_channels=256,
-                norm_cfg=norm_cfg,
-                num_classes=10),
-            dict(
-                type='Shared4Conv1FCBBoxHead',
-                conv_out_channels=256,
-                norm_cfg=norm_cfg,
-                num_classes=10)]))
+            dict(type='Shared4Conv1FCBBoxHead', conv_out_channels=256, norm_cfg=norm_cfg, num_classes=10),
+            dict(type='Shared4Conv1FCBBoxHead', conv_out_channels=256, norm_cfg=norm_cfg, num_classes=10),
+            dict(type='Shared4Conv1FCBBoxHead', conv_out_channels=256, norm_cfg=norm_cfg, num_classes=10)]))
 
 # 数据集路径配置 (绝对路径)
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 
-# 2 GPU配置 (ViT需要更小batch)
+# 2 GPU配置 (官方batch_size=4 per GPU)
 train_dataloader = dict(
-    batch_size=2, 
-    num_workers=2,
+    batch_size=4, 
+    num_workers=4,
+    persistent_workers=True,
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='train/'),
@@ -82,6 +71,7 @@ train_dataloader = dict(
 val_dataloader = dict(
     batch_size=1, 
     num_workers=2,
+    persistent_workers=False,
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='val/'),
@@ -94,7 +84,7 @@ test_evaluator = val_evaluator
 # LayerDecay优化器 (官方标准)
 optim_wrapper = dict(
     _delete_=True,
-    type='OptimWrapper',
+    type='AmpOptimWrapper',
     constructor='LayerDecayOptimizerConstructor',
     paramwise_cfg={
         'decay_rate': 0.7,

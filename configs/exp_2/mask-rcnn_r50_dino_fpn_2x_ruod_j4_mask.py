@@ -3,7 +3,12 @@
 
 _base_ = '../_base_/models/mask-rcnn_r50_fpn.py'
 
+# 导入mmdet
+custom_imports = dict(imports=['mmdet.models'])
+
 # 数据集路径配置 (绝对路径)
+data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
+ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 data_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'
 ann_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/annotations/'
 

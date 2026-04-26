@@ -2,9 +2,11 @@
 
 # exp_2 训练脚本
 # 使用方法: bash run_exp_2_train.sh [task]
+# log文件保存在 work_dirs/xxx/xxx.log
 
 CONFIG_DIR="configs/exp_2"
 PORT=29500
+WORK_DIR="work_dirs"
 
 echo "========================================="
 echo "exp_2 训练任务脚本"
@@ -22,37 +24,51 @@ echo "  j3_mask  - J3 Mask (ViT-Base MAE)"
 echo "  j4_mask  - J4 Mask (ResNet-50 DINO)"
 echo "  all      - 顺序运行所有任务"
 echo ""
+echo "Log文件保存在: $WORK_DIR/<config_name>/"
+echo ""
 
 TASK=${1:-all}
 
 run_j2_det() {
+    CONFIG="cascade-rcnn_r50_fpn_2x_ruod_j2"
     echo "[J2 Detection] Cascade R-CNN (ResNet-50 Supervised)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$PORT tools/train.py $CONFIG_DIR/cascade-rcnn_r50_fpn_2x_ruod_j2.py
+    echo "Log: $WORK_DIR/$CONFIG/xxx.log"
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$PORT tools/train.py $CONFIG_DIR/cascade-rcnn_r50_fpn_2x_ruod_j2.py 2>&1 | tee $WORK_DIR/$CONFIG/training.log
 }
 
 run_j3_det() {
+    CONFIG="cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3"
     echo "[J3 Detection] Cascade R-CNN (ViT-Base MAE)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+1)) tools/train.py $CONFIG_DIR/cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py
+    echo "Log: $WORK_DIR/$CONFIG/training.log"
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+1)) tools/train.py $CONFIG_DIR/cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py 2>&1 | tee $WORK_DIR/$CONFIG/training.log
 }
 
 run_j4_det() {
+    CONFIG="cascade-rcnn_r50_dino_fpn_2x_ruod_j4"
     echo "[J4 Detection] Cascade R-CNN (ResNet-50 DINO)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+2)) tools/train.py $CONFIG_DIR/cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py
+    echo "Log: $WORK_DIR/$CONFIG/training.log"
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+2)) tools/train.py $CONFIG_DIR/cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py 2>&1 | tee $WORK_DIR/$CONFIG/training.log
 }
 
 run_j2_mask() {
+    CONFIG="mask-rcnn_r50_fpn_2x_ruod_j2_mask"
     echo "[J2 Mask] Mask R-CNN (ResNet-50 Supervised)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+3)) tools/train.py $CONFIG_DIR/mask-rcnn_r50_fpn_2x_ruod_j2_mask.py
+    echo "Log: $WORK_DIR/$CONFIG/training.log"
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+3)) tools/train.py $CONFIG_DIR/mask-rcnn_r50_fpn_2x_ruod_j2_mask.py 2>&1 | tee $WORK_DIR/$CONFIG/training.log
 }
 
 run_j3_mask() {
+    CONFIG="mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask"
     echo "[J3 Mask] Mask R-CNN (ViT-Base MAE)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+4)) tools/train.py $CONFIG_DIR/mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py
+    echo "Log: $WORK_DIR/$CONFIG/training.log"
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+4)) tools/train.py $CONFIG_DIR/mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py 2>&1 | tee $WORK_DIR/$CONFIG/training.log
 }
 
 run_j4_mask() {
+    CONFIG="mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask"
     echo "[J4 Mask] Mask R-CNN (ResNet-50 DINO)"
-    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+5)) tools/train.py $CONFIG_DIR/mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py
+    echo "Log: $WORK_DIR/$CONFIG/training.log"
+    python -m torch.distributed.launch --nproc_per_node=2 --master_port=$((PORT+5)) tools/train.py $CONFIG_DIR/mask-rcnn_r50_dino_fpn_2x_ruod_j4_mask.py 2>&1 | tee $WORK_DIR/$CONFIG/training.log
 }
 
 case $TASK in

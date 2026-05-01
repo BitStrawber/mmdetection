@@ -46,7 +46,7 @@ echo "===== Cascade Detection ====="
 run_task "j3_det" "cascade-rcnn_vit-base_mae_fpn_2x_ruod_j3.py"
 
 echo "===== Mask ====="
-run_task "j3_mask" "mask-rcnn_vit-base_mae_fpn_2x_ruod_j3_mask.py"
+run_task "j3_mask" "mask-rcnn_vit-base_mae_fpn_2x_uiis10k_j3_mask.py"
 
 echo "所有任务完成!"
 echo "结束时间: $(date)"

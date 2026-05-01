@@ -115,7 +115,7 @@ def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1, wo
                           name2cat=name2cat, cat2id=cat2id, sample_rate=sample_rate)
     
     with Pool(workers) as pool:
-        results = list(tqdm(pool.imap_unordered(worker_func, video_dirs), total=len(video_dirs)))
+        results = list(tqdm(pool.imap(worker_func, video_dirs, chunksize=4), total=len(video_dirs)))
     
     # 合并结果，分配全局ID
     final_images, final_annotations = [], []
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=None)
     args = parser.parse_args()
     
-    workers = args.workers or cpu_count()
+    workers = args.workers or min(cpu_count(), 32)
     xlsx = f'WebUOT-1M-{args.mode.capitalize()}.xlsx'
     xlsx_path = os.path.join(args.data_root, xlsx)
     if not os.path.exists(xlsx_path):

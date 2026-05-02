@@ -22,7 +22,7 @@ def read_excel_categories(xlsx_path):
     return name2cat
 
 
-def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_rate=1):
+def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_rate=1, count_only=False):
     name2cat = read_excel_categories(xlsx_path)
     
     categories = sorted(set(name2cat.values()))
@@ -64,6 +64,28 @@ def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_
             else: continue
         
         cap = cv2.VideoCapture(mp4_file)
+        img_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        img_area = img_w * img_h
+        
+        if count_only and img_area > 0:
+            # 快速模式：不逐帧解码，直接用gt_lines算
+            for fi in range(0, min(len(gt_lines), total_frames), args.sample_rate):
+                total += 1
+                absent_val = int(absent_lines[fi]) if fi < len(absent_lines) else 0
+                if absent_val == 1:
+                    absent += 1; continue
+                parts = gt_lines[fi].split(',')
+                x, y, w, h = map(int, map(float, parts))
+                if w <= 0 or h <= 0: continue
+                if (w * h) / img_area > threshold:
+                    large += 1
+            cap.release()
+            pbar.set_postfix(large=large)
+            continue
+        
+        # 完整模式：逐帧解码
         frame_idx = 0
         while True:
             ret, frame = cap.read()
@@ -88,7 +110,7 @@ def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_
                 frame_idx += 1; continue
             
             large += 1
-            if not args.count_only:
+            if not count_only:
                 img_filename = f"{vdir}_f{frame_idx:06d}.jpg"
                 img_path = os.path.join(frames_dir, img_filename)
                 cv2.imwrite(img_path, frame)
@@ -110,7 +132,7 @@ def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_
             "licenses": [], "categories": coco_cats,
             "images": images, "annotations": annotations}
     
-    if not args.count_only:
+    if not count_only:
         out_json = os.path.join(out_dir, f'instances_{mode}.json')
         with open(out_json, 'w') as f:
             json.dump(coco, f)
@@ -134,4 +156,4 @@ if __name__ == '__main__':
     if not os.path.exists(xlsx_path):
         print(f"找不到Excel: {xlsx_path}"); sys.exit(1)
     
-    filter_and_export(args.data_root, xlsx_path, args.mode, args.threshold, args.sample_rate)
+    filter_and_export(args.data_root, xlsx_path, args.mode, args.threshold, args.sample_rate, args.count_only)

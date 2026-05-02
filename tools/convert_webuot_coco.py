@@ -34,7 +34,7 @@ def read_excel_categories(xlsx_path):
     return name2cat, cat2id, coco_cats
 
 
-def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1):
+def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1, min_area=0, min_side=0):
     name2cat, cat2id, coco_cats = read_excel_categories(xlsx_path)
     
     data_dir = os.path.join(data_root, mode.capitalize())
@@ -45,7 +45,7 @@ def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1):
     print(f"处理 {len(video_dirs)} 个视频...")
     
     final_images, final_annotations = [], []
-    stats = {'total': 0, 'valid': 0, 'absent': 0, 'nobox': 0}
+    stats = {'total': 0, 'valid': 0, 'absent': 0, 'nobox': 0, 'small': 0}
     found, missed = 0, 0
     img_id, ann_id = 0, 0
     
@@ -92,8 +92,12 @@ def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1):
             
             parts = gt_lines[frame_idx].split(',')
             x, y, w, h = map(int, map(float, parts))
-            if w <= 0 or h <= 0:
-                stats['nobox'] += 1; frame_idx += 1; continue
+        if w <= 0 or h <= 0:
+            stats['nobox'] += 1; frame_idx += 1; continue
+        if min_area > 0 and w * h < min_area:
+            stats['small'] += 1; frame_idx += 1; continue
+        if min_side > 0 and (w < min_side or h < min_side):
+            stats['small'] += 1; frame_idx += 1; continue
             
             img_filename = f"{vdir}_f{frame_idx:06d}.jpg"
             img_path = os.path.join(frames_dir, img_filename)
@@ -108,7 +112,7 @@ def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1):
             stats['valid'] += 1; img_id += 1; ann_id += 1; frame_idx += 1
         
         cap.release()
-        pbar.set_postfix(valid=stats['valid'])
+        pbar.set_description(vdir[:40])
     
     coco = {"info": {"year": 2024, "version": "1.0", "description": "WebUOT-1M"},
             "licenses": [], "categories": coco_cats,
@@ -124,7 +128,7 @@ def convert_webuot_to_coco(data_root, xlsx_path, mode='train', sample_rate=1):
     print(f"{mode} 完成!")
     print(f"  视频: {len(video_dirs)} | 匹配类别: {found} | 未匹配: {missed}")
     print(f"  总帧: {stats['total']} | 有效: {stats['valid']}")
-    print(f"  absent: {stats['absent']} | 无效bbox: {stats['nobox']}")
+    print(f"  absent: {stats['absent']} | 无效bbox: {stats['nobox']} | 小bbox: {stats['small']}")
     print(f"  图片: {img_id} | 标注: {ann_id} | 类别: {len(coco_cats)}")
     print(f"  输出: {output}")
 
@@ -134,6 +138,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_root', default='/media/HDD0/XCX/exp_2_data/exp_2/WebUOT-1M')
     parser.add_argument('--mode', default='train', choices=['train', 'test'])
     parser.add_argument('--sample_rate', type=int, default=1)
+    parser.add_argument('--min_bbox_area', type=int, default=0, help='最小bbox面积(像素), 0=不过滤')
+    parser.add_argument('--min_bbox_side', type=int, default=0, help='最小bbox边长, 0=不过滤')
     args = parser.parse_args()
     
     xlsx = f'WebUOT-1M-{args.mode.capitalize()}.xlsx'
@@ -141,4 +147,4 @@ if __name__ == '__main__':
     if not os.path.exists(xlsx_path):
         print(f"找不到Excel: {xlsx_path}"); sys.exit(1)
     
-    convert_webuot_to_coco(args.data_root, xlsx_path, args.mode, args.sample_rate)
+    convert_webuot_to_coco(args.data_root, xlsx_path, args.mode, args.sample_rate, args.min_bbox_area, args.min_bbox_side)

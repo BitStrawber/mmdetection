@@ -66,12 +66,11 @@ def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_
         cap = cv2.VideoCapture(mp4_file)
         img_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         img_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         img_area = img_w * img_h
         
         if count_only and img_area > 0:
-            # 快速模式：不逐帧解码，直接用gt_lines算
-            for fi in range(0, min(len(gt_lines), total_frames), args.sample_rate):
+            for fi in range(0, min(len(gt_lines), cap_frames), sample_rate):
                 total += 1
                 absent_val = int(absent_lines[fi]) if fi < len(absent_lines) else 0
                 if absent_val == 1:

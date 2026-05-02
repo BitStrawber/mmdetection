@@ -88,9 +88,12 @@ def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_
                 frame_idx += 1; continue
             
             large += 1
-            img_filename = f"{vdir}_f{frame_idx:06d}.jpg"
-            img_path = os.path.join(frames_dir, img_filename)
-            cv2.imwrite(img_path, frame)
+            if not args.count_only:
+                img_filename = f"{vdir}_f{frame_idx:06d}.jpg"
+                img_path = os.path.join(frames_dir, img_filename)
+                cv2.imwrite(img_path, frame)
+            else:
+                img_filename = f"{vdir}_f{frame_idx:06d}.jpg"
             
             images.append({"id": img_id, "file_name": img_filename,
                           "width": frame.shape[1], "height": frame.shape[0]})
@@ -107,16 +110,14 @@ def filter_and_export(data_root, xlsx_path, mode='train', threshold=0.3, sample_
             "licenses": [], "categories": coco_cats,
             "images": images, "annotations": annotations}
     
-    out_json = os.path.join(out_dir, f'instances_{mode}.json')
-    with open(out_json, 'w') as f:
-        json.dump(coco, f)
-    
-    print(f"\n{'='*50}")
-    print(f"{out_name} 完成!")
-    print(f"  总帧: {total} | absent: {absent} | bbox>{int(threshold*100)}%: {large}")
-    print(f"  图片: {img_id} | 类别: {len(coco_cats)}")
-    print(f"  输出: {out_dir}")
-    print(f"    images/ + {out_json}")
+    if not args.count_only:
+        out_json = os.path.join(out_dir, f'instances_{mode}.json')
+        with open(out_json, 'w') as f:
+            json.dump(coco, f)
+        print(f"  输出: {out_dir}")
+        print(f"    images/ + instances_{mode}.json")
+    else:
+        print(f"  (仅统计模式)")
 
 
 if __name__ == '__main__':
@@ -125,6 +126,7 @@ if __name__ == '__main__':
     parser.add_argument('--mode', default='train', choices=['train', 'test'])
     parser.add_argument('--threshold', type=float, default=0.3)
     parser.add_argument('--sample_rate', type=int, default=1)
+    parser.add_argument('--count_only', action='store_true', help='仅统计, 不导出图片')
     args = parser.parse_args()
     
     xlsx = f'WebUOT-1M-{args.mode.capitalize()}.xlsx'

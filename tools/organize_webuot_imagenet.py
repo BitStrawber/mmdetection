@@ -7,7 +7,7 @@ import os, sys, json, argparse, shutil
 from tqdm import tqdm
 from collections import defaultdict
 
-def organize_imagenet_style(data_root, mode='train', subset='all'):
+def organize_imagenet_style(data_root, mode='train', subset='all', symlink=False, out_root=None):
     json_path = os.path.join(data_root, 'annotations', f'instances_{mode}_webuot.json')
     if not os.path.exists(json_path):
         print(f"找不到: {json_path}"); sys.exit(1)
@@ -20,9 +20,10 @@ def organize_imagenet_style(data_root, mode='train', subset='all'):
         json_path = os.path.join(subset_dir, f'instances_{mode}.json')
         frames_dir = os.path.join(subset_dir, 'images')
         out_root = os.path.join(data_root, f'imagenet_{mode}_{subset}')
-    else:
-        frames_dir = os.path.join(data_root, f'{mode}_frames')
+    if out_root is None:
         out_root = os.path.join(data_root, f'imagenet_{mode}')
+    
+    print(f"\n处理 {mode} -> {out_root}")
     
     if not os.path.exists(json_path):
         print(f"找不到: {json_path}"); sys.exit(1)
@@ -51,11 +52,17 @@ def organize_imagenet_style(data_root, mode='train', subset='all'):
             src = os.path.join(frames_dir, img_file)
             dst = os.path.join(cat_dir, img_file)
             if os.path.exists(src):
-                shutil.copy2(src, dst)  # 复制; 用 symlink 可节省空间
+                if symlink:
+                    os.symlink(os.path.abspath(src), dst)
+                else:
+                    shutil.copy2(src, dst)
             else:
                 # 尝试从全量train_frames找
                 src2 = os.path.join(data_root, f'{mode}_frames', img_file)
                 if os.path.exists(src2):
+                if symlink:
+                    os.symlink(os.path.abspath(src2), dst)
+                else:
                     shutil.copy2(src2, dst)
     
     # 统计
@@ -69,8 +76,15 @@ def organize_imagenet_style(data_root, mode='train', subset='all'):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_root', default='/media/HDD0/XCX/exp_2_data/exp_2/WebUOT-1M')
-    parser.add_argument('--mode', default='train', choices=['train', 'test'])
+    parser.add_argument('--mode', default='train', help='train, test, or all')
     parser.add_argument('--subset', default='all', help='筛选子集, e.g. 30pct or all')
-    parser.add_argument('--symlink', action='store_true', help='使用软链接而非复制(节省空间)')
+    parser.add_argument('--symlink', action='store_true', help='使用软链接')
     args = parser.parse_args()
-    organize_imagenet_style(args.data_root, args.mode, args.subset)
+    
+    modes = ['train', 'test'] if args.mode == 'all' else [args.mode]
+    out_root = os.path.join(args.data_root, 'imagenet_all') if args.mode == 'all' else None
+    
+    for mode in modes:
+        if out_root is None:
+            out_root = os.path.join(args.data_root, f'imagenet_{mode}')
+        organize_imagenet_style(args.data_root, mode, args.subset, args.symlink, out_root)

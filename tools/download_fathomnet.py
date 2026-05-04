@@ -69,6 +69,24 @@ def main():
     if args.max_concepts > 0:
         concepts = concepts[:args.max_concepts]
     
+    # 先按图片数过滤（避免对所有概念查分类树）
+    if args.min_images > 0:
+        print(f"过滤图片数≥{args.min_images}的类别...")
+        enough = []
+        for i, c in enumerate(concepts):
+            if (i+1) % 100 == 0:
+                print(f"  {i+1}/{len(concepts)}...", end='\r')
+            from urllib.parse import quote
+            try:
+                imgs = api_get(f"images/query/concept/{quote(c)}")
+                if len(imgs) >= args.min_images:
+                    enough.append(c)
+            except:
+                continue
+        print(f"  {len(concepts)}/{len(concepts)} - 完成!")
+        print(f"  满足条件: {len(enough)} / {len(concepts)}")
+        concepts = enough
+    
     # 只保留海洋生物
     if args.bio_only:
         print("检查海洋生物分类...")
@@ -101,10 +119,6 @@ def main():
         
         if not imgs:
             print("  无图片")
-            continue
-        
-        if args.min_images > 0 and len(imgs) < args.min_images:
-            print(f"  跳过 (仅{len(imgs)}张, < {args.min_images})")
             continue
         
         if args.max_per_concept > 0:

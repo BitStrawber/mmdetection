@@ -69,9 +69,12 @@ def main():
     if args.bio_only:
         print("检查海洋生物分类...")
         bio = []
-        for c in concepts:
+        for i, c in enumerate(concepts):
+            if (i+1) % 100 == 0 or i == 0:
+                print(f"  {i+1}/{len(concepts)}...", end='\r')
             if is_biological(c):
                 bio.append(c)
+        print(f"  {len(concepts)}/{len(concepts)} - 完成!")
         print(f"  海洋生物: {len(bio)} / {len(concepts)}")
         concepts = bio
     

@@ -36,6 +36,7 @@ def main():
     parser.add_argument('--max_concepts', type=int, default=0)
     parser.add_argument('--max_per_concept', type=int, default=0)
     parser.add_argument('--min_images', type=int, default=0, help='跳过图片数<此值的类别')
+    parser.add_argument('--per_class_json', action='store_true', help='每个类别生成独立的annotations.json')
     args = parser.parse_args()
     
     os.makedirs(args.out, exist_ok=True)
@@ -85,11 +86,12 @@ def main():
         
         # 4. 生成标注
         saved = 0
+        class_images, class_anns = [], []
         for img_data, fpath in zip(imgs, paths):
             if fpath is None: continue
             saved += 1
             
-            all_images.append({
+            class_images.append({
                 "id": img_id,
                 "file_name": os.path.relpath(fpath, args.out),
                 "width": img_data.get('width', 0),
@@ -97,7 +99,7 @@ def main():
             })
             for box in img_data.get('boundingBoxes', []):
                 w, h = box['width'], box['height']
-                all_anns.append({
+                class_anns.append({
                     "id": ann_id, "image_id": img_id,
                     "category_id": cat2id[concept],
                     "bbox": [box['x'], box['y'], w, h],
@@ -105,6 +107,18 @@ def main():
                 })
                 ann_id += 1
             img_id += 1
+        
+        # 全量标注
+        all_images.extend(class_images)
+        all_anns.extend(class_anns)
+        
+        # 每个类单独保存
+        if args.per_class_json:
+            per_coco = {"info": {"description": f"FathomNet - {concept}"}, "licenses": [],
+                        "categories": [{"id": cat2id[concept], "name": concept}],
+                        "images": class_images, "annotations": class_anns}
+            with open(os.path.join(concept_dir, 'annotations.json'), 'w') as f:
+                json.dump(per_coco, f)
         
         print(f"  完成 ({saved} images, {ann_id} bboxes)")
         

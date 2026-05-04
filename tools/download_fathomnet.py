@@ -31,7 +31,7 @@ def download_img(img_data, out_dir):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--out', default='/media/HDD0/XCX/exp_2_data/exp_2/FathomNet')
+    parser.add_argument('--out', default='/media/HDD1/XCX/exp_2/FathomNet')
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--max_concepts', type=int, default=0)
     parser.add_argument('--max_per_concept', type=int, default=0)

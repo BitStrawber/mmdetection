@@ -6,7 +6,7 @@ import os, sys, json, argparse
 from urllib.request import urlretrieve, Request, urlopen
 from concurrent.futures import ThreadPoolExecutor
 
-BASE_URL = "https://database.fathomnet.org/"
+BASE_URL = "https://database.fathomnet.org/api/"
 
 def api_get(endpoint, params=None):
     from urllib.parse import urlencode
@@ -41,13 +41,13 @@ def main():
     
     # 1. 获取概念列表
     print("获取概念列表...")
-    try:
-        concepts = api_get("boundingboxes/concepts")
-    except:
-        print("API不可用，尝试备用接口...")
-        concepts = ["fish", "coral", "jellyfish", "shark", "turtle"]  # 后备
+    concepts = api_get("boundingboxes/list/concepts")
     
     print(f"概念数: {len(concepts)}")
+    
+    # 2. 获取图片总数
+    count = api_get("images/count")
+    print(f"图片总数: {count['count']}")
     if args.max_concepts > 0:
         concepts = concepts[:args.max_concepts]
     
@@ -60,11 +60,8 @@ def main():
         print(f"\n[{ci+1}/{len(concepts)}] {concept}")
         
         # 2. 获取图片
-        try:
-            imgs = api_get("images/find", {"concept": concept})
-        except:
-            print("  API错误，跳过")
-            continue
+        quoted_concept = concept.replace(' ', '%20')
+        imgs = api_get(f"images/query/concept/{quoted_concept}")
         
         if not imgs:
             print("  无图片")

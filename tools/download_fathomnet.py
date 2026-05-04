@@ -65,6 +65,10 @@ def main():
     concepts = [c for c in concepts if c.strip()]
     print(f"有效概念: {len(concepts)}")
     
+    # 预先截断（避免过滤全量太慢）
+    if args.max_concepts > 0:
+        concepts = concepts[:args.max_concepts]
+    
     # 只保留海洋生物
     if args.bio_only:
         print("检查海洋生物分类...")
@@ -81,8 +85,6 @@ def main():
     # 2. 获取图片总数
     count = api_get("images/count")
     print(f"图片总数: {count['count']}")
-    if args.max_concepts > 0:
-        concepts = concepts[:args.max_concepts]
     
     cat2id = {c: i+1 for i, c in enumerate(concepts)}
     

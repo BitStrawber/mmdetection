@@ -9,14 +9,17 @@ from concurrent.futures import ThreadPoolExecutor
 BASE_URL = "https://database.fathomnet.org/api/"
 
 def is_biological(concept):
-    """通过mbari分类树判断是否为海洋生物"""
+    """通过分类树判断是否为海洋生物"""
     from urllib.parse import quote
-    try:
-        data = api_get(f"taxa/query/mbari/{quote(concept)}")
-        if not data: return False
-        return any(t.get('rank') and t['rank'] != 'None' for t in data)
-    except:
-        return False
+    for provider in ['mbari', 'fathomnet']:
+        try:
+            data = api_get(f"taxa/query/{provider}/{quote(concept)}")
+            if not data: continue
+            if any(t.get('rank') and str(t['rank']) not in ('None', '') for t in data):
+                return True
+        except:
+            continue
+    return False
 
 def api_get(endpoint, params=None):
     from urllib.parse import urlencode

@@ -47,6 +47,10 @@ def main():
     
     print(f"概念数: {len(concepts)}")
     
+    # 过滤空概念
+    concepts = [c for c in concepts if c.strip()]
+    print(f"有效概念: {len(concepts)}")
+    
     # 2. 获取图片总数
     count = api_get("images/count")
     print(f"图片总数: {count['count']}")
@@ -62,7 +66,8 @@ def main():
         print(f"\n[{ci+1}/{len(concepts)}] {concept}")
         
         # 2. 获取图片
-        quoted_concept = concept.replace(' ', '%20')
+        from urllib.parse import quote
+        quoted_concept = quote(concept, safe='')
         imgs = api_get(f"images/query/concept/{quoted_concept}")
         
         if not imgs:

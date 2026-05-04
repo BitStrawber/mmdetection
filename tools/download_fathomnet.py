@@ -35,6 +35,7 @@ def main():
     parser.add_argument('--workers', type=int, default=8)
     parser.add_argument('--max_concepts', type=int, default=0)
     parser.add_argument('--max_per_concept', type=int, default=0)
+    parser.add_argument('--min_images', type=int, default=0, help='跳过图片数<此值的类别')
     args = parser.parse_args()
     
     os.makedirs(args.out, exist_ok=True)
@@ -66,6 +67,11 @@ def main():
         if not imgs:
             print("  无图片")
             continue
+        
+        if args.min_images > 0 and len(imgs) < args.min_images:
+            print(f"  跳过 (仅{len(imgs)}张, < {args.min_images})")
+            continue
+        
         if args.max_per_concept > 0:
             imgs = imgs[:args.max_per_concept]
         

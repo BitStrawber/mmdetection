@@ -8,6 +8,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 BASE_URL = "https://database.fathomnet.org/api/"
 
+def is_biological(concept):
+    """通过mbari分类树判断是否为海洋生物"""
+    from urllib.parse import quote
+    try:
+        data = api_get(f"taxa/query/mbari/{quote(concept)}")
+        if not data: return False
+        return any(t.get('rank') and t['rank'] != 'None' for t in data)
+    except:
+        return False
+
 def api_get(endpoint, params=None):
     from urllib.parse import urlencode
     url = BASE_URL + endpoint
@@ -37,6 +47,7 @@ def main():
     parser.add_argument('--max_per_concept', type=int, default=0)
     parser.add_argument('--min_images', type=int, default=0, help='跳过图片数<此值的类别')
     parser.add_argument('--per_class_json', action='store_true', help='每个类别生成独立的annotations.json')
+    parser.add_argument('--bio_only', action='store_true', help='只下载海洋生物（通过分类树过滤）')
     args = parser.parse_args()
     
     os.makedirs(args.out, exist_ok=True)
@@ -50,6 +61,16 @@ def main():
     # 过滤空概念
     concepts = [c for c in concepts if c.strip()]
     print(f"有效概念: {len(concepts)}")
+    
+    # 只保留海洋生物
+    if args.bio_only:
+        print("检查海洋生物分类...")
+        bio = []
+        for c in concepts:
+            if is_biological(c):
+                bio.append(c)
+        print(f"  海洋生物: {len(bio)} / {len(concepts)}")
+        concepts = bio
     
     # 2. 获取图片总数
     count = api_get("images/count")

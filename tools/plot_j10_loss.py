@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """J10 两阶段 loss 图 (分开保存)"""
-import re, matplotlib.pyplot as plt, pandas as pd
+import re, matplotlib.pyplot as plt
 
 def parse_log_split(log_path, start1, start2):
     with open(log_path) as f:
@@ -23,14 +23,10 @@ for losses, name in [(s1_losses, 'J10_S1_DFUI_48ep'), (s2_losses, 'J10_S2_RUOD_2
     print(f"{name}: {len(losses)} losses")
     
     fig, ax = plt.subplots(figsize=(16, 5))
-    ax.plot(losses, alpha=0.4, linewidth=0.5, color='#2874A6', label='iter loss')
-    if len(losses) > 50:
-        smooth = pd.Series(losses).rolling(50).mean()
-        ax.plot(smooth, linewidth=2.0, color='#E74C3C', label='smooth(50)')
+    ax.plot(losses, alpha=0.4, linewidth=0.5, color='#E74C3C')
     ax.set_xlabel('Iteration', fontsize=12)
     ax.set_ylabel('Loss', fontsize=12)
     ax.set_title(name.replace('_', ' '), fontsize=14)
-    ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(f'{name}.png', dpi=150)

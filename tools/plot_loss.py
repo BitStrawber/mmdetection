@@ -1,67 +1,48 @@
-"""从mmdetection日志文件生成loss曲线图
-
-用法:
-    python plot_loss.py --expA /path/to/log_expA.txt --expB3 /path/to/log_expB3.txt --output /path/to/output.png
-    python plot_loss.py --expA /path/to/log_expA.txt --output /path/to/output.png
-"""
-import argparse
-import re
+#!/usr/bin/env python3
+"""从mmdet训练log中提取loss并画图"""
+import re, argparse
 import matplotlib.pyplot as plt
-from pathlib import Path
-
 
 def parse_log(log_path):
-    epochs = []
     losses = []
-    lrs = []
-
-    pattern = re.compile(r'Epoch\(train\)\s+\[(\d+)\]\s+\[.*?\]\s+.*?loss:\s*([0-9.]+)')
-    lr_pattern = re.compile(r'lr:\s*([0-9.e\-]+)')
-
-    with open(log_path, 'r') as f:
+    with open(log_path) as f:
         for line in f:
-            m = pattern.search(line)
-            if m:
-                epoch = int(m.group(1))
-                loss = float(m.group(2))
-                epochs.append(epoch)
-                losses.append(loss)
-
-    return epochs, losses
-
+            # 匹配 mmdet 3.x 格式: ... loss: X.XXX ...
+            m = re.search(r'loss:\s*([\d.]+)', line)
+            if m and 'loss_rpn' not in line and 'lr' not in line.lower():
+                losses.append(float(m.group(1)))
+    return losses
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--expA', required=True, help='Exp A训练日志路径')
-    parser.add_argument('--expB3', default=None, help='Exp B-3训练日志路径')
-    parser.add_argument('--expB1', default=None, help='Exp B-1训练日志路径')
-    parser.add_argument('--output', default='loss_curve.png', help='输出图片路径')
-    parser.add_argument('--title', default='Training Loss Curve', help='图表标题')
+    parser.add_argument('log', help='训练log文件路径')
+    parser.add_argument('--out', default=None, help='输出图片路径')
+    parser.add_argument('--window', type=int, default=50, help='平滑窗口大小')
     args = parser.parse_args()
-
-    plt.figure(figsize=(12, 6))
-
-    datasets = [
-        ('Exp A (ImageNet+RUOD)', args.expA, 'blue'),
-        ('Exp B-3 (UWNR Pretrain+RUOD)', args.expB3, 'red'),
-        ('Exp B-1 (COCO-UWNR)', args.expB1, 'green'),
-    ]
-
-    for name, path, color in datasets:
-        if path and Path(path).exists():
-            epochs, losses = parse_log(path)
-            if epochs:
-                plt.plot(epochs, losses, label=name, color=color, alpha=0.8)
-
-    plt.xlabel('Epoch')
+    
+    losses = parse_log(args.log)
+    print(f"提取到 {len(losses)} 个loss值")
+    
+    plt.figure(figsize=(10, 4))
+    plt.plot(losses, alpha=0.3, linewidth=0.5, label='raw')
+    
+    if len(losses) > args.window:
+        import pandas as pd
+        smooth = pd.Series(losses).rolling(args.window).mean()
+        plt.plot(smooth, linewidth=1.5, label=f'smooth({args.window})')
+    
+    plt.xlabel('Iteration')
     plt.ylabel('Loss')
-    plt.title(args.title)
+    plt.title(f'Training Loss Curve - {args.log}')
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig(args.output, dpi=150)
-    print(f'保存到 {args.output}')
-
+    
+    if args.out:
+        plt.savefig(args.out, dpi=150)
+        print(f"保存: {args.out}")
+    else:
+        plt.show()
 
 if __name__ == '__main__':
     main()

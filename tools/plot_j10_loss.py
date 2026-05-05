@@ -23,7 +23,7 @@ for losses, name in [(s1_losses, 'J10_S1_DFUI_48ep'), (s2_losses, 'J10_S2_RUOD_2
     print(f"{name}: {len(losses)} losses")
     
     fig, ax = plt.subplots(figsize=(16, 5))
-    ax.plot(losses, alpha=0.15, linewidth=0.3, color='#3498DB', label='iter loss')
+    ax.plot(losses, alpha=0.4, linewidth=0.5, color='#2874A6', label='iter loss')
     if len(losses) > 50:
         smooth = pd.Series(losses).rolling(50).mean()
         ax.plot(smooth, linewidth=2.0, color='#E74C3C', label='smooth(50)')

@@ -23,7 +23,7 @@ for losses, name in [(s1_losses, 'J10_S1_DFUI_48ep'), (s2_losses, 'J10_S2_RUOD_2
     print(f"{name}: {len(losses)} losses")
     
     fig, ax = plt.subplots(figsize=(16, 5))
-    ax.plot(losses, alpha=0.4, linewidth=0.5, color='#E74C3C')
+    ax.plot(losses, alpha=0.7, linewidth=0.5, color='#C0392B')
     ax.set_xlabel('Iteration', fontsize=12)
     ax.set_ylabel('Loss', fontsize=12)
     ax.set_title(name.replace('_', ' '), fontsize=14)

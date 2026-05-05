@@ -13,8 +13,8 @@ def parse_log_split(log_path, start1, start2):
         if start2 in line: stage = 2
         if stage == 0: continue
         
-        m = re.search(r'loss:\s*([\d.]+)', line)
-        if m and 'loss_rpn' not in line:
+        m = re.search(r' loss:\s*([\d.]+)', line)
+        if m:
             if stage == 1: s1.append(float(m.group(1)))
             else: s2.append(float(m.group(1)))
     return s1, s2

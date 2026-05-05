@@ -2,36 +2,25 @@
 """J10 两阶段 loss 图"""
 import re, matplotlib.pyplot as plt, pandas as pd
 
-def parse_loss(log_path):
-    losses = []
-    with open(log_path) as f:
-        for line in f:
-            m = re.search(r'loss:\s*([\d.]+)', line)
-            if m and 'loss_rpn' not in line and 'lr' not in line.lower():
-                losses.append(float(m.group(1)))
-    return losses
-
-def parse_log_split(log_path, marker1, marker2):
-    """按标记分割log，分别提取loss"""
+def parse_log_split(log_path, start1, start2):
     with open(log_path) as f:
         lines = f.readlines()
     
-    parts = [[], []]
-    stage = 0
+    s1, s2 = [], []
+    stage = 0  # 0=before S1, 1=S1, 2=S2
     for line in lines:
-        if marker1 in line:
-            stage = 1
-        if marker2 in line:
-            stage = 2
-        if stage >= 1:
-            m = re.search(r'loss:\s*([\d.]+)', line)
-            if m and 'loss_rpn' not in line and 'lr' not in line.lower():
-                parts[min(stage-1, 1)].append(float(m.group(1)))
-    return parts[0], parts[1]
+        if start1 in line: stage = 1
+        if start2 in line: stage = 2
+        if stage == 0: continue
+        
+        m = re.search(r'loss:\s*([\d.]+)', line)
+        if m and 'loss_rpn' not in line:
+            if stage == 1: s1.append(float(m.group(1)))
+            else: s2.append(float(m.group(1)))
+    return s1, s2
 
-# J10 log 文件路径
 log = 'j10_run.log'
-s1_losses, s2_losses = parse_log_split(log, 'j10_s1', 'j10_s2')
+s1_losses, s2_losses = parse_log_split(log, '>>> Stage 1', '>>> Stage 2')
 
 print(f"J10 S1 (DFUI): {len(s1_losses)} losses")
 print(f"J10 S2 (RUOD): {len(s2_losses)} losses")

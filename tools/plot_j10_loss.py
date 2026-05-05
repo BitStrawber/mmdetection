@@ -29,7 +29,7 @@ fig, axes = plt.subplots(1, 2, figsize=(14, 4))
 
 for ax, losses, title in zip(axes, [s1_losses, s2_losses], 
                               ['J10 S1: DFUI (48 epoch)', 'J10 S2: RUOD (24 epoch)']):
-    ax.plot(losses, alpha=0.15, linewidth=0.3, color='gray', label='iter loss')
+    ax.plot(losses, alpha=0.15, linewidth=0.3, color='#3498DB', label='iter loss')
     if len(losses) > 50:
         smooth = pd.Series(losses).rolling(50).mean()
         ax.plot(smooth, linewidth=2.0, color='#E74C3C', label='smooth(50)')

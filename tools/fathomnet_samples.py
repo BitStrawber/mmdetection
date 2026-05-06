@@ -4,6 +4,7 @@ FathomNet: 每类选1张图，画bbox，统计bbox占比
 """
 import os, json, cv2, argparse
 from collections import defaultdict
+from tqdm import tqdm
 
 def main():
     parser = argparse.ArgumentParser()
@@ -32,7 +33,7 @@ def main():
     img_map = {img['id']: img for img in data['images']}
     ratios = []
     
-    for cat_id, img_ids in sorted(cat_imgs.items()):
+    for cat_id, img_ids in tqdm(sorted(cat_imgs.items()), desc="处理类别"):
         cat_name = id2name[cat_id]
         img_id = img_ids[0]
         img_info = img_map[img_id]

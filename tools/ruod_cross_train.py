@@ -96,12 +96,20 @@ val_evaluator = dict(ann_file='{CROSS_DIR}/train_A.json')
 test_evaluator = val_evaluator
 """
     
-    os.makedirs('configs/exp_2/cross', exist_ok=True)
-    with open('configs/exp_2/cross/train_A_val_B.py', 'w') as f:
+    config_dir = 'configs/exp_2/cross'
+    os.makedirs(config_dir, exist_ok=True)
+    
+    config_a_path = f'{config_dir}/train_A_val_B.py'
+    config_b_path = f'{config_dir}/train_B_val_A.py'
+    
+    with open(config_a_path, 'w') as f:
         f.write(config_a)
-    with open('configs/exp_2/cross/train_B_val_A.py', 'w') as f:
+    with open(config_b_path, 'w') as f:
         f.write(config_b)
-    print("配置已生成: configs/exp_2/cross/train_A_val_B.py, train_B_val_A.py")
+    
+    print(f"配置已生成:")
+    print(f"  {config_a_path}")
+    print(f"  {config_b_path}")
 
 
 def run_train(config_path, work_dir, log_name):

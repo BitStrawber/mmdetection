@@ -114,14 +114,11 @@ def run_train(config_path, work_dir, log_name):
 
 def filter_by_ap(checkpoint, val_json, output_json, thresh=0.6):
     """
-    用checkpoint推理val_json中的图片,计算每图AP50,
-    保留AP50>thresh的图片,输出筛选后的COCO JSON
-    
-    简化实现: 用mmdet test推理val_json,解析per-image AP
+    用checkpoint推理val_json, 计算每图AP50, 保留>thresh的图片
     """
-    import subprocess, tempfile
+    import subprocess, tempfile, pickle
     
-    # 创建临时测试配置
+    # 创建临时测试配置(仅推理, 不evaluate)
     test_cfg = f"""
 _base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 data_root = '{RUOD_ROOT}'
@@ -140,22 +137,131 @@ load_from = '{checkpoint}'
         f.write(test_cfg)
         test_cfg_path = f.name
     
-    # 运行推理, 输出COCO results
-    result_file = f'{CROSS_DIR}/_results.pkl'
+    # 推理, 输出COCO格式predictions
+    result_pkl = f'{CROSS_DIR}/_results.pkl'
+    result_json = f'{CROSS_DIR}/_results.bbox.json'
+    
     cmd = (f'python tools/test.py {test_cfg_path} {checkpoint} '
-           f'--out {result_file} 2>&1 | tee {CROSS_DIR}/inference.log')
-    print(f"\n推理: {cmd}")
-    os.system(cmd)
-    
-    # TODO: 解析结果, 筛选高AP图片
-    # 这里需要从mmdet的result pkl中提取per-image metrics
-    # 简化: 直接返回全量(后续实现)
-    val_coco = load_coco(val_json)
-    save_coco(val_coco, output_json)
-    print(f"筛选完成: {len(val_coco['images'])} 张 → {output_json}")
-    
+           f'--out {result_pkl} --format-only '
+           f'--options "jsonfile_prefix={CROSS_DIR}/_results" 2>&1')
+    print(f"\n推理中...")
+    ret = os.system(cmd)
     os.unlink(test_cfg_path)
+    
+    if ret != 0 or not os.path.exists(result_json):
+        print("推理失败, 返回全量")
+        val_coco = load_coco(val_json)
+        save_coco(val_coco, output_json)
+        return val_coco
+    
+    # 计算per-image AP50
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+    import numpy as np
+    
+    coco_gt = COCO(val_json)
+    coco_dt = coco_gt.loadRes(result_json)
+    
+    # 逐图评估
+    img_ids = coco_gt.getImgIds()
+    good_ids = set()
+    
+    for iid in img_ids:
+        # 获取该图GT和预测
+        ann_ids = coco_gt.getAnnIds(imgIds=[iid])
+        dt_ids = coco_dt.getAnnIds(imgIds=[iid])
+        
+        if len(ann_ids) == 0:
+            # 无GT标注的图直接保留
+            good_ids.add(iid)
+            continue
+        
+        gts = coco_gt.loadAnns(ann_ids)
+        dts = coco_dt.loadAnns(dt_ids)
+        
+        if len(dts) == 0:
+            continue  # 没检测到, 跳过
+        
+        # 计算该图的AP50
+        from collections import defaultdict
+        gt_by_class = defaultdict(list)
+        for gt in gts:
+            gt_by_class[gt['category_id']].append(gt)
+        
+        # 按confidence排序预测
+        dts_sorted = sorted(dts, key=lambda x: x['score'], reverse=True)
+        
+        # 匹配
+        tp = np.zeros(len(dts_sorted))
+        fp = np.zeros(len(dts_sorted))
+        gt_used = defaultdict(set)
+        gt_count = sum(len(v) for v in gt_by_class.values())
+        
+        for d_idx, dt in enumerate(dts_sorted):
+            cat = dt['category_id']
+            if cat not in gt_by_class:
+                fp[d_idx] = 1
+                continue
+            
+            # 找最大IoU的GT
+            dt_box = dt['bbox']
+            max_iou = 0
+            max_gt_idx = -1
+            for g_idx, gt in enumerate(gt_by_class[cat]):
+                if g_idx in gt_used[cat]:
+                    continue
+                iou = _compute_iou(dt_box, gt['bbox'])
+                if iou > max_iou:
+                    max_iou = iou
+                    max_gt_idx = g_idx
+            
+            if max_iou >= 0.5:
+                tp[d_idx] = 1
+                gt_used[cat].add(max_gt_idx)
+            else:
+                fp[d_idx] = 1
+        
+        # 计算AP50 = 平均precision (单类别简化)
+        tp_cum = np.cumsum(tp)
+        fp_cum = np.cumsum(fp)
+        recalls = tp_cum / max(gt_count, 1)
+        precisions = tp_cum / np.maximum(tp_cum + fp_cum, np.finfo(float).eps)
+        
+        # AP50 = 11点插值
+        ap50 = 0
+        for t in np.linspace(0, 1, 11):
+            p = np.max(precisions[recalls >= t]) if np.any(recalls >= t) else 0
+            ap50 += p / 11
+        
+        if ap50 >= thresh:
+            good_ids.add(iid)
+    
+    print(f"  AP50>{thresh}: {len(good_ids)}/{len(img_ids)} ({len(good_ids)/len(img_ids)*100:.1f}%)")
+    
+    # 筛选
+    val_coco = load_coco(val_json)
+    val_coco['images'] = [img for img in val_coco['images'] if img['id'] in good_ids]
+    val_coco['annotations'] = [a for a in val_coco['annotations'] if a['image_id'] in good_ids]
+    save_coco(val_coco, output_json)
+    
+    # 清理
+    for f in [result_pkl, result_json]:
+        if os.path.exists(f): os.remove(f)
+    
     return val_coco
+
+
+def _compute_iou(box1, box2):
+    """计算两个[x,y,w,h]格式bbox的IoU"""
+    x1 = max(box1[0], box2[0])
+    y1 = max(box1[1], box2[1])
+    x2 = min(box1[0] + box1[2], box2[0] + box2[2])
+    y2 = min(box1[1] + box1[3], box2[1] + box2[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1)
+    area1 = box1[2] * box1[3]
+    area2 = box2[2] * box2[3]
+    union = area1 + area2 - inter
+    return inter / union if union > 0 else 0
 
 
 def main():

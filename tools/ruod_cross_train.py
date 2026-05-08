@@ -279,6 +279,17 @@ def main():
         print("完成!")
         print(f"  A_easy: {CROSS_DIR}/A_easy.json")
         print(f"  B_easy: {CROSS_DIR}/B_easy.json")
+        
+        # GPU占位
+        print("\nGPU继续占位中... 手动停止: pkill -f gpu_cross_occupy")
+        for gpu_id in GPU_IDS.split(','):
+            os.system(
+                f'CUDA_VISIBLE_DEVICES={gpu_id} nohup python -c '
+                f'"import torch,time; x=torch.zeros(2000,2000,1000,device=\\\"cuda\\\"); print(\\\"GPU {gpu_id} 占位完成\\\"); '
+                f'while True: time.sleep(60)" '
+                f'> logs/gpu_cross_occupy_{gpu_id}.log 2>&1 &'
+            )
+        input("按回车键释放GPU...")
 
 
 if __name__ == '__main__':

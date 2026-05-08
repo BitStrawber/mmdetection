@@ -23,7 +23,7 @@ RUOD_ROOT  = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco'
 ANNOTATION = f'{RUOD_ROOT}/annotations/instances_train.json'
 CROSS_DIR  = f'{RUOD_ROOT}/cross_split'
 WORK_DIR   = 'work_dirs/ruod_cross'
-GPU_IDS    = '0,1'
+GPU_IDS    = '4,5'
 NUM_GPUS   = 2
 SEED       = 42
 

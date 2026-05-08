@@ -195,7 +195,8 @@ load_from = '{checkpoint}'
         if ap50 >= thresh:
             good_ids.add(iid)
     
-    print(f"  AP50>{thresh}: {len(good_ids)}/{len(img_ids)} ({len(good_ids)/len(img_ids)*100:.1f}%)")
+    total = len(img_ids)
+    print(f"  筛选结果: {len(good_ids)}/{total} ({len(good_ids)/total*100:.1f}%) 保留, {total-len(good_ids)} 丢弃")
     
     # 筛选
     val_coco = load_coco(val_json)
@@ -269,11 +270,15 @@ def main():
         ckpt_b = sorted(glob.glob(f'{WORK_DIR}/stageB/best_coco*.pth'))[-1] if glob.glob(f'{WORK_DIR}/stageB/best_coco*.pth') else None
         
         if ckpt_a:
-            filter_by_ap(ckpt_a, f'{CROSS_DIR}/train_B.json',
+            print(f"\n模型A ({ckpt_a}) → 筛选B图片")
+            result = filter_by_ap(ckpt_a, f'{CROSS_DIR}/train_B.json',
                         f'{CROSS_DIR}/B_easy.json')
+            print(f"  B_easy: {len(result['images'])} images")
         if ckpt_b:
-            filter_by_ap(ckpt_b, f'{CROSS_DIR}/train_A.json',
+            print(f"\n模型B ({ckpt_b}) → 筛选A图片")
+            result = filter_by_ap(ckpt_b, f'{CROSS_DIR}/train_A.json',
                         f'{CROSS_DIR}/A_easy.json')
+            print(f"  A_easy: {len(result['images'])} images")
         
         print("\n" + "=" * 60)
         print("完成!")

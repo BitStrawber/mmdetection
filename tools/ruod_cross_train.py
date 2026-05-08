@@ -141,58 +141,61 @@ load_from = '{checkpoint}'
         if len(dts) == 0:
             continue  # 没检测到, 跳过
         
-        # 计算该图的AP50
+        # 按类别分组GT + 按置信度排序预测
         from collections import defaultdict
         gt_by_class = defaultdict(list)
         for gt in gts:
             gt_by_class[gt['category_id']].append(gt)
-        
-        # 按confidence排序预测
+        gt_count = sum(len(v) for v in gt_by_class.values())
         dts_sorted = sorted(dts, key=lambda x: x['score'], reverse=True)
         
-        # 匹配
-        tp = np.zeros(len(dts_sorted))
-        fp = np.zeros(len(dts_sorted))
-        gt_used = defaultdict(set)
-        gt_count = sum(len(v) for v in gt_by_class.values())
+        # 计算该图的mAP (IoU 0.50:0.05:0.95)
+        iou_thresholds = np.linspace(0.5, 0.95, 10)
+        aps = []
         
-        for d_idx, dt in enumerate(dts_sorted):
-            cat = dt['category_id']
-            if cat not in gt_by_class:
-                fp[d_idx] = 1
-                continue
+        for iou_thr in iou_thresholds:
+            tp = np.zeros(len(dts_sorted))
+            fp = np.zeros(len(dts_sorted))
+            gt_used = defaultdict(set)
             
-            # 找最大IoU的GT
-            dt_box = dt['bbox']
-            max_iou = 0
-            max_gt_idx = -1
-            for g_idx, gt in enumerate(gt_by_class[cat]):
-                if g_idx in gt_used[cat]:
+            for d_idx, dt in enumerate(dts_sorted):
+                cat = dt['category_id']
+                if cat not in gt_by_class:
+                    fp[d_idx] = 1
                     continue
-                iou = _compute_iou(dt_box, gt['bbox'])
-                if iou > max_iou:
-                    max_iou = iou
-                    max_gt_idx = g_idx
+                
+                dt_box = dt['bbox']
+                max_iou = 0
+                max_gt_idx = -1
+                for g_idx, gt in enumerate(gt_by_class[cat]):
+                    if g_idx in gt_used[cat]:
+                        continue
+                    iou = _compute_iou(dt_box, gt['bbox'])
+                    if iou > max_iou:
+                        max_iou = iou
+                        max_gt_idx = g_idx
+                
+                if max_iou >= iou_thr:
+                    tp[d_idx] = 1
+                    gt_used[cat].add(max_gt_idx)
+                else:
+                    fp[d_idx] = 1
             
-            if max_iou >= 0.5:
-                tp[d_idx] = 1
-                gt_used[cat].add(max_gt_idx)
-            else:
-                fp[d_idx] = 1
+            tp_cum = np.cumsum(tp)
+            fp_cum = np.cumsum(fp)
+            recalls = tp_cum / max(gt_count, 1)
+            precisions = tp_cum / np.maximum(tp_cum + fp_cum, np.finfo(float).eps)
+            
+            # 101点插值
+            ap = 0
+            for t in np.linspace(0, 1, 101):
+                p = np.max(precisions[recalls >= t]) if np.any(recalls >= t) else 0
+                ap += p / 101
+            aps.append(ap)
         
-        # 计算AP50 = 平均precision (单类别简化)
-        tp_cum = np.cumsum(tp)
-        fp_cum = np.cumsum(fp)
-        recalls = tp_cum / max(gt_count, 1)
-        precisions = tp_cum / np.maximum(tp_cum + fp_cum, np.finfo(float).eps)
+        per_image_map = np.mean(aps)
         
-        # AP50 = 11点插值
-        ap50 = 0
-        for t in np.linspace(0, 1, 11):
-            p = np.max(precisions[recalls >= t]) if np.any(recalls >= t) else 0
-            ap50 += p / 11
-        
-        if ap50 >= thresh:
+        if per_image_map >= thresh:
             good_ids.add(iid)
     
     total = len(img_ids)

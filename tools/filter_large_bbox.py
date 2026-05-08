@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 """
-筛选最大bbox占图面积>=阈值的图片 (支持多种数据集格式)
+筛选最大bbox占图面积>=阈值的图片
+
+结果保存位置: 原始JSON同目录, 自动加 _bboxXXpct 后缀
 
 用法:
-  # FathomNet (按类文件夹)
-  python tools/filter_large_bbox.py --fathom_dir /path/to/FathomNet -t 0.2
-
-  # WebUOT / DFUI (训练+测试)
   python tools/filter_large_bbox.py \
-      --json_train /path/to/instances_train.json \
-      --json_val /path/to/instances_val.json \
+      --fathom_dir /path/to/FathomNet \
+      --json_train /path/to/train.json --json_val /path/to/val.json \
       -t 0.2
-
-  # 单个JSON
-  python tools/filter_large_bbox.py --json /path/to/annotations.json -t 0.2
 """
 import json, os, glob, argparse
 from tqdm import tqdm

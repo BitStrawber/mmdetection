@@ -57,59 +57,10 @@ def split_coco(coco):
 
 
 def gen_configs():
-    """生成 A_train → B_val 和 B_train → A_val 两个mmdet配置"""
-    base = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
-    
-    config_a = f"""# Cross: A训练 + B验证
-_base_ = '{base}'
-data_root = '{RUOD_ROOT}'
-train_dataloader = dict(
-    batch_size=6, num_workers=2,
-    dataset=dict(data_root=data_root,
-        data_prefix=dict(img='train/'),
-        ann_file='{CROSS_DIR}/train_A.json'))
-val_dataloader = dict(
-    batch_size=1, num_workers=2,
-    dataset=dict(data_root=data_root,
-        data_prefix=dict(img='train/'),
-        ann_file='{CROSS_DIR}/train_B.json'))
-test_dataloader = val_dataloader
-val_evaluator = dict(ann_file='{CROSS_DIR}/train_B.json')
-test_evaluator = val_evaluator
-"""
-    
-    config_b = f"""# Cross: B训练 + A验证
-_base_ = '{base}'
-data_root = '{RUOD_ROOT}'
-train_dataloader = dict(
-    batch_size=6, num_workers=2,
-    dataset=dict(data_root=data_root,
-        data_prefix=dict(img='train/'),
-        ann_file='{CROSS_DIR}/train_B.json'))
-val_dataloader = dict(
-    batch_size=1, num_workers=2,
-    dataset=dict(data_root=data_root,
-        data_prefix=dict(img='train/'),
-        ann_file='{CROSS_DIR}/train_A.json'))
-test_dataloader = val_dataloader
-val_evaluator = dict(ann_file='{CROSS_DIR}/train_A.json')
-test_evaluator = val_evaluator
-"""
-    
-    config_dir = 'configs/exp_2/cross'
-    os.makedirs(config_dir, exist_ok=True)
-    
-    config_a_path = f'{config_dir}/train_A_val_B.py'
-    config_b_path = f'{config_dir}/train_B_val_A.py'
-    
-    with open(config_a_path, 'w') as f:
-        f.write(config_a)
-    with open(config_b_path, 'w') as f:
-        f.write(config_b)
-    
-    print(f"配置已生成:")
-    print(f"  {config_a_path}")
-    print(f"  {config_b_path}")
+    """配置已预生成(不再动态创建)"""
+    print(f"配置文件已预生成:")
+    print(f"  configs/exp_2/cross/train_A_val_B.py")
+    print(f"  configs/exp_2/cross/train_B_val_A.py")
 
 
 def run_train(config_path, work_dir, log_name):

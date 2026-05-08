@@ -25,11 +25,19 @@ def filter_coco(coco, threshold=0.2):
             img_max_bbox[iid] = area
     
     keep_ids = set()
+    skipped = 0
     for iid, max_area in img_max_bbox.items():
         img = img_map[iid]
-        img_area = img['width'] * img['height']
-        if img_area > 0 and max_area / img_area >= threshold:
+        w, h = img.get('width'), img.get('height')
+        if not w or not h:
+            skipped += 1
+            continue
+        img_area = w * h
+        if max_area / img_area >= threshold:
             keep_ids.add(iid)
+    
+    if skipped:
+        print(f"    跳过 {skipped} 张尺寸缺失的图片")
     
     filtered = {
         'info': coco.get('info', {}),

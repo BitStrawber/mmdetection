@@ -15,8 +15,10 @@ RUOD 训练集交叉筛选
   python tools/ruod_cross_train.py --step all       # 全流程
 """
 
-import os, sys, json, random, argparse
+import os, sys, json, random, argparse, numpy as np
 from copy import deepcopy
+from collections import defaultdict
+from tqdm import tqdm
 
 # ========== 配置 ==========
 RUOD_ROOT  = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco'
@@ -73,45 +75,136 @@ def run_train(config_path, work_dir, log_name):
 
 def filter_by_ap(checkpoint, val_json, output_json, thresh=0.6):
     """
-    用checkpoint推理val_json, 计算每图AP50, 保留>thresh的图片
+    用checkpoint推理val_json, 计算每图mAP, 保留>thresh的图片
     """
-    import subprocess, tempfile, pickle
+    import sys
+    sys.path.insert(0, os.getcwd())
+    from mmdet.apis import init_detector, inference_detector
+    from mmengine.config import Config
     
-    # 创建临时测试配置(仅推理, 不evaluate)
-    test_cfg = f"""
-_base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
-data_root = '{RUOD_ROOT}'
-val_dataloader = dict(
-    batch_size=1, num_workers=2,
-    dataset=dict(data_root=data_root,
-        data_prefix=dict(img='train/'),
-        ann_file='{val_json}'))
-test_dataloader = val_dataloader
-val_evaluator = dict(ann_file='{val_json}', metric='bbox')
-test_evaluator = val_evaluator
-load_from = '{checkpoint}'
-"""
+    # 创建测试配置
+    test_cfg_dict = Config.fromfile('configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py')
+    test_cfg_dict.data_root = RUOD_ROOT
+    test_cfg_dict.val_dataloader = dict(
+        batch_size=1, num_workers=2,
+        dataset=dict(
+            type='CocoDataset',
+            data_root=RUOD_ROOT,
+            data_prefix=dict(img='train/'),
+            ann_file=val_json,
+            metainfo=dict(classes=('holothurian','echinus','scallop','starfish','fish',
+                                     'corals','diver','cuttlefish','turtle','jellyfish'))
+        )
+    )
     
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(test_cfg)
-        test_cfg_path = f.name
+    # 初始化模型
+    print(f"  加载模型: {checkpoint}")
+    model = init_detector(test_cfg_dict, checkpoint, device='cuda:0')
     
-    # 推理, 输出COCO格式predictions
-    result_pkl = f'{CROSS_DIR}/_results.pkl'
-    result_json = f'{CROSS_DIR}/_results.bbox.json'
+    val_coco = load_coco(val_json)
+    img_map = {img['id']: img for img in val_coco['images']}
     
-    cmd = (f'python tools/test.py {test_cfg_path} {checkpoint} '
-           f'--out {result_pkl} --format-only '
-           f'--options "jsonfile_prefix={CROSS_DIR}/_results" 2>&1')
-    print(f"\n推理中...")
-    ret = os.system(cmd)
-    os.unlink(test_cfg_path)
+    # 逐图推理
+    import numpy as np
+    from collections import defaultdict
     
-    if ret != 0 or not os.path.exists(result_json):
-        print("推理失败, 返回全量")
-        val_coco = load_coco(val_json)
-        save_coco(val_coco, output_json)
-        return val_coco
+    good_ids = set()
+    total = len(img_map)
+    
+    print(f"  推理 {total} 张图片...")
+    for idx, img_info in enumerate(tqdm(list(img_map.values()))):
+        if (idx + 1) % 200 == 0:
+            print(f"    {idx+1}/{total}...")
+        
+        img_path = os.path.join(RUOD_ROOT, 'train', img_info['file_name'])
+        if not os.path.exists(img_path):
+            continue
+        
+        result = inference_detector(model, img_path)
+        pred_instances = result.pred_instances
+        
+        # 获取GT标注
+        ann_ids = [a['id'] for a in val_coco['annotations'] if a['image_id'] == img_info['id']]
+        gts = [a for a in val_coco['annotations'] if a['image_id'] == img_info['id']]
+        
+        if len(gts) == 0:
+            good_ids.add(img_info['id'])
+            continue
+        
+        if pred_instances is None or len(pred_instances.bboxes) == 0:
+            continue
+        
+        # 提取预测: [bbox, score, label]
+        pred_boxes = pred_instances.bboxes.cpu().numpy()
+        pred_scores = pred_instances.scores.cpu().numpy()
+        pred_labels = pred_instances.labels.cpu().numpy()
+        
+        # 按置信度排序
+        sort_idx = np.argsort(-pred_scores)
+        
+        gt_by_class = defaultdict(list)
+        for gt in gts:
+            gt_by_class[gt['category_id']].append(gt)
+        gt_count = sum(len(v) for v in gt_by_class.values())
+        
+        # 计算per-image mAP
+        iou_thresholds = np.linspace(0.5, 0.95, 10)
+        aps = []
+        
+        for iou_thr in iou_thresholds:
+            tp = np.zeros(len(sort_idx))
+            fp = np.zeros(len(sort_idx))
+            gt_used = defaultdict(set)
+            
+            for rank, d_idx in enumerate(sort_idx):
+                label = int(pred_labels[d_idx]) + 1  # 0-indexed → 1-indexed
+                if label not in gt_by_class:
+                    fp[rank] = 1
+                    continue
+                
+                pred_box = [float(pred_boxes[d_idx][0]), float(pred_boxes[d_idx][1]),
+                           float(pred_boxes[d_idx][2] - pred_boxes[d_idx][0]),
+                           float(pred_boxes[d_idx][3] - pred_boxes[d_idx][1])]
+                
+                max_iou = 0
+                max_gt_idx = -1
+                for g_idx, gt in enumerate(gt_by_class[label]):
+                    if g_idx in gt_used[label]:
+                        continue
+                    iou = _compute_iou(pred_box, gt['bbox'])
+                    if iou > max_iou:
+                        max_iou = iou
+                        max_gt_idx = g_idx
+                
+                if max_iou >= iou_thr:
+                    tp[rank] = 1
+                    gt_used[label].add(max_gt_idx)
+                else:
+                    fp[rank] = 1
+            
+            tp_cum = np.cumsum(tp)
+            fp_cum = np.cumsum(fp)
+            recalls = tp_cum / max(gt_count, 1)
+            precisions = tp_cum / np.maximum(tp_cum + fp_cum, np.finfo(float).eps)
+            
+            ap = 0
+            for t in np.linspace(0, 1, 101):
+                p = np.max(precisions[recalls >= t]) if np.any(recalls >= t) else 0
+                ap += p / 101
+            aps.append(ap)
+        
+        per_image_map = np.mean(aps)
+        if per_image_map >= thresh:
+            good_ids.add(img_info['id'])
+    
+    print(f"\n  筛选结果: {len(good_ids)}/{total} ({len(good_ids)/total*100:.1f}%) 保留, {total-len(good_ids)} 丢弃")
+    
+    # 筛选并保存
+    val_coco['images'] = [img for img in val_coco['images'] if img['id'] in good_ids]
+    val_coco['annotations'] = [a for a in val_coco['annotations'] if a['image_id'] in good_ids]
+    save_coco(val_coco, output_json)
+    
+    return val_coco
     
     # 计算per-image AP50
     from pycocotools.coco import COCO

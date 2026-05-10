@@ -1,5 +1,5 @@
 # J10 S1: 筛选RUOD + DFUI 合并预训练 (96 epoch + 早停)
-_base_ = '../../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
+_base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 
 data_root = '/media/HDD0/XCX/exp_2/DFUI_NEW/'
 ann_root = data_root + 'annotations/'

@@ -34,14 +34,11 @@ for img in dfui['images']:
 
 random.shuffle(all_items)
 n = len(all_items)
-n_train = int(n * 0.64)
-n_val   = int(n * 0.16)
-# n_test = 剩余 (20%)
+n_train = int(n * 0.8)
 
 splits = {
     'train': all_items[:n_train],
-    'val':   all_items[n_train:n_train + n_val],
-    'test':  all_items[n_train + n_val:]
+    'val':   all_items[n_train:]
 }
 
 for split_name, items in splits.items():
@@ -91,7 +88,6 @@ for split_name, items in splits.items():
     print(f"  {split_name}: {img_id} imgs, {ann_id} anns")
 
 print(f"\n完成!")
-print(f"  Train: {len(splits['train'])} ({100*n_train/n:.0f}%)")
-print(f"  Val:   {len(splits['val'])} ({100*n_val/n:.0f}%)")
-print(f"  Test:  {len(splits['test'])} ({100*(n-n_train-n_val)/n:.0f}%)")
+print(f"  Train: {n_train} ({100*n_train/n:.0f}%)")
+print(f"  Val:   {n - n_train} ({100*(n-n_train)/n:.0f}%)")
 print(f"  输出: {NEW_ROOT}/")

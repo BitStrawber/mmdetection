@@ -1,5 +1,5 @@
 # Faster R-CNN: 筛选后的RUOD + DFUI 训练
-_base_ = '../faster_rcnn/faster-rcnn_r50_fpn_2x_coco.py'
+_base_ = '../../faster_rcnn/faster-rcnn_r50_fpn_2x_coco.py'
 
 # RUOD 筛选后数据集
 ruod_root = '/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco/'

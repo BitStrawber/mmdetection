@@ -1,7 +1,7 @@
 # J10 S1: 筛选RUOD + DFUI 合并预训练 (96 epoch + 早停)
 _base_ = '../../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 
-data_root = '/media/HDD0/XCX/exp_2/RUOD/coco/'
+data_root = '/media/HDD0/XCX/exp_2/DFUI_NEW/'
 ann_root = data_root + 'annotations/'
 
 classes = ('holothurian', 'echinus', 'scallop', 'starfish', 'fish',
@@ -16,10 +16,26 @@ train_dataloader = dict(
     num_workers=2,
     dataset=dict(
         data_root=data_root,
-        data_prefix=dict(img='train/'),
-        ann_file=ann_root + 'merged_ruod_dfui.json',
+        data_prefix=dict(img='images/'),
+        ann_file=ann_root + 'instances_train2017.json',
         metainfo=dict(classes=classes),
         filter_cfg=dict(filter_empty_gt=True, min_size=32)))
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    dataset=dict(
+        data_root=data_root,
+        data_prefix=dict(img='images/'),
+        ann_file=ann_root + 'instances_val2017.json',
+        metainfo=dict(classes=classes),
+        test_mode=True))
+test_dataloader = val_dataloader
+
+val_evaluator = dict(
+    ann_file=ann_root + 'instances_val2017.json',
+    metric='bbox')
+test_evaluator = val_evaluator
 
 train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=96, val_interval=1)
 

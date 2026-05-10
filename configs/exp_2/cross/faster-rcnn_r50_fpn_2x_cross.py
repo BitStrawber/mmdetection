@@ -44,8 +44,13 @@ val_dataloader = dict(
     dataset=dict(
         type='CocoDataset',
         data_root=ruod_root,
-        data_prefix=dict(img='val/'),
-        ann_file=ruod_root + 'annotations/instances_val.json',
-        metainfo=dict(classes=classes)))
+        data_prefix=dict(img='train/'),
+        ann_file=cross_dir + 'easy_merged.json',
+        metainfo=dict(classes=classes),
+        test_mode=True))
 
-val_evaluator = dict(ann_file=ruod_root + 'annotations/instances_val.json')
+val_evaluator = dict(
+    ann_file=cross_dir + 'easy_merged.json',
+    metric='bbox')
+test_dataloader = val_dataloader
+test_evaluator = val_evaluator

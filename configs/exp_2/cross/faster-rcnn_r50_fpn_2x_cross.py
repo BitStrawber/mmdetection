@@ -20,23 +20,11 @@ train_dataloader = dict(
     batch_size=6,
     num_workers=2,
     dataset=dict(
-        type='ConcatDataset',
-        datasets=[
-            dict(
-                type='CocoDataset',
-                data_root=ruod_root,
-                data_prefix=dict(img='train/'),
-                ann_file=cross_dir + 'A_easy.json',
-                metainfo=dict(classes=classes),
-                filter_cfg=dict(filter_empty_gt=True, min_size=32)),
-            dict(
-                type='CocoDataset',
-                data_root=ruod_root,
-                data_prefix=dict(img='train/'),
-                ann_file=cross_dir + 'B_easy.json',
-                metainfo=dict(classes=classes),
-                filter_cfg=dict(filter_empty_gt=True, min_size=32)),
-        ]))
+        data_root=ruod_root,
+        data_prefix=dict(img='train/'),
+        ann_file=cross_dir + 'easy_merged.json',
+        metainfo=dict(classes=classes),
+        filter_cfg=dict(filter_empty_gt=True, min_size=32)))
 
 val_dataloader = dict(
     batch_size=1,

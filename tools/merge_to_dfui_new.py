@@ -50,8 +50,9 @@ for split_name, items in splits.items():
     images_list = []
     anns_list = []
     
-    print(f"\n{splits[split_name]} (n)")
-    
+    print(f"\n{split_name} (n)")
+
+
     for source, img, anns in tqdm(items, desc=split_name):
         fname = os.path.basename(img['file_name'])
         

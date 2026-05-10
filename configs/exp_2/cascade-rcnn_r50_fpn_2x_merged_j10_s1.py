@@ -9,7 +9,11 @@ classes = ('holothurian', 'echinus', 'scallop', 'starfish', 'fish',
 
 model = dict(
     roi_head=dict(
-        bbox_head=[dict(num_classes=10), dict(num_classes=10), dict(num_classes=10)]))
+        bbox_head=[
+            dict(type='Shared2FCBBoxHead', num_classes=10),
+            dict(type='Shared2FCBBoxHead', num_classes=10),
+            dict(type='Shared2FCBBoxHead', num_classes=10),
+        ]))
 
 train_dataloader = dict(
     batch_size=6,

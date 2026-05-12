@@ -36,9 +36,5 @@ train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=72, val_interval=1)
 param_scheduler = [
     dict(type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
     dict(type='MultiStepLR', begin=0, end=72, by_epoch=True, 
-         milestones=[48, 64], gamma=0.1)
-]
-
-custom_hooks = [
-    dict(type='EarlyStoppingHook', monitor='coco/bbox_mAP', patience=10, min_delta=0.001)
+         milestones=[48, 60], gamma=0.1)
 ]

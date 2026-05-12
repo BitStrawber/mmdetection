@@ -1,21 +1,19 @@
-# Faster R-CNN: DFUI 训练 (72 epoch + 早停)
+# Faster R-CNN: DFUI (仅DFUI部分, trainval=训练+验证)
 _base_ = '../../faster_rcnn/faster-rcnn_r50_fpn_2x_coco.py'
 
-data_root = '/media/HDD0/XCX/exp_2/DFUI_NEW/'
+data_root = '/media/HDD0/XCX/exp_2/dfui/'
 
-classes = ('holothurian', 'echinus', 'scallop', 'starfish', 'fish',
-           'corals', 'diver', 'cuttlefish', 'turtle', 'jellyfish',
-           'waterweeds')
+classes = ('echinus', 'holothurian', 'scallop', 'starfish', 'waterweeds')
 
 model = dict(
     roi_head=dict(
-        bbox_head=dict(type='Shared2FCBBoxHead', num_classes=11)))
+        bbox_head=dict(type='Shared2FCBBoxHead', num_classes=5)))
 
 train_dataloader = dict(
     batch_size=6, num_workers=2,
     dataset=dict(data_root=data_root,
         data_prefix=dict(img='images/'),
-        ann_file=data_root + 'annotations/instances_train2017.json',
+        ann_file=data_root + 'annotations/instances_trainval2017.json',
         metainfo=dict(classes=classes),
         filter_cfg=dict(filter_empty_gt=True, min_size=32)))
 
@@ -23,13 +21,13 @@ val_dataloader = dict(
     batch_size=1, num_workers=2,
     dataset=dict(data_root=data_root,
         data_prefix=dict(img='images/'),
-        ann_file=data_root + 'annotations/instances_val2017.json',
+        ann_file=data_root + 'annotations/instances_trainval2017.json',
         metainfo=dict(classes=classes),
         test_mode=True))
 test_dataloader = val_dataloader
 
 val_evaluator = dict(
-    ann_file=data_root + 'annotations/instances_val2017.json',
+    ann_file=data_root + 'annotations/instances_trainval2017.json',
     metric='bbox')
 test_evaluator = val_evaluator
 

@@ -22,7 +22,7 @@ train_dataloader = dict(
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='images/'),
-        ann_file=ann_root + 'instances_train2017.json',
+        ann_file=ann_root + 'instances_train.json',
         metainfo=dict(classes=classes),
         filter_cfg=dict(filter_empty_gt=True, min_size=32)))
 
@@ -32,13 +32,13 @@ val_dataloader = dict(
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='images/'),
-        ann_file=ann_root + 'instances_val2017.json',
+        ann_file=ann_root + 'instances_train.json',
         metainfo=dict(classes=classes),
         test_mode=True))
 test_dataloader = val_dataloader
 
 val_evaluator = dict(
-    ann_file=ann_root + 'instances_val2017.json',
+    ann_file=ann_root + 'instances_train.json',
     metric='bbox')
 test_evaluator = val_evaluator
 

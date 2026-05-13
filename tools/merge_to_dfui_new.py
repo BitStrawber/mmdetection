@@ -43,64 +43,55 @@ for img in dfui['images']:
     all_items.append(('dfui', img, anns))
 
 random.shuffle(all_items)
-n = len(all_items)
-n_train = int(n * 0.8)
 
-splits = {
-    'train': all_items[:n_train],
-    'val':   all_items[n_train:]
-}
+# 不划分，全量训练
+items = all_items
+split_name = 'train'
 
-for split_name, items in splits.items():
-    img_id = 0
-    ann_id = 0
-    images_list = []
-    anns_list = []
+img_id = 0
+ann_id = 0
+images_list = []
+anns_list = []
+
+for source, img, anns in tqdm(items, desc=split_name):
+    fname = os.path.basename(img['file_name'])
     
-    print(f"\n{split_name} (n)")
-
-
-    for source, img, anns in tqdm(items, desc=split_name):
-        fname = os.path.basename(img['file_name'])
-        
-        if source == 'ruod':
-            src = os.path.join(ruod_img_dir, fname)
-        else:
-            src = os.path.join(dfui_img_dir, fname)
-        
+    if source == 'ruod':
+        src = os.path.join(ruod_img_dir, fname)
+    else:
+        src = os.path.join(dfui_img_dir, fname)
+    
+    dst = os.path.join(new_img_dir, fname)
+    if os.path.exists(dst):
+        fname = f'{source}_{fname}'
         dst = os.path.join(new_img_dir, fname)
-        # 处理重名
-        if os.path.exists(dst):
-            fname = f'{source}_{fname}'
-            dst = os.path.join(new_img_dir, fname)
-        
-        if os.path.exists(src):
-            shutil.copy2(src, dst)
-        
-        images_list.append({'id': img_id, 'file_name': fname,
-                           'width': img['width'], 'height': img['height']})
-        for ann in anns:
-            cat_id = ann['category_id']
-            if source == 'dfui':
-                cat_id = dfui_to_ruod_cat.get(cat_id, cat_id)
-            anns_list.append({'id': ann_id, 'image_id': img_id,
-                             'category_id': cat_id,
-                             'bbox': ann['bbox'], 'area': ann['area'],
-                             'iscrowd': ann.get('iscrowd', 0)})
-            ann_id += 1
-        img_id += 1
     
-    coco = {
-        'info': {'description': f'DFUI_NEW {split_name}'},
-        'licenses': [],
-        'categories': unified_categories,
-        'images': images_list,
-        'annotations': anns_list
-    }
-    json.dump(coco, open(os.path.join(NEW_ROOT, 'annotations', f'instances_{split_name}2017.json'), 'w'))
-    print(f"  {split_name}: {img_id} imgs, {ann_id} anns")
+    if os.path.exists(src):
+        shutil.copy2(src, dst)
+    
+    images_list.append({'id': img_id, 'file_name': fname,
+                       'width': img['width'], 'height': img['height']})
+    for ann in anns:
+        cat_id = ann['category_id']
+        if source == 'dfui':
+            cat_id = dfui_to_ruod_cat.get(cat_id, cat_id)
+        anns_list.append({'id': ann_id, 'image_id': img_id,
+                         'category_id': cat_id,
+                         'bbox': ann['bbox'], 'area': ann['area'],
+                         'iscrowd': ann.get('iscrowd', 0)})
+        ann_id += 1
+    img_id += 1
 
-print(f"\n完成!")
-print(f"  Train: {n_train} ({100*n_train/n:.0f}%)")
-print(f"  Val:   {n - n_train} ({100*(n-n_train)/n:.0f}%)")
-print(f"  输出: {NEW_ROOT}/")
+coco = {
+    'info': {'description': 'DFUI_NEW'},
+    'licenses': [],
+    'categories': unified_categories,
+    'images': images_list,
+    'annotations': anns_list
+}
+json.dump(coco, open(os.path.join(NEW_ROOT, 'annotations', 'instances_train.json'), 'w'))
+print(f"  完成: {img_id} imgs, {ann_id} anns")
+
+print(f"\n输出: {NEW_ROOT}/")
+print(f"  images/ ({img_id} imgs)")
+print(f"  annotations/instances_train.json ({len(unified_categories)} classes)")

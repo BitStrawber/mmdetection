@@ -23,6 +23,16 @@ ruod = json.load(open(ruod_json))
 dfui = json.load(open(dfui_json))
 print(f"RUOD: {len(ruod['images'])} images, DFUI: {len(dfui['images'])} images")
 
+# DFUI → RUOD category_id 映射
+# DFUI: echinus=0, holothurian=1, scallop=2, starfish=3, waterweeds=4
+# RUOD: holothurian=1, echinus=2, scallop=3, starfish=4, fish=5, corals=6, diver=7, cuttlefish=8, turtle=9, jellyfish=10
+dfui_to_ruod_cat = {0: 2, 1: 1, 2: 3, 3: 4, 4: 11}
+
+# 创建统一的categories (10+1)
+unified_categories = ruod['categories'][:]
+unified_categories.append({'id': 11, 'name': 'waterweeds'})
+print(f"统一类别: {[c['name'] for c in unified_categories]}")
+
 # 合并并shuffle
 all_items = []
 for img in ruod['images']:
@@ -70,8 +80,11 @@ for split_name, items in splits.items():
         images_list.append({'id': img_id, 'file_name': fname,
                            'width': img['width'], 'height': img['height']})
         for ann in anns:
+            cat_id = ann['category_id']
+            if source == 'dfui':
+                cat_id = dfui_to_ruod_cat.get(cat_id, cat_id)
             anns_list.append({'id': ann_id, 'image_id': img_id,
-                             'category_id': ann['category_id'],
+                             'category_id': cat_id,
                              'bbox': ann['bbox'], 'area': ann['area'],
                              'iscrowd': ann.get('iscrowd', 0)})
             ann_id += 1
@@ -80,7 +93,7 @@ for split_name, items in splits.items():
     coco = {
         'info': {'description': f'DFUI_NEW {split_name}'},
         'licenses': [],
-        'categories': ruod['categories'],
+        'categories': unified_categories,
         'images': images_list,
         'annotations': anns_list
     }

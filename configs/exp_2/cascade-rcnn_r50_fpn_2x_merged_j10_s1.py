@@ -5,14 +5,15 @@ data_root = '/media/HDD0/XCX/exp_2/DFUI_NEW/'
 ann_root = data_root + 'annotations/'
 
 classes = ('holothurian', 'echinus', 'scallop', 'starfish', 'fish',
-           'corals', 'diver', 'cuttlefish', 'turtle', 'jellyfish')
+           'corals', 'diver', 'cuttlefish', 'turtle', 'jellyfish',
+           'waterweeds')
 
 model = dict(
     roi_head=dict(
         bbox_head=[
-            dict(type='Shared2FCBBoxHead', num_classes=10),
-            dict(type='Shared2FCBBoxHead', num_classes=10),
-            dict(type='Shared2FCBBoxHead', num_classes=10),
+            dict(type='Shared2FCBBoxHead', num_classes=11),
+            dict(type='Shared2FCBBoxHead', num_classes=11),
+            dict(type='Shared2FCBBoxHead', num_classes=11),
         ]))
 
 train_dataloader = dict(
@@ -48,9 +49,4 @@ optim_wrapper = dict(optimizer=dict(type='SGD', lr=0.015, momentum=0.9, weight_d
 param_scheduler = [
     dict(type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
     dict(type='MultiStepLR', begin=0, end=96, by_epoch=True, milestones=[64, 88], gamma=0.1)
-]
-
-# 早停: val_coco/bbox_mAP 连续10 epoch不涨就停止
-custom_hooks = [
-    dict(type='EarlyStoppingHook', monitor='coco/bbox_mAP', patience=10, min_delta=0.001)
 ]

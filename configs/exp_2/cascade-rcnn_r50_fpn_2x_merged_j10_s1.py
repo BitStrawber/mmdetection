@@ -32,21 +32,21 @@ val_dataloader = dict(
     dataset=dict(
         data_root=data_root,
         data_prefix=dict(img='images/'),
-        ann_file=ann_root + 'instances_train.json',
+        ann_file=ann_root + 'instances_val.json',
         metainfo=dict(classes=classes),
         test_mode=True))
 test_dataloader = val_dataloader
 
 val_evaluator = dict(
-    ann_file=ann_root + 'instances_train.json',
+    ann_file=ann_root + 'instances_val.json',
     metric='bbox')
 test_evaluator = val_evaluator
 
-train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=96, val_interval=1)
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=48, val_interval=1)
 
-optim_wrapper = dict(optimizer=dict(type='SGD', lr=0.015, momentum=0.9, weight_decay=0.0001))
+optim_wrapper = dict(optimizer=dict(type='SGD', lr=0.00375, momentum=0.9, weight_decay=0.0001))
 
 param_scheduler = [
     dict(type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
-    dict(type='MultiStepLR', begin=0, end=96, by_epoch=True, milestones=[64, 88], gamma=0.1)
+    dict(type='MultiStepLR', begin=0, end=48, by_epoch=True, milestones=[32, 44], gamma=0.1)
 ]

@@ -1,14 +1,12 @@
 #!/bin/bash
 
-# J10 并行实验: 3组不同LR同时运行
+# J10 并行实验 - 仅 S2 阶段 (S1 已完成时使用)
 # GPU分配: A(2,3)  B(4,5)  C(6,7)
 #
 # LR设置:
 #   Exp A: 0.015  (base LR, 不缩放)
 #   Exp B: 0.0075 (平方根缩放)
 #   Exp C: 0.00375 (线性缩放)
-#
-# 流程: S1(并行) → 提取backbone → S2(并行)
 
 WORK_DIR="work_dirs"
 LOG_DIR="logs"
@@ -33,55 +31,12 @@ EXP_NAME[exp_c]="J10-C (LR=0.00375)"
 
 NUM_GPUS=2
 
-# ======================== Stage 1: 并行预训练 ========================
-echo "========================================="
-echo "J10 并行实验 - Stage 1: DFUI_NEW 预训练"
-echo "========================================="
-echo ""
-
-S1_PIDS=()
-for exp in "${EXPS[@]}"; do
-    lr="${EXP_LR[$exp]}"
-    gpus="${EXP_GPUS[$exp]}"
-    port="${EXP_PORTS[$exp]}"
-    name="${EXP_NAME[$exp]}"
-
-    echo "启动 $name ..."
-
-    (
-        export PORT=$port
-        mkdir -p "$WORK_DIR/${exp}_s1"
-
-        CUDA_VISIBLE_DEVICES=$gpus bash tools/dist_train.sh \
-            configs/exp_2/cascade-rcnn_r50_fpn_2x_merged_j10_s1.py \
-            $NUM_GPUS \
-            --work-dir "$WORK_DIR/${exp}_s1" \
-            --cfg-options \
-                optim_wrapper.optimizer.lr=$lr \
-                default_hooks.checkpoint.max_keep_ckpts=10 \
-        2>&1 | tee "$LOG_DIR/${exp}_s1.log"
-
-        echo "[$name] Stage 1 完成"
-    ) &
-
-    S1_PIDS+=($!)
-done
-
-# 等待所有 S1 完成
-echo "等待所有 Stage 1 完成..."
-for pid in "${S1_PIDS[@]}"; do
-    wait $pid
-done
-echo "所有 Stage 1 完成！"
-echo ""
-
 # ======================== 提取Backbone ========================
 echo "========================================="
 echo "提取 Backbone 权重"
 echo "========================================="
 
 for exp in "${EXPS[@]}"; do
-    gpus="${EXP_GPUS[$exp]}"
     name="${EXP_NAME[$exp]}"
 
     echo "[$name] 提取 backbone..."
@@ -174,7 +129,6 @@ for exp in "${EXPS[@]}"; do
     echo "  S1 best: $(basename ${s1_best:-'无'})"
     echo "  S2 best: $(basename ${s2_best:-'无'})"
 
-    # 尝试从日志中提取mAP
     s2_map=$(grep -oP 'bbox_mAP: \K[0-9.]+' "$LOG_DIR/${exp}_s2.log" 2>/dev/null | tail -1)
     echo "  S2 mAP: ${s2_map:-'日志中未找到'}"
 done

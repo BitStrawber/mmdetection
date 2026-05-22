@@ -6,6 +6,7 @@ ResNet + RFTM (Residual Feature Transference Module)
 RFTM是一个轻量特征增强模块，插入在ResNet的layer1和layer2之间。
 它学习将水下重度退化区域的特征映射到"检测友好"的特征空间。
 """
+import torch
 import torch.nn as nn
 from mmcv.cnn import build_conv_layer
 from mmengine.model import BaseModule
@@ -73,12 +74,37 @@ class ResNetWithRFTM(ResNet):
         **kwargs: 其他ResNet参数
     """
 
-    def __init__(self, depth=50, rftm_channels=256, **kwargs):
+    def __init__(self, depth=50, rftm_channels=256, rftm_init=None, **kwargs):
         super().__init__(depth=depth, **kwargs)
         # 在layer1之后插入RFTM
         self.rftm = RFTM(in_channels=rftm_channels)
         # 标记RFTM插入位置
         self.with_rftm = True
+        self.rftm_init = rftm_init
+
+    def init_weights(self):
+        """Initialize ResNet normally, then optionally load only RFTM."""
+        super().init_weights()
+        if self.rftm_init is None:
+            return
+
+        ckpt = torch.load(self.rftm_init, map_location='cpu')
+        state_dict = ckpt.get('state_dict', ckpt)
+        rftm_state = {}
+        for key, value in state_dict.items():
+            if key.startswith('backbone.rftm.'):
+                rftm_state[key[len('backbone.rftm.'):]] = value
+            elif key.startswith('rftm.'):
+                rftm_state[key[len('rftm.'):]] = value
+            elif key in self.rftm.state_dict():
+                rftm_state[key] = value
+
+        if not rftm_state:
+            raise RuntimeError(
+                'No RFTM weights found in checkpoint: {}'.format(self.rftm_init))
+        missing, unexpected = self.rftm.load_state_dict(rftm_state, strict=False)
+        print('Loaded RFTM from {} (missing={}, unexpected={})'.format(
+            self.rftm_init, len(missing), len(unexpected)))
 
     def forward(self, x):
         """Forward function with RFTM enhancement."""

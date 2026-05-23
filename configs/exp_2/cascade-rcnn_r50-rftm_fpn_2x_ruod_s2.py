@@ -39,4 +39,4 @@ test_dataloader = val_dataloader
 val_evaluator = dict(ann_file=ann_root + 'instances_val.json')
 test_evaluator = val_evaluator
 
-optim_wrapper = dict(optimizer=dict(type='SGD', lr=0.00375, momentum=0.9, weight_decay=0.0001))
+optim_wrapper = dict(optimizer=dict(type='SGD', lr=0.015, momentum=0.9, weight_decay=0.0001))

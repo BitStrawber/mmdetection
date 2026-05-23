@@ -41,20 +41,25 @@ launch_exp() {
     local launcher_log="$LOG_DIR/${exp_name}_launcher.log"
 
     echo "Launching $exp_name on GPU $gpu_ids"
-    PYTHON="$PYTHON" \
-    WORK_DIR="$WORK_DIR" \
-    LOG_DIR="$LOG_DIR" \
-    EXP_NAME="$exp_name" \
-    GPU_IDS="$gpu_ids" \
-    NUM_GPUS="2" \
-    PORT="$port" \
-    THRESHOLD="$THRESHOLD" \
-    S1_LR="$S1_LR" \
-    RUOD_IMG_DIR="$RUOD_IMG_DIR" \
-    RUOD_ANN="$RUOD_ANN" \
-    EASY_IMG_DIR="$easy_img_dir" \
-    EASY_ANN="$easy_ann" \
-    bash run_exp_2_j10_hdp.sh > "$launcher_log" 2>&1 &
+    (
+        set -o pipefail
+        PYTHON="$PYTHON" \
+        WORK_DIR="$WORK_DIR" \
+        LOG_DIR="$LOG_DIR" \
+        EXP_NAME="$exp_name" \
+        GPU_IDS="$gpu_ids" \
+        NUM_GPUS="2" \
+        PORT="$port" \
+        THRESHOLD="$THRESHOLD" \
+        S1_LR="$S1_LR" \
+        RUOD_IMG_DIR="$RUOD_IMG_DIR" \
+        RUOD_ANN="$RUOD_ANN" \
+        EASY_IMG_DIR="$easy_img_dir" \
+        EASY_ANN="$easy_ann" \
+        bash run_exp_2_j10_hdp.sh 2>&1 \
+            | sed "s/^/[$exp_name] /" \
+            | tee "$launcher_log"
+    ) &
     printf -v "$pid_var" '%s' "$!"
 }
 

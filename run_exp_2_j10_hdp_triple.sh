@@ -42,7 +42,6 @@ launch_exp() {
 
     echo "Launching $exp_name on GPU $gpu_ids"
     (
-        set -o pipefail
         PYTHON="$PYTHON" \
         WORK_DIR="$WORK_DIR" \
         LOG_DIR="$LOG_DIR" \
@@ -56,9 +55,7 @@ launch_exp() {
         RUOD_ANN="$RUOD_ANN" \
         EASY_IMG_DIR="$easy_img_dir" \
         EASY_ANN="$easy_ann" \
-        bash run_exp_2_j10_hdp.sh 2>&1 \
-            | sed "s/^/[$exp_name] /" \
-            | tee "$launcher_log"
+        bash run_exp_2_j10_hdp.sh 2>&1 | tee "$launcher_log"
     ) &
     printf -v "$pid_var" '%s' "$!"
 }

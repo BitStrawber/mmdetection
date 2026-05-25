@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """UVOT400 跟踪格式 → COCO + 20%筛选 (单文件版，不移除__pycache__)"""
-import json, os, sys, glob
+import json, os, sys, glob, re
 from PIL import Image
 
 BASE = '/media/HDD1/XCX/exp_2/UVOT400'
@@ -48,16 +48,24 @@ def main():
                 print(f"  [发现] {os.path.basename(root)}: img_dir_candidates={candidate_dirs}, found={len(img_files)} images, sample={img_files[:3]}")
 
                 with open(gt_file) as f:
-                    lines = f.readlines()
+                    lines = [l.strip() for l in f.readlines() if l.strip()]
 
                 seq_imgs, seq_anns = 0, 0
                 for i, line in enumerate(lines):
                     if i >= len(img_files):
                         break
-                    parts = line.strip().split(',')
+                    # 支持多种分隔符（逗号、空白、制表符）并清理括号
+                    s = line.strip()
+                    s = s.replace('(', ' ').replace(')', ' ')
+                    parts = re.split(r'[,\s]+', s)
                     if len(parts) < 4:
                         continue
-                    x, y, w, h = map(float, parts[:4])
+                    try:
+                        x, y, w, h = map(float, parts[:4])
+                    except Exception:
+                        # 解析失败则跳过并记录
+                        print(f"    [解析失败] {os.path.basename(root)} line {i}: '{line}' -> parts={parts}")
+                        continue
                     if w <= 0 or h <= 0:
                         continue
                     try:
@@ -84,7 +92,7 @@ def main():
                     ann_id += 1
                     seq_imgs += 1
 
-                print(f"  {os.path.basename(root)}: {seq_imgs} imgs")
+                print(f"  {os.path.basename(root)}: {seq_imgs} imgs (lines={len(lines)}, available_images={len(img_files)})")
 
             if not images:
                 print(f"[无数据] {split}")

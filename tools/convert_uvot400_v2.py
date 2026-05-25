@@ -31,18 +31,21 @@ def main():
                     continue
 
                 gt_file = os.path.join(root, 'groundtruth_rect.txt')
-                img_dir = os.path.join(root, 'imgs')
-                if not os.path.isdir(img_dir):
-                    img_dir = root
-
-                # 找到所有图片
+                # 尝试在多种候选目录查找图片（imgs, images, 根目录），支持嵌套子目录
+                candidate_dirs = [os.path.join(root, 'imgs'), os.path.join(root, 'images'), root]
                 img_files = []
-                for ext in ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.JPG', '*.JPEG', '*.PNG']:
-                    img_files.extend(glob.glob(os.path.join(img_dir, ext)))
+                exts = ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.JPG', '*.JPEG', '*.PNG']
+                for d in candidate_dirs:
+                    if not os.path.isdir(d):
+                        continue
+                    for ext in exts:
+                        img_files.extend(glob.glob(os.path.join(d, '**', ext), recursive=True))
                 img_files = sorted(set(img_files))
                 if not img_files:
-                    print(f"  [跳过] {os.path.basename(root)}: 无图片")
+                    print(f"  [跳过] {os.path.basename(root)}: 无图片 (检查目录: {candidate_dirs})")
                     continue
+                # 简要调试信息，帮助定位路径问题
+                print(f"  [发现] {os.path.basename(root)}: img_dir_candidates={candidate_dirs}, found={len(img_files)} images, sample={img_files[:3]}")
 
                 with open(gt_file) as f:
                     lines = f.readlines()

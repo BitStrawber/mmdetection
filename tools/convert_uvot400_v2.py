@@ -14,8 +14,8 @@ def main():
             print(f"[跳过] {data_dir} 不存在")
             continue
 
-        out_dir = os.path.join(BASE, 'annotations')
-        os.makedirs(out_dir, exist_ok=True)
+        # 将输出保存到数据集 split 根目录（例如 .../UVOT400/train/instances_train.json）
+        out_dir = data_dir
         out_json = os.path.join(out_dir, f'instances_{split}.json')
 
         # 已存在则跳过

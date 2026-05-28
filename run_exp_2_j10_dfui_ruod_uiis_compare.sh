@@ -7,6 +7,9 @@
 #      then finetune RUOD with the existing HDP/RFTM S2 config.
 
 set -e
+set -o pipefail
+
+export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
 
 PYTHON="${PYTHON:-python}"
 WORK_DIR="${WORK_DIR:-work_dirs}"

@@ -11,6 +11,9 @@
 # Defaults match the current server layout under /media/HDD0/XCX/exp_2.
 
 set -e
+set -o pipefail
+
+export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
 
 PYTHON="${PYTHON:-python}"
 

@@ -21,6 +21,8 @@ from collections import defaultdict
 from copy import deepcopy
 from pathlib import Path
 
+os.environ.setdefault('MKL_THREADING_LAYER', 'GNU')
+
 import numpy as np
 from tqdm import tqdm
 
@@ -125,6 +127,8 @@ def train_detector(args, train_ann, val_ann, work_dir, log_name, port):
         f'default_hooks.checkpoint.max_keep_ckpts={args.max_keep_ckpts}',
     ]
     shell_cmd = (
+        f'set -o pipefail; '
+        f'export MKL_THREADING_LAYER="${{MKL_THREADING_LAYER:-GNU}}"; '
         f'PORT={port} CUDA_VISIBLE_DEVICES={args.gpu_ids} '
         f'bash tools/dist_train.sh {args.config} {args.num_gpus} '
         f'--work-dir {work_dir} --cfg-options {" ".join(cfg_options)} '

@@ -8,6 +8,9 @@
 # This differs from the old J10 S1: S1 here is not detection training.
 
 set -e
+set -o pipefail
+
+export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
 
 WORK_DIR="${WORK_DIR:-work_dirs}"
 LOG_DIR="${LOG_DIR:-logs}"

@@ -11,6 +11,8 @@ import json
 import os
 from copy import deepcopy
 
+os.environ.setdefault('MKL_THREADING_LAYER', 'GNU')
+
 import numpy as np
 
 try:

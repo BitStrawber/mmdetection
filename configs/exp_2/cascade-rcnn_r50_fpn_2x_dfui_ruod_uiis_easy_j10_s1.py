@@ -1,0 +1,65 @@
+# J10 S1: DFUI + RUOD easy + UIIS10K easy detection pretraining.
+
+_base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
+
+data_root = '/media/HDD0/XCX/exp_2/DFUI_RUOD_UIIS_EASY/'
+ann_root = data_root + 'annotations/'
+
+classes = ('holothurian', 'echinus', 'scallop', 'starfish', 'fish',
+           'corals', 'diver', 'cuttlefish', 'turtle', 'jellyfish',
+           'waterweeds')
+
+model = dict(
+    roi_head=dict(
+        bbox_head=[
+            dict(type='Shared2FCBBoxHead', num_classes=11),
+            dict(type='Shared2FCBBoxHead', num_classes=11),
+            dict(type='Shared2FCBBoxHead', num_classes=11),
+        ]))
+
+train_dataloader = dict(
+    batch_size=6,
+    num_workers=2,
+    dataset=dict(
+        data_root=data_root,
+        data_prefix=dict(img='images/'),
+        ann_file=ann_root + 'instances_train.json',
+        metainfo=dict(classes=classes),
+        filter_cfg=dict(filter_empty_gt=True, min_size=32)))
+
+val_dataloader = dict(
+    batch_size=1,
+    num_workers=2,
+    dataset=dict(
+        data_root=data_root,
+        data_prefix=dict(img='images/'),
+        ann_file=ann_root + 'instances_val.json',
+        metainfo=dict(classes=classes),
+        test_mode=True))
+
+test_dataloader = val_dataloader
+
+val_evaluator = dict(
+    ann_file=ann_root + 'instances_val.json',
+    metric='bbox')
+test_evaluator = val_evaluator
+
+train_cfg = dict(type='EpochBasedTrainLoop', max_epochs=48, val_interval=1)
+
+param_scheduler = [
+    dict(type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=500),
+    dict(
+        type='MultiStepLR',
+        begin=0,
+        end=48,
+        by_epoch=True,
+        milestones=[32, 44],
+        gamma=0.1)
+]
+
+optim_wrapper = dict(
+    type='OptimWrapper',
+    optimizer=dict(type='SGD', lr=0.00375, momentum=0.9, weight_decay=0.0001))
+
+load_from = None
+resume = False

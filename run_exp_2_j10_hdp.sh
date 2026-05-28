@@ -27,6 +27,9 @@ THRESHOLD="${THRESHOLD:-0.6}"
 PATCH_SIZE="${PATCH_SIZE:-256}"
 PATCH_STRIDE="${PATCH_STRIDE:-128}"
 PATCH_ROOT="${PATCH_ROOT:-/media/HDD0/XCX/exp_2/HDP_PATCHES/${EXP_NAME}_t${THRESHOLD}}"
+RUOD_PATCH_DIR="${RUOD_PATCH_DIR:-$PATCH_ROOT/ruod_hd}"
+EASY_PATCH_DIR="${EASY_PATCH_DIR:-$PATCH_ROOT/easy_hd}"
+FORCE_HDP_PATCHES="${FORCE_HDP_PATCHES:-0}"
 S1_EPOCHS="${S1_EPOCHS:-20}"
 S1_BATCH_SIZE="${S1_BATCH_SIZE:-32}"
 S1_LR="${S1_LR:-0.001}"
@@ -45,6 +48,8 @@ echo "T: $THRESHOLD"
 echo "S1_LR: $S1_LR"
 echo "RUOD_IMG_DIR: $RUOD_IMG_DIR"
 echo "EASY_IMG_DIR: $EASY_IMG_DIR"
+echo "RUOD_PATCH_DIR: $RUOD_PATCH_DIR"
+echo "EASY_PATCH_DIR: $EASY_PATCH_DIR"
 echo ""
 
 echo ">>> S0-A: build RUOD HD patches"
@@ -52,33 +57,43 @@ RUOD_ANN_ARG=()
 if [ -n "$RUOD_ANN" ]; then
     RUOD_ANN_ARG=(--ann "$RUOD_ANN")
 fi
-"$PYTHON" tools/make_hdp_patches.py \
-    --img-dir "$RUOD_IMG_DIR" \
-    "${RUOD_ANN_ARG[@]}" \
-    --out-dir "$PATCH_ROOT/ruod_hd" \
-    --threshold "$THRESHOLD" \
-    --patch-size "$PATCH_SIZE" \
-    --stride "$PATCH_STRIDE" \
-    2>&1 | tee "${LOG_PREFIX}_s0_ruod.log"
+if [ "$FORCE_HDP_PATCHES" = "1" ] || [ ! -f "$RUOD_PATCH_DIR/metadata.json" ]; then
+    "$PYTHON" tools/make_hdp_patches.py \
+        --img-dir "$RUOD_IMG_DIR" \
+        "${RUOD_ANN_ARG[@]}" \
+        --out-dir "$RUOD_PATCH_DIR" \
+        --threshold "$THRESHOLD" \
+        --patch-size "$PATCH_SIZE" \
+        --stride "$PATCH_STRIDE" \
+        2>&1 | tee "${LOG_PREFIX}_s0_ruod.log"
+else
+    echo "Skip RUOD HD patches, found: $RUOD_PATCH_DIR/metadata.json" \
+        2>&1 | tee "${LOG_PREFIX}_s0_ruod.log"
+fi
 
 echo ">>> S0-B: build easy/DFUI HD patches"
 EASY_ANN_ARG=()
 if [ -n "$EASY_ANN" ]; then
     EASY_ANN_ARG=(--ann "$EASY_ANN")
 fi
-"$PYTHON" tools/make_hdp_patches.py \
-    --img-dir "$EASY_IMG_DIR" \
-    "${EASY_ANN_ARG[@]}" \
-    --out-dir "$PATCH_ROOT/easy_hd" \
-    --threshold "$THRESHOLD" \
-    --patch-size "$PATCH_SIZE" \
-    --stride "$PATCH_STRIDE" \
-    2>&1 | tee "${LOG_PREFIX}_s0_easy.log"
+if [ "$FORCE_HDP_PATCHES" = "1" ] || [ ! -f "$EASY_PATCH_DIR/metadata.json" ]; then
+    "$PYTHON" tools/make_hdp_patches.py \
+        --img-dir "$EASY_IMG_DIR" \
+        "${EASY_ANN_ARG[@]}" \
+        --out-dir "$EASY_PATCH_DIR" \
+        --threshold "$THRESHOLD" \
+        --patch-size "$PATCH_SIZE" \
+        --stride "$PATCH_STRIDE" \
+        2>&1 | tee "${LOG_PREFIX}_s0_easy.log"
+else
+    echo "Skip easy/DFUI HD patches, found: $EASY_PATCH_DIR/metadata.json" \
+        2>&1 | tee "${LOG_PREFIX}_s0_easy.log"
+fi
 
 echo ">>> S1: train RFTM prior on HD patches"
 CUDA_VISIBLE_DEVICES="${GPU_IDS%%,*}" "$PYTHON" tools/train_rftm_prior.py \
-    --easy-patch-dir "$PATCH_ROOT/easy_hd" \
-    --ruod-patch-dir "$PATCH_ROOT/ruod_hd" \
+    --easy-patch-dir "$EASY_PATCH_DIR" \
+    --ruod-patch-dir "$RUOD_PATCH_DIR" \
     --work-dir "$RUN_WORK_DIR/s1" \
     --out "$RUN_WORK_DIR/s1/rftm_prior.pth" \
     --epochs "$S1_EPOCHS" \

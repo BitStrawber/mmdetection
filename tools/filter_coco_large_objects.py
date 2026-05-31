@@ -124,16 +124,79 @@ def filter_coco(ann_path, out_path, threshold, keep_only_large_anns=False):
         json.dump(out, f)
 
     ratios = list(max_ratio_by_img.values())
+    input_images = len(coco.get('images', []))
+    input_annotations = len(coco.get('annotations', []))
+    output_images = len(out['images'])
+    output_annotations = len(out['annotations'])
     print(f'{ann_path}')
-    print(f'  images: {len(coco.get("images", []))} -> {len(out["images"])}')
-    print(f'  annotations: {len(coco.get("annotations", []))} -> {len(out["annotations"])}')
+    print(f'  images: {input_images} -> {output_images}')
+    print(f'  annotations: {input_annotations} -> {output_annotations}')
     print(f'  threshold: {threshold}')
     if ratios:
+        min_ratio = min(ratios)
+        mean_ratio = sum(ratios) / len(ratios)
+        max_ratio = max(ratios)
         print(
             '  max-ratio stats: '
-            f'min={min(ratios):.4f}, mean={sum(ratios) / len(ratios):.4f}, '
-            f'max={max(ratios):.4f}')
+            f'min={min_ratio:.4f}, mean={mean_ratio:.4f}, '
+            f'max={max_ratio:.4f}')
+    else:
+        min_ratio = mean_ratio = max_ratio = 0.0
     print(f'  output: {out_path}')
+
+    keep_ratio = output_images / input_images if input_images else 0.0
+    return {
+        'input': ann_path,
+        'output': out_path,
+        'input_images': input_images,
+        'output_images': output_images,
+        'input_annotations': input_annotations,
+        'output_annotations': output_annotations,
+        'keep_ratio': keep_ratio,
+        'min_ratio': min_ratio,
+        'mean_ratio': mean_ratio,
+        'max_ratio': max_ratio,
+    }
+
+
+def print_summary(stats):
+    if not stats:
+        return
+
+    print('\nSummary')
+    print('=' * 120)
+    header = (
+        f'{"input":50} {"images":>17} {"anns":>17} '
+        f'{"keep%":>8} {"max":>8} {"output"}')
+    print(header)
+    print('-' * 120)
+    total_in_images = 0
+    total_out_images = 0
+    total_in_anns = 0
+    total_out_anns = 0
+    for item in stats:
+        total_in_images += item['input_images']
+        total_out_images += item['output_images']
+        total_in_anns += item['input_annotations']
+        total_out_anns += item['output_annotations']
+        name = Path(item['input']).name
+        if len(name) > 50:
+            name = '...' + name[-47:]
+        print(
+            f'{name:50} '
+            f'{item["input_images"]:>8}->{item["output_images"]:<8} '
+            f'{item["input_annotations"]:>8}->{item["output_annotations"]:<8} '
+            f'{item["keep_ratio"] * 100:>7.2f}% '
+            f'{item["max_ratio"]:>8.4f} '
+            f'{item["output"]}')
+
+    total_keep_ratio = total_out_images / total_in_images if total_in_images else 0.0
+    print('-' * 120)
+    print(
+        f'{"TOTAL":50} '
+        f'{total_in_images:>8}->{total_out_images:<8} '
+        f'{total_in_anns:>8}->{total_out_anns:<8} '
+        f'{total_keep_ratio * 100:>7.2f}%')
 
 
 def main():
@@ -155,12 +218,15 @@ def main():
         out_paths = args.out
 
     pairs = list(zip(ann_paths, out_paths))
+    stats = []
     for ann_path, out_path in tqdm(pairs, desc='COCO files', unit='file'):
-        filter_coco(
-            ann_path=ann_path,
-            out_path=out_path,
-            threshold=args.threshold,
-            keep_only_large_anns=args.keep_only_large_anns)
+        stats.append(
+            filter_coco(
+                ann_path=ann_path,
+                out_path=out_path,
+                threshold=args.threshold,
+                keep_only_large_anns=args.keep_only_large_anns))
+    print_summary(stats)
 
 
 if __name__ == '__main__':

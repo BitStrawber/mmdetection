@@ -1,114 +1,208 @@
 #!/usr/bin/env python3
-"""CoralSCOP: 每图独立JSON → COCO格式合并 + 20%筛选"""
-import json, os, glob, argparse
+"""Convert CoralSCOP per-image JSON annotations to COCO and filter large boxes."""
 
-def merge_coralscop(data_dir, split='train'):
-    jsons = sorted(glob.glob(os.path.join(data_dir, split, 'jsons', '*.json')))
+import argparse
+import glob
+import json
+import os
+from pathlib import Path
+
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover
+    def tqdm(iterable, **kwargs):
+        return iterable
+
+
+IMG_SUFFIXES = ('', '.jpg', '.jpeg', '.png', '.bmp', '.webp')
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data-dir', default='/media/HDD1/XCX/exp_2/CoralSCOP')
+    parser.add_argument('--threshold', type=float, default=0.2)
+    parser.add_argument(
+        '--splits',
+        nargs='+',
+        default=['train', 'test'],
+        help='Dataset splits to convert.')
+    return parser.parse_args()
+
+
+def find_jsons(data_dir, split):
+    split_dir = Path(data_dir) / split
+    jsons = sorted((split_dir / 'jsons').glob('*.json'))
     if not jsons:
-        jsons = sorted(glob.glob(os.path.join(data_dir, split, '*.json')))
+        jsons = sorted(split_dir.glob('*.json'))
+    return [str(path) for path in jsons]
 
-    images, annotations = [], []
-    img_id, ann_id = 0, 0
-    cat_set, categories = set(), []
 
-    for jf in jsons:
-        with open(jf) as f:
+def find_image_path(data_dir, split, json_path, file_name):
+    candidates = []
+    split_dir = Path(data_dir) / split
+    json_dir = Path(json_path).parent
+    for base in (split_dir / 'images', split_dir, json_dir):
+        for suffix in IMG_SUFFIXES:
+            name = file_name
+            if suffix and not name.lower().endswith(suffix):
+                name = f'{file_name}{suffix}'
+            candidates.append(base / name)
+
+    for path in candidates:
+        if path.exists():
+            return path
+    return None
+
+
+def valid_bbox(bbox):
+    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+        return None
+    try:
+        x, y, w, h = [float(v) for v in bbox]
+    except (TypeError, ValueError):
+        return None
+    if w <= 0 or h <= 0:
+        return None
+    return [x, y, w, h]
+
+
+def merge_coralscop(data_dir, split):
+    jsons = find_jsons(data_dir, split)
+    if not jsons:
+        print(f'CoralSCOP {split}: no JSON files found')
+        return None
+
+    images = []
+    annotations = []
+    img_id = 0
+    ann_id = 0
+    skipped_images = 0
+    skipped_anns = 0
+
+    for json_path in tqdm(jsons, desc=f'CoralSCOP {split} convert', unit='json'):
+        with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        img_info = data.get('image', data.get('images', [{}])[0] if isinstance(data.get('images'), list) else {})
-        if 'file_name' not in img_info:
+
+        img_info = data.get('image')
+        if not img_info and isinstance(data.get('images'), list) and data['images']:
+            img_info = data['images'][0]
+        if not isinstance(img_info, dict) or 'file_name' not in img_info:
+            skipped_images += 1
             continue
 
-        # 找图片实际路径
-        img_path = None
-        for ext in ['', '.jpg', '.png', '.jpeg']:
-            fn = img_info['file_name']
-            if not fn.endswith(ext):
-                fn += ext
-            p = os.path.join(os.path.dirname(jf), fn)
-            if os.path.exists(p):
-                img_path = p
-                break
-        if not img_path and os.path.exists(os.path.join(os.path.dirname(jf), img_info['file_name'])):
-            img_path = os.path.join(os.path.dirname(jf), img_info['file_name'])
-        if not img_path:
+        image_path = find_image_path(
+            data_dir=data_dir,
+            split=split,
+            json_path=json_path,
+            file_name=img_info['file_name'])
+        if image_path is None:
+            skipped_images += 1
             continue
 
+        width = int(img_info.get('width') or 0)
+        height = int(img_info.get('height') or 0)
         images.append({
             'id': img_id,
-            'file_name': os.path.relpath(img_path, data_dir),
-            'width': img_info.get('width', 0),
-            'height': img_info.get('height', 0)
+            'file_name': os.path.relpath(image_path, data_dir),
+            'width': width,
+            'height': height,
         })
 
-        anns = data.get('annotations', [])
-        for ann in anns:
-            bbox = ann.get('bbox', [0, 0, 0, 0])
+        for ann in data.get('annotations', []):
+            bbox = valid_bbox(ann.get('bbox'))
+            if bbox is None:
+                skipped_anns += 1
+                continue
             annotations.append({
                 'id': ann_id,
                 'image_id': img_id,
                 'category_id': 1,
                 'bbox': bbox,
-                'area': bbox[2] * bbox[3],
-                'iscrowd': 0
+                'area': float(ann.get('area') or bbox[2] * bbox[3]),
+                'iscrowd': int(ann.get('iscrowd', 0)),
             })
             ann_id += 1
         img_id += 1
 
-    categories = [{'id': 1, 'name': 'coral'}]
-
     coco = {
         'info': {'description': f'CoralSCOP {split}'},
-        'licenses': [], 'categories': categories,
-        'images': images, 'annotations': annotations
+        'licenses': [],
+        'categories': [{'id': 1, 'name': 'coral'}],
+        'images': images,
+        'annotations': annotations,
     }
 
-    ann_dir = os.path.join(data_dir, 'annotations')
-    os.makedirs(ann_dir, exist_ok=True)
-    out = os.path.join(ann_dir, f'instances_{split}.json')
-    with open(out, 'w') as f:
+    ann_dir = Path(data_dir) / 'annotations'
+    ann_dir.mkdir(parents=True, exist_ok=True)
+    out_path = ann_dir / f'instances_{split}.json'
+    with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(coco, f)
 
-    print(f"CoralSCOP {split}: {len(images)} imgs, {len(annotations)} anns → {out}")
-    return out
+    print(
+        f'CoralSCOP {split}: {len(images)} imgs, {len(annotations)} anns, '
+        f'skipped_images={skipped_images}, skipped_anns={skipped_anns} -> {out_path}')
+    return str(out_path)
 
 
-def filter_coco(coco, threshold=0.2):
-    """筛选最大bbox >= threshold * 图片面积 的图片"""
-    img_map = {i['id']: i for i in coco['images']}
+def filter_coco(coco, threshold):
+    img_map = {img['id']: img for img in coco.get('images', [])}
     img_max = {}
-    for a in coco['annotations']:
-        iid = a['image_id']
-        _, _, w, h = a['bbox']
-        area = w * h
-        if iid not in img_max or area > img_max[iid]:
-            img_max[iid] = area
+    for ann in tqdm(
+            coco.get('annotations', []),
+            desc='CoralSCOP filter annotations',
+            unit='ann'):
+        img_id = ann.get('image_id')
+        bbox = valid_bbox(ann.get('bbox'))
+        if img_id not in img_map or bbox is None:
+            continue
+        area = bbox[2] * bbox[3]
+        if area > img_max.get(img_id, 0.0):
+            img_max[img_id] = area
+
     keep = set()
-    for iid, ma in img_max.items():
-        im = img_map[iid]
-        ia = im.get('width', 0) * im.get('height', 0)
-        if ia > 0 and ma / ia >= threshold:
-            keep.add(iid)
-    return {
-        'info': coco.get('info', {}), 'licenses': coco.get('licenses', []),
-        'categories': coco['categories'],
-        'images': [i for i in coco['images'] if i['id'] in keep],
-        'annotations': [a for a in coco['annotations'] if a['image_id'] in keep]
-    }, len(coco['images']), len(keep)
+    for img_id, max_area in tqdm(
+            img_max.items(),
+            desc='CoralSCOP select images',
+            unit='img'):
+        img = img_map[img_id]
+        image_area = float(img.get('width') or 0) * float(img.get('height') or 0)
+        if image_area > 0 and max_area / image_area >= threshold:
+            keep.add(img_id)
+
+    filtered = {
+        'info': coco.get('info', {}),
+        'licenses': coco.get('licenses', []),
+        'categories': coco.get('categories', []),
+        'images': [img for img in coco.get('images', []) if img['id'] in keep],
+        'annotations': [
+            ann for ann in tqdm(
+                coco.get('annotations', []),
+                desc='CoralSCOP write filtered anns',
+                unit='ann')
+            if ann.get('image_id') in keep
+        ],
+    }
+    return filtered, len(coco.get('images', [])), len(keep)
+
+
+def main():
+    args = parse_args()
+    for split in args.splits:
+        out_path = merge_coralscop(args.data_dir, split)
+        if not out_path:
+            continue
+
+        with open(out_path, 'r', encoding='utf-8') as f:
+            coco = json.load(f)
+        filtered, total, kept = filter_coco(coco, args.threshold)
+        out_filtered = out_path.replace(
+            '.json', f'_bbox{int(args.threshold * 100)}pct.json')
+        with open(out_filtered, 'w', encoding='utf-8') as f:
+            json.dump(filtered, f)
+        ratio = kept / total * 100 if total else 0.0
+        print(f'CoralSCOP {split} filter: {total} -> {kept} ({ratio:.1f}%)')
+        print(f'  output: {out_filtered}')
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--data-dir', default='/media/HDD1/XCX/exp_2/CoralSCOP')
-    parser.add_argument('--threshold', type=float, default=0.2)
-    args = parser.parse_args()
-
-    for split in ['train', 'test']:
-        out_path = merge_coralscop(args.data_dir, split)
-        if out_path:
-            with open(out_path) as f:
-                coco = json.load(f)
-            filtered, total, kept = filter_coco(coco, args.threshold)
-            out_filtered = out_path.replace('.json', f'_bbox{int(args.threshold*100)}pct.json')
-            with open(out_filtered, 'w') as f:
-                json.dump(filtered, f)
-            print(f"  {split}: {total} → {kept} ({kept/total*100:.1f}%)")
+    main()

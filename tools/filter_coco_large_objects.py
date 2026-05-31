@@ -15,6 +15,12 @@ import os
 from copy import deepcopy
 from pathlib import Path
 
+try:
+    from tqdm import tqdm
+except ImportError:  # pragma: no cover
+    def tqdm(iterable, **kwargs):
+        return iterable
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -63,18 +69,25 @@ def bbox_ratio(ann, image_info):
 
 
 def filter_coco(ann_path, out_path, threshold, keep_only_large_anns=False):
+    print(f'Loading: {ann_path}')
     with open(ann_path, 'r', encoding='utf-8') as f:
         coco = json.load(f)
 
     images_by_id = {img['id']: img for img in coco.get('images', [])}
     anns_by_img = {img_id: [] for img_id in images_by_id}
-    for ann in coco.get('annotations', []):
+    for ann in tqdm(
+            coco.get('annotations', []),
+            desc=f'{Path(ann_path).name} group annotations',
+            unit='ann'):
         if ann.get('image_id') in anns_by_img:
             anns_by_img[ann['image_id']].append(ann)
 
     keep_img_ids = set()
     max_ratio_by_img = {}
-    for img_id, anns in anns_by_img.items():
+    for img_id, anns in tqdm(
+            anns_by_img.items(),
+            desc=f'{Path(ann_path).name} select images',
+            unit='img'):
         image_info = images_by_id[img_id]
         ratios = [bbox_ratio(ann, image_info) for ann in anns]
         max_ratio = max(ratios) if ratios else 0.0
@@ -86,7 +99,10 @@ def filter_coco(ann_path, out_path, threshold, keep_only_large_anns=False):
     out['images'] = [img for img in coco.get('images', []) if img['id'] in keep_img_ids]
 
     filtered_anns = []
-    for ann in coco.get('annotations', []):
+    for ann in tqdm(
+            coco.get('annotations', []),
+            desc=f'{Path(ann_path).name} write annotations',
+            unit='ann'):
         img_id = ann.get('image_id')
         if img_id not in keep_img_ids:
             continue
@@ -138,7 +154,8 @@ def main():
         ann_paths = args.ann
         out_paths = args.out
 
-    for ann_path, out_path in zip(ann_paths, out_paths):
+    pairs = list(zip(ann_paths, out_paths))
+    for ann_path, out_path in tqdm(pairs, desc='COCO files', unit='file'):
         filter_coco(
             ann_path=ann_path,
             out_path=out_path,

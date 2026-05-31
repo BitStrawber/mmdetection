@@ -51,7 +51,7 @@ def parse_args():
 def load_json(path):
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            return json.load(f), None
     except Exception as exc:
         return None, str(exc)
 

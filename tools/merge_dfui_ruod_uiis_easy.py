@@ -42,6 +42,15 @@ DFUI_ID_TO_NAME = {
     4: 'waterweeds',
 }
 
+DEFAULT_DFUI_ANN_CANDIDATES = [
+    '/media/HDD0/XCX/exp_2/dfui/annotations/instances_train2017.json',
+    '/media/HDD0/XCX/exp_2/dfui/annotations/instances_val2017.json',
+    '/media/HDD0/XCX/exp_2/dfui/annotations/instances_test2017.json',
+]
+
+LEGACY_DFUI_ANN = (
+    '/media/HDD0/XCX/exp_2/dfui/annotations/instances_trainval2017.json')
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -50,7 +59,12 @@ def parse_args():
         default='/media/HDD0/XCX/exp_2/dfui/images')
     parser.add_argument(
         '--dfui-ann',
-        default='/media/HDD0/XCX/exp_2/dfui/annotations/instances_trainval2017.json')
+        nargs='+',
+        default=None,
+        help=(
+            'One or more DFUI COCO annotation files. If omitted, the script '
+            'uses DFUI train/val/test split annotations when they exist, and '
+            'falls back to instances_trainval2017.json for old layouts.'))
     parser.add_argument(
         '--ruod-easy-img-dir',
         default='/media/HDD0/XCX/exp_2/RUOD/coco/train')
@@ -86,6 +100,40 @@ def save_coco(data, path):
         json.dump(data, f)
 
 
+def resolve_dfui_ann_paths(paths):
+    if paths:
+        resolved = [Path(p) for p in paths]
+    else:
+        split_paths = [Path(p) for p in DEFAULT_DFUI_ANN_CANDIDATES]
+        existing_split_paths = [p for p in split_paths if p.is_file()]
+        if existing_split_paths:
+            resolved = existing_split_paths
+        else:
+            resolved = [Path(LEGACY_DFUI_ANN)]
+
+    missing = [str(p) for p in resolved if not p.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            'Missing DFUI annotation file(s):\n  ' + '\n  '.join(missing))
+    return resolved
+
+
+def source_prefix(source_name, ann_path=None):
+    if source_name != 'dfui' or ann_path is None:
+        return source_name
+
+    stem = Path(ann_path).stem
+    if 'train2017' in stem:
+        return 'dfui_train'
+    if 'val2017' in stem:
+        return 'dfui_val'
+    if 'test2017' in stem:
+        return 'dfui_test'
+    if 'trainval2017' in stem:
+        return 'dfui_trainval'
+    return f'dfui_{stem}'
+
+
 def source_category_map(coco, source_name):
     id_to_name = {cat['id']: cat['name'] for cat in coco.get('categories', [])}
     mapping = {}
@@ -93,7 +141,7 @@ def source_category_map(coco, source_name):
         name = str(cat_name).lower()
         if name in NAME_TO_ID:
             mapping[cat_id] = NAME_TO_ID[name]
-        elif source_name == 'dfui' and cat_id in DFUI_ID_TO_NAME:
+        elif source_name.startswith('dfui') and cat_id in DFUI_ID_TO_NAME:
             mapping[cat_id] = NAME_TO_ID[DFUI_ID_TO_NAME[cat_id]]
     return mapping
 
@@ -127,8 +175,19 @@ def collect_items(source_name, img_dir, ann_path):
         items.append((source_name, src_path, img, anns))
 
     print(
-        f'{source_name}: {len(items)} images, '
+        f'{source_name} ({ann_path}): {len(items)} images, '
         f'{sum(len(x[3]) for x in items)} anns, skipped_anns={skipped_anns}')
+    return items
+
+
+def collect_dfui_items(img_dir, ann_paths):
+    items = []
+    for ann_path in ann_paths:
+        prefix = source_prefix('dfui', ann_path)
+        items.extend(collect_items(prefix, img_dir, ann_path))
+    print(
+        f'dfui total: {len(items)} images, '
+        f'{sum(len(x[3]) for x in items)} anns from {len(ann_paths)} file(s)')
     return items
 
 
@@ -181,7 +240,12 @@ def main():
     out_ann_dir.mkdir(parents=True, exist_ok=True)
 
     items = []
-    items.extend(collect_items('dfui', args.dfui_img_dir, args.dfui_ann))
+    dfui_ann_paths = resolve_dfui_ann_paths(args.dfui_ann)
+    print('DFUI annotation files:')
+    for ann_path in dfui_ann_paths:
+        print(f'  {ann_path}')
+
+    items.extend(collect_dfui_items(args.dfui_img_dir, dfui_ann_paths))
     items.extend(collect_items('ruod_easy', args.ruod_easy_img_dir, args.ruod_easy_ann))
     items.extend(collect_items('uiis_easy', args.uiis_easy_img_dir, args.uiis_easy_ann))
 

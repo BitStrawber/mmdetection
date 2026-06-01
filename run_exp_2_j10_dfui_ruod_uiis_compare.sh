@@ -17,7 +17,6 @@ LOG_DIR="${LOG_DIR:-logs}"
 MERGED_ROOT="${MERGED_ROOT:-/media/HDD0/XCX/exp_2/DFUI_RUOD_UIIS_EASY}"
 
 DFUI_IMG_DIR="${DFUI_IMG_DIR:-/media/HDD0/XCX/exp_2/dfui/images}"
-DFUI_ANN="${DFUI_ANN:-/media/HDD0/XCX/exp_2/dfui/annotations/instances_trainval2017.json}"
 RUOD_EASY_IMG_DIR="${RUOD_EASY_IMG_DIR:-/media/HDD0/XCX/exp_2/RUOD/coco/train}"
 RUOD_EASY_ANN="${RUOD_EASY_ANN:-/media/HDD0/XCX/exp_2/RUOD/coco/annotations/easy_merged.json}"
 UIIS_EASY_IMG_DIR="${UIIS_EASY_IMG_DIR:-/media/HDD0/XCX/exp_2/UIIS10K/img}"
@@ -40,18 +39,24 @@ EASY_PATCH_DIR="${EASY_PATCH_DIR:-/media/HDD0/XCX/exp_2/HDP_PATCHES/${HDP_EXP_NA
 
 mkdir -p "$LOG_DIR"
 
+DFUI_ANN_ARGS=()
+if [ -n "${DFUI_ANN:-}" ]; then
+    read -r -a DFUI_ANN_LIST <<< "$DFUI_ANN"
+    DFUI_ANN_ARGS=(--dfui-ann "${DFUI_ANN_LIST[@]}")
+fi
+
 echo "========================================="
 echo "Build merged DFUI source"
 echo "========================================="
 "$PYTHON" tools/merge_dfui_ruod_uiis_easy.py \
     --dfui-img-dir "$DFUI_IMG_DIR" \
-    --dfui-ann "$DFUI_ANN" \
+    "${DFUI_ANN_ARGS[@]}" \
     --ruod-easy-img-dir "$RUOD_EASY_IMG_DIR" \
     --ruod-easy-ann "$RUOD_EASY_ANN" \
     --uiis-easy-img-dir "$UIIS_EASY_IMG_DIR" \
     --uiis-easy-ann "$UIIS_EASY_ANN" \
     --out-root "$MERGED_ROOT" \
-    $MERGE_EXTRA_ARGS \
+    ${MERGE_EXTRA_ARGS:-} \
     2>&1 | tee "$LOG_DIR/dfui_ruod_uiis_easy_merge.log"
 
 echo "========================================="

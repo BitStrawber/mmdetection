@@ -44,7 +44,7 @@ default_hooks = dict(
         type='CheckpointHook',
         interval=1,
         save_best='coco/bbox_mAP',
-        max_keep_ckpts=10))
+        max_keep_ckpts=5))
 
 load_from = None
 resume = False

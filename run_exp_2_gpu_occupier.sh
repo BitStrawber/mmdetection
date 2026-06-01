@@ -19,6 +19,9 @@ OCCUPY_MEM_MB="${2:-}"
 GPU_MAX_UTIL=${GPU_MAX_UTIL:-10}
 GPU_IDLE_CHECKS=${GPU_IDLE_CHECKS:-2}
 GPU_WAIT_INTERVAL=${GPU_WAIT_INTERVAL:-30}
+OCCUPY_TARGET_UTIL=${OCCUPY_TARGET_UTIL:-60}
+OCCUPY_CYCLE_SEC=${OCCUPY_CYCLE_SEC:-1.0}
+OCCUPY_MATMUL_SIZE=${OCCUPY_MATMUL_SIZE:-2048}
 LOG_DIR=${LOG_DIR:-logs}
 LOG_FILE=${LOG_FILE:-}
 
@@ -111,14 +114,33 @@ import time
 import torch
 
 target_mb = int('$OCCUPY_MEM_MB')
+target_util = max(0, min(100, int('$OCCUPY_TARGET_UTIL')))
+cycle_sec = float('$OCCUPY_CYCLE_SEC')
+matmul_size = int('$OCCUPY_MATMUL_SIZE')
 numel = target_mb * 1024 * 1024 // 4
 torch.cuda.set_device(0)
 x = torch.empty(numel, dtype=torch.float32, device='cuda')
 x.fill_(1.0)
 allocated_mb = x.element_size() * x.nelement() / 1024 / 1024
-print('GPU $gpu occupied with %.0f MB tensor' % allocated_mb, flush=True)
+print('GPU $gpu occupied with %.0f MB tensor, target util %d%%' % (allocated_mb, target_util), flush=True)
+
+if target_util <= 0:
+    while True:
+        time.sleep(60)
+
+a = torch.randn(matmul_size, matmul_size, dtype=torch.float32, device='cuda')
+b = torch.randn(matmul_size, matmul_size, dtype=torch.float32, device='cuda')
+c = torch.empty(matmul_size, matmul_size, dtype=torch.float32, device='cuda')
+busy_sec = cycle_sec * target_util / 100.0
+idle_sec = max(0.0, cycle_sec - busy_sec)
+
 while True:
-    time.sleep(60)
+    start = time.time()
+    while time.time() - start < busy_sec:
+        torch.mm(a, b, out=c)
+        torch.cuda.synchronize()
+    if idle_sec > 0:
+        time.sleep(idle_sec)
 "
 }
 
@@ -130,6 +152,9 @@ echo "OCCUPY_MEM_MB: $OCCUPY_MEM_MB"
 echo "GPU_MAX_UTIL: $GPU_MAX_UTIL"
 echo "GPU_IDLE_CHECKS: $GPU_IDLE_CHECKS"
 echo "GPU_WAIT_INTERVAL: $GPU_WAIT_INTERVAL"
+echo "OCCUPY_TARGET_UTIL: $OCCUPY_TARGET_UTIL"
+echo "OCCUPY_CYCLE_SEC: $OCCUPY_CYCLE_SEC"
+echo "OCCUPY_MATMUL_SIZE: $OCCUPY_MATMUL_SIZE"
 echo "LOG_FILE: $LOG_FILE"
 echo "Press Ctrl+C to stop"
 echo "========================================="

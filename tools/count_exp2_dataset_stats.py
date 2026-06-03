@@ -17,6 +17,7 @@ DEFAULT_GROUPS = {
     "DUO": [Path("/media/HDD1/XCX/exp_2/DUO/annotations")],
     "FathomNet": [Path("/media/HDD1/XCX/exp_2/FathomNet")],
     "MARIS": [Path("/media/HDD1/XCX/exp_2/MARIS/annotations")],
+    "MUOT_3M": [Path("/media/HDD1/XCX/exp_2/MUOT_3M/annotations")],
     "UOT100": [Path("/media/HDD1/XCX/exp_2/UOT100/annotations")],
     "USIS16K": [Path("/media/HDD1/XCX/exp_2/USIS16K/USIS16K/annotations")],
     "UVEB": [Path("/media/HDD1/XCX/exp_2/UVEB")],
@@ -122,7 +123,7 @@ def main():
     totals = {}
 
     if not args.quiet:
-        progress("Scanning exp_2 datasets except MUOT_3M...")
+        progress("Scanning exp_2 datasets...")
 
     for dataset, paths in DEFAULT_GROUPS.items():
         if not args.quiet:

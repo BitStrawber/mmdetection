@@ -15,6 +15,7 @@ or used by tools that expect image files on disk.
 import argparse
 import json
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 try:
@@ -56,6 +57,11 @@ def parse_args():
         '--overwrite',
         action='store_true',
         help='Overwrite existing extracted images.')
+    parser.add_argument(
+        '--workers',
+        type=int,
+        default=1,
+        help='Number of worker processes. Each worker processes whole videos.')
     parser.add_argument(
         '--limit',
         type=int,
@@ -115,6 +121,84 @@ def extract_frame(cap, frame_index, frame_base):
     return ok, frame
 
 
+def process_video(payload):
+    video_path_text, tasks, frame_base, quality, overwrite = payload
+
+    try:
+        import cv2
+    except ImportError as exc:
+        return {
+            'video_path': video_path_text,
+            'written': 0,
+            'skipped_exists': 0,
+            'missing_video': 0,
+            'bad_video': 0,
+            'failed_frames': len(tasks),
+            'error': 'opencv-python is required: {}'.format(exc),
+        }
+
+    result = {
+        'video_path': video_path_text,
+        'written': 0,
+        'skipped_exists': 0,
+        'missing_video': 0,
+        'bad_video': 0,
+        'failed_frames': 0,
+        'error': '',
+    }
+
+    video_path = Path(video_path_text)
+    if not video_path.is_file():
+        result['missing_video'] = 1
+        return result
+
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        result['bad_video'] = 1
+        return result
+
+    # One frame can be referenced once per split; keep the first output path.
+    tasks_by_frame = {}
+    for task in tasks:
+        tasks_by_frame.setdefault(task['frame_index'], task)
+
+    encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(quality)]
+    for frame_index, task in sorted(tasks_by_frame.items()):
+        out_path = Path(task['out_path'])
+        if out_path.is_file() and not overwrite:
+            result['skipped_exists'] += 1
+            continue
+
+        ok, frame = extract_frame(cap, frame_index, frame_base)
+        if not ok:
+            result['failed_frames'] += 1
+            continue
+
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        if not cv2.imwrite(str(out_path), frame, encode_params):
+            result['failed_frames'] += 1
+            continue
+        result['written'] += 1
+
+    cap.release()
+    return result
+
+
+def merge_video_result(stats, result):
+    for key in (
+            'written',
+            'skipped_exists',
+            'missing_video',
+            'bad_video',
+            'failed_frames'):
+        stats[key] += result.get(key, 0)
+    if result.get('error'):
+        stats.setdefault('worker_errors', []).append({
+            'video_path': result.get('video_path'),
+            'error': result.get('error'),
+        })
+
+
 def main():
     args = parse_args()
     root = Path(args.root)
@@ -142,6 +226,7 @@ def main():
     print('requested images:', requested_images)
     print('missing image fields:', missing_fields)
     print('frame_base:', args.frame_base)
+    print('workers:', args.workers)
 
     stats = {
         'root': str(root),
@@ -157,47 +242,32 @@ def main():
         'frame_base': args.frame_base,
         'quality': args.quality,
         'overwrite': args.overwrite,
+        'workers': args.workers,
         'limit': args.limit,
+        'worker_errors': [],
     }
 
-    encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(args.quality)]
-    for video_path_text, tasks in tqdm(
-            sorted(tasks_by_video.items()),
-            desc='extract MUOT_3M',
-            unit='video'):
-        video_path = Path(video_path_text)
-        if not video_path.is_file():
-            stats['missing_video'] += 1
-            continue
+    payloads = [
+        (video_path_text, tasks, args.frame_base, args.quality, args.overwrite)
+        for video_path_text, tasks in sorted(tasks_by_video.items())
+    ]
 
-        cap = cv2.VideoCapture(str(video_path))
-        if not cap.isOpened():
-            stats['bad_video'] += 1
-            continue
-
-        # One frame can be referenced once per split; keep the first output path.
-        tasks_by_frame = {}
-        for task in tasks:
-            tasks_by_frame.setdefault(task['frame_index'], task)
-
-        for frame_index, task in sorted(tasks_by_frame.items()):
-            out_path = Path(task['out_path'])
-            if out_path.is_file() and not args.overwrite:
-                stats['skipped_exists'] += 1
-                continue
-
-            ok, frame = extract_frame(cap, frame_index, args.frame_base)
-            if not ok:
-                stats['failed_frames'] += 1
-                continue
-
-            out_path.parent.mkdir(parents=True, exist_ok=True)
-            if not cv2.imwrite(str(out_path), frame, encode_params):
-                stats['failed_frames'] += 1
-                continue
-            stats['written'] += 1
-
-        cap.release()
+    if args.workers <= 1:
+        iterator = (process_video(payload) for payload in payloads)
+        for result in tqdm(
+                iterator,
+                total=len(payloads),
+                desc='extract MUOT_3M',
+                unit='video'):
+            merge_video_result(stats, result)
+    else:
+        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+            for result in tqdm(
+                    executor.map(process_video, payloads),
+                    total=len(payloads),
+                    desc='extract MUOT_3M',
+                    unit='video'):
+                merge_video_result(stats, result)
 
     summary_path = (
         Path(args.summary)
@@ -219,6 +289,9 @@ def main():
             'failed_frames',
             'missing_image_fields'):
         print('{}: {}'.format(key, stats[key]))
+    print('workers:', stats['workers'])
+    if stats['worker_errors']:
+        print('worker_errors:', len(stats['worker_errors']))
     print('summary:', summary_path)
 
 

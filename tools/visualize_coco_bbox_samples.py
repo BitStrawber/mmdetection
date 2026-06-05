@@ -48,6 +48,16 @@ EXP2_BBOX20_PRESET = [
         '/media/HDD1/XCX/exp_2/MARIS/val',
     ),
     (
+        'muot3m_train',
+        '/media/HDD1/XCX/exp_2/MUOT_3M/annotations/instances_train_bbox20pct.json',
+        '/media/HDD1/XCX/exp_2/MUOT_3M',
+    ),
+    (
+        'muot3m_test',
+        '/media/HDD1/XCX/exp_2/MUOT_3M/annotations/instances_test_bbox20pct.json',
+        '/media/HDD1/XCX/exp_2/MUOT_3M',
+    ),
+    (
         'uvot400_train',
         '/media/HDD1/XCX/exp_2/UVOT400/train/instances_train_bbox20pct.json',
         '/media/HDD1/XCX/exp_2/UVOT400/train',
@@ -66,6 +76,11 @@ EXP2_BBOX20_PRESET = [
         'duo_test',
         '/media/HDD1/XCX/exp_2/DUO/annotations/instances_test_bbox20pct.json',
         '/media/HDD1/XCX/exp_2/DUO/images',
+    ),
+    (
+        'fathomnet_all',
+        '/media/HDD1/XCX/exp_2/FathomNet/fathomnet_bbox20pct.json',
+        '/media/HDD1/XCX/exp_2/FathomNet',
     ),
     (
         'usis16k_train',
@@ -91,6 +106,16 @@ EXP2_BBOX20_PRESET = [
         'uwcot220_all',
         '/media/HDD1/XCX/exp_2/UW-COT220/annotations/instances_all_bbox20pct.json',
         '/media/HDD1/XCX/exp_2/UW-COT220/UW-COT220/UW-COT220',
+    ),
+    (
+        'webuot1m_train',
+        '/media/HDD0/XCX/exp_2_data/exp_2/WebUOT-1M/annotations/instances_train_webuot_bbox20pct.json',
+        '/media/HDD0/XCX/exp_2_data/exp_2/WebUOT-1M/train_frames',
+    ),
+    (
+        'webuot1m_test',
+        '/media/HDD0/XCX/exp_2_data/exp_2/WebUOT-1M/annotations/instances_test_webuot_bbox20pct.json',
+        '/media/HDD0/XCX/exp_2_data/exp_2/WebUOT-1M/test_frames',
     ),
 ]
 

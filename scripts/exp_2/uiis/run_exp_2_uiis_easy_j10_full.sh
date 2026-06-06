@@ -13,6 +13,8 @@
 set -e
 set -o pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
 
 PYTHON="${PYTHON:-python}"
@@ -92,7 +94,7 @@ fi
 UIIS_EASY_IMG_DIR="${UIIS_EASY_IMG_DIR:-$UIIS_ROOT/img}" \
 UIIS_EASY_ANN="$UIIS_EASY_ANN" \
 MERGE_EXTRA_ARGS="$MERGE_ARGS" \
-bash run_exp_2_j10_dfui_ruod_uiis_compare.sh
+bash "$SCRIPT_DIR/../j10/run_exp_2_j10_dfui_ruod_uiis_compare.sh"
 
 echo "========================================="
 echo "Full pipeline finished: $(date)"

@@ -1,33 +1,31 @@
 #!/bin/bash
 set -euo pipefail
 
-# J10 scheme C LR/epoch sweep after the frozen-stage sweep.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# J10 scheme C milestone/scheduler sweep.
 #
-# Fixed:
+# Fixed from the current best recipe:
 #   frozen_stages=1
+#   lr=0.00375
+#   epochs=48
+#   weight_decay=0.0001
 #   S2 config unchanged
 #
-# Compared recipes:
-#   low LR  + longer S1: lr=0.001875, epochs=60, milestones=[40,55]
-#   base LR + repeat S1: lr=0.00375,  epochs=48, milestones=[32,44]
-#   high LR + shorter S1: lr=0.0075,  epochs=36, milestones=[24,33]
-#
-# Default GPU allocation:
-#   lr=0.001875 -> GPU 2,3
-#   lr=0.00375  -> GPU 4,5
-#   lr=0.0075   -> GPU 6,7
+# Compared S1 step schedules:
+#   early decay: milestones=[28,40]
+#   base decay : milestones=[32,44]
+#   late decay : milestones=[36,44]
 #
 # Outputs:
 #   logs/j10_scheme_c_tuning/
 #   work_dirs/j10_scheme_c_tuning/
-#
-# Common overrides:
-#   RUN_S2=0 bash run_exp_2_j10_scheme_c_f1_lr_epoch_sweep_parallel.sh
-#   WAIT_FOR_GPUS=0 bash run_exp_2_j10_scheme_c_f1_lr_epoch_sweep_parallel.sh
 
 WORK_DIR=${WORK_DIR:-work_dirs/j10_scheme_c_tuning}
 LOG_DIR=${LOG_DIR:-logs/j10_scheme_c_tuning}
 FROZEN_STAGES=${FROZEN_STAGES:-1}
+S1_LR=${S1_LR:-0.00375}
+S1_EPOCHS=${S1_EPOCHS:-48}
 S1_WEIGHT_DECAY=${S1_WEIGHT_DECAY:-0.0001}
 MAX_KEEP_CKPTS=${MAX_KEEP_CKPTS:-5}
 RUN_S2=${RUN_S2:-1}
@@ -40,22 +38,12 @@ GPU_WAIT_INTERVAL=${GPU_WAIT_INTERVAL:-30}
 if [ -n "${EXP_NAMES:-}" ]; then
     read -r -a EXP_NAMES <<< "$EXP_NAMES"
 else
-    EXP_NAMES=(j10_scheme_c_f1_lr001875_e60 j10_scheme_c_f1_lr00375_e48_repeat j10_scheme_c_f1_lr0075_e36)
-fi
-if [ -n "${S1_LRS:-}" ]; then
-    read -r -a S1_LRS <<< "$S1_LRS"
-else
-    S1_LRS=(0.001875 0.00375 0.0075)
-fi
-if [ -n "${S1_EPOCHS_LIST:-}" ]; then
-    read -r -a S1_EPOCHS_LIST <<< "$S1_EPOCHS_LIST"
-else
-    S1_EPOCHS_LIST=(60 48 36)
+    EXP_NAMES=(j10_scheme_c_f1_lr00375_e48_ms28_40 j10_scheme_c_f1_lr00375_e48_ms32_44 j10_scheme_c_f1_lr00375_e48_ms36_44)
 fi
 if [ -n "${S1_MILESTONES_LIST:-}" ]; then
     read -r -a S1_MILESTONES_LIST <<< "$S1_MILESTONES_LIST"
 else
-    S1_MILESTONES_LIST=('[40,55]' '[32,44]' '[24,33]')
+    S1_MILESTONES_LIST=('[28,40]' '[32,44]' '[36,44]')
 fi
 if [ -n "${GPU_GROUPS:-}" ]; then
     read -r -a GPU_GROUPS <<< "$GPU_GROUPS"
@@ -65,20 +53,16 @@ fi
 if [ -n "${PORTS:-}" ]; then
     read -r -a PORTS <<< "$PORTS"
 else
-    PORTS=(29631 29632 29633)
+    PORTS=(29651 29652 29653)
 fi
 
 mkdir -p "$LOG_DIR"
 
-if [ "${#EXP_NAMES[@]}" -ne "${#S1_LRS[@]}" ] || \
-   [ "${#EXP_NAMES[@]}" -ne "${#S1_EPOCHS_LIST[@]}" ] || \
-   [ "${#EXP_NAMES[@]}" -ne "${#S1_MILESTONES_LIST[@]}" ] || \
+if [ "${#EXP_NAMES[@]}" -ne "${#S1_MILESTONES_LIST[@]}" ] || \
    [ "${#EXP_NAMES[@]}" -ne "${#GPU_GROUPS[@]}" ] || \
    [ "${#EXP_NAMES[@]}" -ne "${#PORTS[@]}" ]; then
-    echo "Error: EXP_NAMES, S1_LRS, S1_EPOCHS_LIST, S1_MILESTONES_LIST, GPU_GROUPS, and PORTS must have the same length."
+    echo "Error: EXP_NAMES, S1_MILESTONES_LIST, GPU_GROUPS, and PORTS must have the same length."
     echo "EXP_NAMES=${EXP_NAMES[*]}"
-    echo "S1_LRS=${S1_LRS[*]}"
-    echo "S1_EPOCHS_LIST=${S1_EPOCHS_LIST[*]}"
     echo "S1_MILESTONES_LIST=${S1_MILESTONES_LIST[*]}"
     echo "GPU_GROUPS=${GPU_GROUPS[*]}"
     echo "PORTS=${PORTS[*]}"
@@ -86,9 +70,11 @@ if [ "${#EXP_NAMES[@]}" -ne "${#S1_LRS[@]}" ] || \
 fi
 
 echo "========================================="
-echo "J10 scheme C f1 LR/epoch sweep"
+echo "J10 scheme C f1 milestone sweep"
 echo "========================================="
 echo "FROZEN_STAGES: $FROZEN_STAGES"
+echo "S1_LR: $S1_LR"
+echo "S1_EPOCHS: $S1_EPOCHS"
 echo "S1_WEIGHT_DECAY: $S1_WEIGHT_DECAY"
 echo "RUN_S2: $RUN_S2"
 echo "WAIT_FOR_GPUS: $WAIT_FOR_GPUS"
@@ -97,8 +83,6 @@ echo "GPU_MAX_UTIL: $GPU_MAX_UTIL"
 echo "GPU_IDLE_CHECKS: $GPU_IDLE_CHECKS"
 echo "GPU_WAIT_INTERVAL: $GPU_WAIT_INTERVAL"
 echo "EXP_NAMES: ${EXP_NAMES[*]}"
-echo "S1_LRS: ${S1_LRS[*]}"
-echo "S1_EPOCHS_LIST: ${S1_EPOCHS_LIST[*]}"
 echo "S1_MILESTONES_LIST: ${S1_MILESTONES_LIST[*]}"
 echo "GPU_GROUPS: ${GPU_GROUPS[*]}"
 echo "PORTS: ${PORTS[*]}"
@@ -109,22 +93,20 @@ names=()
 
 for i in "${!EXP_NAMES[@]}"; do
     exp_name="${EXP_NAMES[$i]}"
-    lr="${S1_LRS[$i]}"
-    epochs="${S1_EPOCHS_LIST[$i]}"
     milestones="${S1_MILESTONES_LIST[$i]}"
     gpus="${GPU_GROUPS[$i]}"
     port="${PORTS[$i]}"
     launcher_log="$LOG_DIR/${exp_name}_launcher.log"
 
     echo "Launching $exp_name on GPUs $gpus, port $port"
-    echo "  S1_LR=$lr S1_EPOCHS=$epochs S1_MILESTONES=$milestones"
+    echo "  S1_LR=$S1_LR S1_EPOCHS=$S1_EPOCHS S1_MILESTONES=$milestones S1_WEIGHT_DECAY=$S1_WEIGHT_DECAY"
     (
         EXP_NAME="$exp_name" \
         GPU_IDS="$gpus" \
         PORT="$port" \
         FROZEN_STAGES="$FROZEN_STAGES" \
-        S1_LR="$lr" \
-        S1_EPOCHS="$epochs" \
+        S1_LR="$S1_LR" \
+        S1_EPOCHS="$S1_EPOCHS" \
         S1_MILESTONES="$milestones" \
         S1_WEIGHT_DECAY="$S1_WEIGHT_DECAY" \
         MAX_KEEP_CKPTS="$MAX_KEEP_CKPTS" \
@@ -134,7 +116,9 @@ for i in "${!EXP_NAMES[@]}"; do
         GPU_MAX_UTIL="$GPU_MAX_UTIL" \
         GPU_IDLE_CHECKS="$GPU_IDLE_CHECKS" \
         GPU_WAIT_INTERVAL="$GPU_WAIT_INTERVAL" \
-        bash run_exp_2_j10_scheme_c.sh \
+        WORK_DIR="$WORK_DIR" \
+        LOG_DIR="$LOG_DIR" \
+        bash "$SCRIPT_DIR/run_exp_2_j10_scheme_c.sh" \
             2>&1 | sed "s/^/[$exp_name] /" | tee "$launcher_log"
     ) &
 
@@ -155,7 +139,7 @@ for i in "${!pids[@]}"; do
 done
 
 echo "========================================="
-echo "LR/epoch sweep summary"
+echo "Milestone sweep summary"
 echo "========================================="
 for name in "${names[@]}"; do
     echo "$name"

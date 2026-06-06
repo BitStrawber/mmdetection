@@ -9,6 +9,8 @@
 set -e
 set -o pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
 
 PYTHON="${PYTHON:-python}"
@@ -132,7 +134,7 @@ EASY_IMG_DIR="$MERGED_ROOT/images" \
 EASY_ANN="$MERGED_ROOT/annotations/instances_all.json" \
 RUOD_PATCH_DIR="$RUOD_PATCH_DIR" \
 EASY_PATCH_DIR="$EASY_PATCH_DIR" \
-bash run_exp_2_j10_hdp.sh 2>&1 | tee "$LOG_DIR/${EXP_NAME}_launcher.log"
+bash "$SCRIPT_DIR/run_exp_2_j10_hdp.sh" 2>&1 | tee "$LOG_DIR/${EXP_NAME}_launcher.log"
 
 echo "========================================="
 echo "Done: $(date)"

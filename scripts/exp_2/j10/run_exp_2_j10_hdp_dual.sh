@@ -8,6 +8,8 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 PYTHON="${PYTHON:-python}"
 WORK_DIR="${WORK_DIR:-work_dirs}"
 LOG_DIR="${LOG_DIR:-logs}"
@@ -39,7 +41,7 @@ RUOD_IMG_DIR="$RUOD_IMG_DIR" \
 RUOD_ANN="$RUOD_ANN" \
 EASY_IMG_DIR="$EASY_RUOD_IMG_DIR" \
 EASY_ANN="$EASY_RUOD_ANN" \
-bash run_exp_2_j10_hdp.sh > "$LOG_DIR/j10_hdp_easy_ruod_launcher.log" 2>&1 &
+bash "$SCRIPT_DIR/run_exp_2_j10_hdp.sh" > "$LOG_DIR/j10_hdp_easy_ruod_launcher.log" 2>&1 &
 PID_EASY=$!
 
 echo "Launching dfui_new-as-DFUI on GPU 6,7"
@@ -56,7 +58,7 @@ RUOD_IMG_DIR="$RUOD_IMG_DIR" \
 RUOD_ANN="$RUOD_ANN" \
 EASY_IMG_DIR="$DFUI_NEW_IMG_DIR" \
 EASY_ANN="$DFUI_NEW_ANN" \
-bash run_exp_2_j10_hdp.sh > "$LOG_DIR/j10_hdp_dfui_new_launcher.log" 2>&1 &
+bash "$SCRIPT_DIR/run_exp_2_j10_hdp.sh" > "$LOG_DIR/j10_hdp_dfui_new_launcher.log" 2>&1 &
 PID_DFUI=$!
 
 echo "easy_ruod PID: $PID_EASY"

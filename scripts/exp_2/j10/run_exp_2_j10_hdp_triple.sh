@@ -11,6 +11,8 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 PYTHON="${PYTHON:-python}"
 WORK_DIR="${WORK_DIR:-work_dirs}"
 LOG_DIR="${LOG_DIR:-logs}"
@@ -55,7 +57,7 @@ launch_exp() {
         RUOD_ANN="$RUOD_ANN" \
         EASY_IMG_DIR="$easy_img_dir" \
         EASY_ANN="$easy_ann" \
-        bash run_exp_2_j10_hdp.sh 2>&1 | tee "$launcher_log"
+        bash "$SCRIPT_DIR/run_exp_2_j10_hdp.sh" 2>&1 | tee "$launcher_log"
     ) &
     printf -v "$pid_var" '%s' "$!"
 }

@@ -33,6 +33,19 @@ DEFAULT_GROUPS = {
     ],
 }
 
+RESOLVED_TRACKING_BBOX20PCT = {
+    "MUOT_3M": [
+        Path("logs/tracking_category_resolution/muot3m_train_bbox20pct_resolved.json"),
+        Path("logs/tracking_category_resolution/muot3m_test_bbox20pct_resolved.json"),
+    ],
+    "UOT100": [
+        Path("logs/tracking_category_resolution/uot100_all_bbox20pct_resolved.json"),
+    ],
+    "UW-COT220": [
+        Path("logs/tracking_category_resolution/uwcot220_all_bbox20pct_resolved.json"),
+    ],
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -48,6 +61,13 @@ def parse_args():
         "--summary-json",
         default=None,
         help="Optional JSON path for all computed statistics.")
+    parser.add_argument(
+        "--use-resolved-tracking",
+        action="store_true",
+        help=(
+            "Use resolved bbox20pct COCO files for MUOT_3M, UOT100, and "
+            "UW-COT220 when they exist, instead of their original bbox20pct "
+            "annotation files."))
     return parser.parse_args()
 
 
@@ -66,6 +86,20 @@ def json_candidates(path):
     if path.name in {"annotations", "train", "test"}:
         return sorted(path.glob("*.json"))
     return sorted(path.rglob("*.json"))
+
+
+def should_skip_original_bbox20pct(dataset, path, use_resolved_tracking):
+    if not use_resolved_tracking:
+        return False
+    if dataset not in RESOLVED_TRACKING_BBOX20PCT:
+        return False
+    return annotation_kind(path) == "bbox20pct"
+
+
+def resolved_tracking_candidates(dataset, use_resolved_tracking):
+    if not use_resolved_tracking:
+        return []
+    return RESOLVED_TRACKING_BBOX20PCT.get(dataset, [])
 
 
 def load_coco(path):
@@ -348,6 +382,41 @@ def progress(message):
     sys.stdout.flush()
 
 
+def add_coco_file(dataset, path, rows, totals, category_totals, quiet=False):
+    if not quiet:
+        progress("  checking: {}".format(path))
+
+    data, error = load_coco(path)
+    if data is None:
+        if not quiet:
+            progress("    skip: {}".format(error))
+        return False
+
+    kind = annotation_kind(path)
+    images = len(data["images"])
+    anns = len(data["annotations"])
+    cats = len(data.get("categories", []))
+
+    rows.append((dataset, kind, images, anns, cats, str(path)))
+    totals.setdefault((dataset, kind), [0, 0, 0])
+    totals[(dataset, kind)][0] += images
+    totals[(dataset, kind)][1] += anns
+    totals[(dataset, kind)][2] += 1
+    add_category_counts(
+        category_totals=category_totals,
+        dataset=dataset,
+        kind=kind,
+        file_key=str(path),
+        coco=data,
+    )
+
+    if not quiet:
+        progress(
+            "    COCO {}: images={}, anns={}, cats={}".format(
+                kind, images, anns, cats))
+    return True
+
+
 def main():
     args = parse_args()
     rows = []
@@ -373,38 +442,35 @@ def main():
                 continue
 
             for path in json_candidates(root):
-                if not args.quiet:
-                    progress("  checking: {}".format(path))
-
-                data, error = load_coco(path)
-                if data is None:
+                if should_skip_original_bbox20pct(
+                        dataset, path, args.use_resolved_tracking):
                     if not args.quiet:
-                        progress("    skip: {}".format(error))
+                        progress("  skip original bbox20pct: {}".format(path))
                     continue
+                if add_coco_file(
+                        dataset=dataset,
+                        path=path,
+                        rows=rows,
+                        totals=totals,
+                        category_totals=category_totals,
+                        quiet=args.quiet):
+                    found += 1
 
-                kind = annotation_kind(path)
-                images = len(data["images"])
-                anns = len(data["annotations"])
-                cats = len(data.get("categories", []))
-
-                rows.append((dataset, kind, images, anns, cats, str(path)))
-                totals.setdefault((dataset, kind), [0, 0, 0])
-                totals[(dataset, kind)][0] += images
-                totals[(dataset, kind)][1] += anns
-                totals[(dataset, kind)][2] += 1
-                add_category_counts(
-                    category_totals=category_totals,
-                    dataset=dataset,
-                    kind=kind,
-                    file_key=str(path),
-                    coco=data,
-                )
-                found += 1
-
+        for path in resolved_tracking_candidates(
+                dataset, args.use_resolved_tracking):
+            if not path.exists():
                 if not args.quiet:
-                    progress(
-                        "    COCO {}: images={}, anns={}, cats={}".format(
-                            kind, images, anns, cats))
+                    progress("  resolved MISSING: {}".format(path))
+                rows.append((dataset, "MISSING_RESOLVED", 0, 0, 0, str(path)))
+                continue
+            if add_coco_file(
+                    dataset=dataset,
+                    path=path,
+                    rows=rows,
+                    totals=totals,
+                    category_totals=category_totals,
+                    quiet=args.quiet):
+                found += 1
 
         if found == 0:
             rows.append((dataset, "NO_COCO_JSON", 0, 0, 0, "-"))

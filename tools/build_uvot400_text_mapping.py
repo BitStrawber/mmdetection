@@ -68,6 +68,14 @@ def sequence_aliases(sequence):
     return {normalize_key(item) for item in aliases if item}
 
 
+def is_uvot_sequence_dir(path):
+    if not path.is_dir():
+        return False
+    if not re.match(r"^Video_\d+$", path.name):
+        return False
+    return True
+
+
 def collect_sequences(uvot_root):
     uvot_root = Path(uvot_root)
     sequences = []
@@ -78,7 +86,8 @@ def collect_sequences(uvot_root):
         split_dir = uvot_root / split
         if not split_dir.is_dir():
             continue
-        for seq_dir in sorted(path for path in split_dir.iterdir() if path.is_dir()):
+        for seq_dir in sorted(path for path in split_dir.iterdir()
+                              if is_uvot_sequence_dir(path)):
             sequence = seq_dir.name
             item = {
                 "split": split,
@@ -103,12 +112,18 @@ def text_file_aliases(path):
     aliases = set()
     for value in (path.stem, path.name, path.parent.name):
         aliases.add(normalize_key(value))
+        aliases.add(normalize_key(re.sub(r"^nlp[_-]?", "", value, flags=re.I)))
+        aliases.add(normalize_key(re.sub(r"^caption[_-]?", "", value, flags=re.I)))
+        aliases.add(normalize_key(re.sub(r"^text[_-]?", "", value, flags=re.I)))
 
     parts = list(path.parts)
     for idx, part in enumerate(parts):
         norm = normalize_key(part)
         if re.match(r"video\d+$", norm) or re.match(r"\d+$", norm):
             aliases.add(norm)
+        stripped = normalize_key(re.sub(r"^nlp[_-]?", "", part, flags=re.I))
+        if re.match(r"video\d+$", stripped) or re.match(r"\d+$", stripped):
+            aliases.add(stripped)
         if idx + 1 < len(parts):
             aliases.add(normalize_key(part + "_" + parts[idx + 1]))
     return {item for item in aliases if item}

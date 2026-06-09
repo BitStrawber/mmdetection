@@ -65,6 +65,10 @@ def parse_args():
     parser.add_argument('--threshold', type=float, default=0.6)
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--max-keep-ckpts', type=int, default=5)
+    parser.add_argument(
+        '--log-prefix',
+        default='uiis10k_cross',
+        help='Prefix for stageA/stageB training logs.')
     return parser.parse_args()
 
 
@@ -314,12 +318,12 @@ def main():
         train_detector(
             args, train_a, train_b,
             os.path.join(args.work_dir, 'stageA'),
-            'uiis10k_cross_stageA.log',
+            f'{args.log_prefix}_stageA.log',
             args.port_a)
         train_detector(
             args, train_b, train_a,
             os.path.join(args.work_dir, 'stageB'),
-            'uiis10k_cross_stageB.log',
+            f'{args.log_prefix}_stageB.log',
             args.port_b)
 
     if args.step in ('filter', 'all'):

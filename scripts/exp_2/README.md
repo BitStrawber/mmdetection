@@ -11,6 +11,7 @@ cd ~/xcx/exp_2/mmdetection
 - `base/`: baseline experiment launchers such as J2/J3/J4.
 - `j10/`: J10, J10 HDP/RFTM, and J10 scheme C tuning launchers.
 - `uiis/`: UIIS10K easy-data and J10 full pipeline launchers.
+- `usod/`: USOD10K objectness easy-data, DFUI merge, and MAE-route launchers.
 - `utils/`: GPU occupier, monitor, and watcher scripts.
 
 ## Common Commands
@@ -28,9 +29,32 @@ UIIS easy + J10 full pipeline:
 bash scripts/exp_2/uiis/run_exp_2_uiis_easy_j10_full.sh
 ```
 
+USOD10K objectness expansion:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_easy_merge.sh
+```
+
+USOD10K objectness expansion + J10 scheme C:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_easy_j10_scheme_c_full.sh \
+  2>&1 | tee logs/j10_scheme_c_usod/full_master.log
+```
+
+USOD10K MAE-route transfer, default GPU `4,5`:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_mae_strategy.sh
+```
+
+This follows the old J3 idea: load `mae_pretrain_vit_base.pth`, train S1 on
+`DFUI_RUOD_UIIS_USOD_EASY`, extract `backbone_only.pth`, then run RUOD S2 with
+the same ViT-Cascade structure.
+
+
 GPU occupier:
 
 ```bash
 bash scripts/exp_2/utils/run_exp_2_gpu_occupier.sh "2,3" 16000
 ```
-

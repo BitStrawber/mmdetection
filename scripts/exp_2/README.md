@@ -52,6 +52,15 @@ This follows the old J3 idea: load `mae_pretrain_vit_base.pth`, train S1 on
 `DFUI_RUOD_UIIS_USOD_EASY`, extract `backbone_only.pth`, then run RUOD S2 with
 the same ViT-Cascade structure.
 
+USOD10K combined dual strategy:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_easy_dual_strategy.sh \
+  2>&1 | tee logs/j10_usod_dual_strategy/full_master.log
+```
+
+This first uses GPU `2,3` for USOD A/B filtering and merge, then runs the
+original RCNN route on GPU `2,3` and the MAE ViT route on GPU `4,5` in parallel.
 
 GPU occupier:
 

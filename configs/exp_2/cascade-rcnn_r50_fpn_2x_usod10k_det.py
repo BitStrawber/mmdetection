@@ -5,7 +5,7 @@
 
 _base_ = '../cascade_rcnn/cascade-rcnn_r50_fpn_2x_ruod.py'
 
-data_root = '/media/HDD1/XCX/exp_2/USOD10K_DET/'
+data_root = '/media/HDD0/XCX/exp_2/USOD10K/'
 ann_root = data_root + 'annotations/'
 
 classes = ('object',)

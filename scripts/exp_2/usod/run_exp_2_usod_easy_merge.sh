@@ -4,16 +4,16 @@ set -euo pipefail
 # USOD10K objectness expansion for DFUI.
 #
 # Prerequisite:
-#   /media/HDD1/XCX/exp_2/USOD10K_DET/
+#   /media/HDD0/XCX/exp_2/USOD10K/
 #     images/
 #     annotations/instances_trainval.json
 #
 # Workflow:
-#   1) A/B cross filtering on USOD10K_DET with threshold 0.6.
+#   1) A/B cross filtering on converted USOD10K with threshold 0.6.
 #   2) Merge DFUI + RUOD_easy + UIIS_easy + USOD_easy into 12-class source.
 
 PYTHON="${PYTHON:-python}"
-USOD_ROOT="${USOD_ROOT:-/media/HDD1/XCX/exp_2/USOD10K_DET}"
+USOD_ROOT="${USOD_ROOT:-/media/HDD0/XCX/exp_2/USOD10K}"
 USOD_ANN="${USOD_ANN:-$USOD_ROOT/annotations/instances_trainval.json}"
 USOD_CROSS_DIR="${USOD_CROSS_DIR:-$USOD_ROOT/annotations/cross_split_det}"
 USOD_GPU_IDS="${USOD_GPU_IDS:-2,3}"

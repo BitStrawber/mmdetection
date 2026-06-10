@@ -64,10 +64,10 @@ def parse_args():
         default='/media/HDD0/XCX/exp_2/UIIS10K/coco/annotations/cross_split_det/easy_merged.json')
     parser.add_argument(
         '--usod-easy-img-dir',
-        default='/media/HDD1/XCX/exp_2/USOD10K_DET/images')
+        default='/media/HDD0/XCX/exp_2/USOD10K/images')
     parser.add_argument(
         '--usod-easy-ann',
-        default='/media/HDD1/XCX/exp_2/USOD10K_DET/annotations/cross_split_det/easy_merged.json')
+        default='/media/HDD0/XCX/exp_2/USOD10K/annotations/cross_split_det/easy_merged.json')
     parser.add_argument(
         '--out-root',
         default='/media/HDD0/XCX/exp_2/DFUI_RUOD_UIIS_USOD_EASY')

@@ -14,7 +14,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 #        S2 stays unchanged and loads only the extracted S1 backbone.
 #
 # Prerequisite:
-#   /media/HDD1/XCX/exp_2/USOD10K_DET/
+#   /media/HDD0/XCX/exp_2/USOD10K/
 #     images/
 #     annotations/instances_trainval.json
 
@@ -24,7 +24,7 @@ PYTHON="${PYTHON:-python}"
 WORK_DIR="${WORK_DIR:-work_dirs/j10_scheme_c_usod}"
 LOG_DIR="${LOG_DIR:-logs/j10_scheme_c_usod}"
 
-USOD_ROOT="${USOD_ROOT:-/media/HDD1/XCX/exp_2/USOD10K_DET}"
+USOD_ROOT="${USOD_ROOT:-/media/HDD0/XCX/exp_2/USOD10K}"
 USOD_ANN="${USOD_ANN:-$USOD_ROOT/annotations/instances_trainval.json}"
 USOD_CROSS_DIR="${USOD_CROSS_DIR:-$USOD_ROOT/annotations/cross_split_det}"
 USOD_GPU_IDS="${USOD_GPU_IDS:-2,3}"

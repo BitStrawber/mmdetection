@@ -259,6 +259,8 @@ def convert_split(split, dataset_root, out_img_dir, args, image_start_id, ann_st
 
 def save_coco(path, images, annotations):
     data = {
+        'info': {'description': 'USOD10K saliency masks converted to detection bboxes'},
+        'licenses': [],
         'images': images,
         'annotations': annotations,
         'categories': [{'id': 1, 'name': 'object'}],

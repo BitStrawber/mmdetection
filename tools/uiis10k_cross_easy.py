@@ -78,12 +78,23 @@ def load_coco(path):
 
 
 def save_coco(data, path):
+    ensure_coco_metadata(data)
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f)
 
 
+def ensure_coco_metadata(data):
+    data.setdefault('info', {'description': 'cross split detection dataset'})
+    data.setdefault('licenses', [])
+    data.setdefault('categories', [
+        {'id': idx + 1, 'name': name} for idx, name in enumerate(CLASSES)
+    ])
+    return data
+
+
 def split_coco(coco, seed):
+    ensure_coco_metadata(coco)
     images = coco['images'][:]
     random.seed(seed)
     random.shuffle(images)

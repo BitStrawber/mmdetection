@@ -62,6 +62,17 @@ bash scripts/exp_2/usod/run_exp_2_usod_easy_dual_strategy.sh \
 This first uses GPU `2,3` for USOD A/B filtering and merge, then runs the
 original RCNN route on GPU `2,3` and the MAE ViT route on GPU `4,5` in parallel.
 
+USOD10K RCNN auto tuning, three experiments per round:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_rcnn_auto_tuning.sh \
+  2>&1 | tee logs/j10_usod_auto_tuning/auto_tuning_master.log
+```
+
+It runs Round 1 epoch/milestone sweep, Round 2 LR sweep from the Round 1 best,
+and Round 3 frozen-stage/weight-decay sweep from the Round 2 best. Results are
+written to `logs/j10_usod_auto_tuning/summary.tsv`.
+
 GPU occupier:
 
 ```bash

@@ -255,6 +255,7 @@ run_dino_resnet50() {
 
     CUDA_VISIBLE_DEVICES="$GPU_IDS" PYTHONPATH="$DINO_DIR:${PYTHONPATH:-}" \
     python -m torch.distributed.launch \
+        --use_env \
         --nproc_per_node="$NUM_GPUS" \
         --master_port="$PORT" \
         "$DINO_DIR/main_dino.py" \
@@ -312,6 +313,7 @@ run_spark_resnet50() {
         cd "$SPARK_DIR/pretrain"
         CUDA_VISIBLE_DEVICES="$GPU_IDS" \
         python -m torch.distributed.launch \
+            --use_env \
             --nproc_per_node="$NUM_GPUS" \
             --master_port="$PORT" \
             main.py \

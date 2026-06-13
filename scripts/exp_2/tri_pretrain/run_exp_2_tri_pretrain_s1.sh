@@ -35,9 +35,27 @@ GPU_MAX_UTIL="${GPU_MAX_UTIL:-10}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-2}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-30}"
 
-MMPRETRAIN_DIR="${MMPRETRAIN_DIR:-../mmpretrain}"
-DINO_DIR="${DINO_DIR:-../dino}"
-SPARK_DIR="${SPARK_DIR:-../SparK}"
+if [ -z "${MMPRETRAIN_DIR:-}" ]; then
+    if [ -f "$REPO_ROOT/third_party/mmpretrain/tools/train.py" ]; then
+        MMPRETRAIN_DIR="$REPO_ROOT/third_party/mmpretrain"
+    else
+        MMPRETRAIN_DIR="../mmpretrain"
+    fi
+fi
+if [ -z "${DINO_DIR:-}" ]; then
+    if [ -f "$REPO_ROOT/third_party/dino/main_dino.py" ]; then
+        DINO_DIR="$REPO_ROOT/third_party/dino"
+    else
+        DINO_DIR="../dino"
+    fi
+fi
+if [ -z "${SPARK_DIR:-}" ]; then
+    if [ -f "$REPO_ROOT/third_party/SparK/pretrain/main.py" ]; then
+        SPARK_DIR="$REPO_ROOT/third_party/SparK"
+    else
+        SPARK_DIR="../SparK"
+    fi
+fi
 
 case "$EXP_ID" in
     j6) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j6_spark_resnet50_realuw.sh" ;;

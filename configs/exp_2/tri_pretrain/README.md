@@ -23,6 +23,18 @@ J12 intentionally has no default upstream config because the cloned MMPreTrain
 repo provides Swin-Base SimMIM configs, not a strict SwinV2-Base masked-modeling
 config.
 
+SparK and DINO runtime code is vendored under:
+
+```text
+third_party/SparK
+third_party/dino
+```
+
+The launchers prefer these in-repo paths and only fall back to sibling
+directories such as `../SparK` or `../dino` when the vendored copy is absent.
+MMPreTrain is still expected from the active environment or a sibling
+`../mmpretrain` checkout.
+
 ## MMPreTrain RealUW Wrappers
 
 Executable MMPreTrain wrapper configs are stored in:

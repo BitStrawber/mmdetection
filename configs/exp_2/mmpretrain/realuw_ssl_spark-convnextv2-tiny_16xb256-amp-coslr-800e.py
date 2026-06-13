@@ -1,5 +1,5 @@
 _base_ = [
-    'mmpretrain::configs/spark/'
+    'mmpretrain::spark/'
     'spark_sparse-convnextv2-tiny_16xb256-amp-coslr-800e_in1k.py'
 ]
 

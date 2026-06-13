@@ -1,5 +1,5 @@
 _base_ = [
-    'mmpretrain::configs/mae/'
+    'mmpretrain::mae/'
     'mae_vit-base-p16_8xb512-amp-coslr-300e_in1k.py'
 ]
 

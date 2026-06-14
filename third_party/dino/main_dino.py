@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFile
 import torch
 import torch.nn as nn
 import torch.distributed as dist
@@ -33,6 +33,8 @@ from torchvision import models as torchvision_models
 import utils
 import vision_transformer as vits
 from vision_transformer import DINOHead
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 torchvision_archs = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")

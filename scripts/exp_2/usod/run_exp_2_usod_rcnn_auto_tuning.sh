@@ -19,8 +19,10 @@ BASE_WORK_DIR="${BASE_WORK_DIR:-work_dirs/j10_usod_auto_tuning}"
 BASE_LOG_DIR="${BASE_LOG_DIR:-logs/j10_usod_auto_tuning}"
 SUMMARY_FILE="${SUMMARY_FILE:-$BASE_LOG_DIR/summary.tsv}"
 
-GPU_GROUPS=(${GPU_GROUPS:-"2,3 4,5 6,7"})
-PORTS=(${PORTS:-"29701 29702 29703"})
+GPU_GROUPS_STR="${GPU_GROUPS:-2,3 4,5 6,7}"
+PORTS_STR="${PORTS:-29701 29702 29703}"
+read -r -a GPU_GROUPS <<< "$GPU_GROUPS_STR"
+read -r -a PORTS <<< "$PORTS_STR"
 
 S1_CONFIG="${S1_CONFIG:-configs/exp_2/cascade-rcnn_r50_fpn_2x_dfui_ruod_uiis_usod_easy_j10_scheme_c_s1.py}"
 S2_CONFIG="${S2_CONFIG:-configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j10_v2_s2.py}"

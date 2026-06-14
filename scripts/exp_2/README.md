@@ -52,6 +52,16 @@ This follows the old J3 idea: load `mae_pretrain_vit_base.pth`, train S1 on
 `DFUI_RUOD_UIIS_USOD_EASY`, extract `backbone_only.pth`, then run RUOD S2 with
 the same ViT-Cascade structure.
 
+USOD10K DINO-route transfer, default GPU `4,5`:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_dino_strategy.sh \
+  2>&1 | tee logs/j10_dino_usod/full_master.log
+```
+
+This uses DINO-pretrained ResNet-50 for S1 on `DFUI_RUOD_UIIS_USOD_EASY`,
+extracts the ResNet backbone, then runs the existing Cascade R-CNN RUOD S2.
+
 USOD10K combined dual strategy:
 
 ```bash
@@ -72,6 +82,15 @@ bash scripts/exp_2/usod/run_exp_2_usod_rcnn_auto_tuning.sh \
 It runs Round 1 epoch/milestone sweep, Round 2 LR sweep from the Round 1 best,
 and Round 3 frozen-stage/weight-decay sweep from the Round 2 best. Results are
 written to `logs/j10_usod_auto_tuning/summary.tsv`.
+
+USOD10K easy Faster R-CNN self-eval:
+
+```bash
+bash scripts/exp_2/usod/run_exp_2_usod_easy_faster_self_eval.sh
+```
+
+This trains Faster R-CNN on `USOD10K/annotations/cross_split_det/easy_merged.json`
+and evaluates on the same easy set to estimate how easy the selected subset is.
 
 GPU occupier:
 

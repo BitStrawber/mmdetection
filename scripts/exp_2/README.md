@@ -103,6 +103,16 @@ bash scripts/exp_2/usod/run_exp_2_usod_easy_faster_self_eval.sh
 This trains Faster R-CNN on `USOD10K/annotations/cross_split_det/easy_merged.json`
 and evaluates on the same easy set to estimate how easy the selected subset is.
 
+USOD10K easy bbox visualization sample:
+
+```bash
+bash scripts/exp_2/usod/export_usod_easy_visual_sample.sh
+```
+
+This samples 50 images from `USOD10K/annotations/cross_split_det/easy_merged.json`,
+draws the converted detection boxes, zips the visualizations, and uploads the
+zip with rclone. Override `RCLONE_DEST`, `NUM_SAMPLES`, or `UPLOAD=0` as needed.
+
 GPU occupier:
 
 ```bash

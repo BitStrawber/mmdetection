@@ -17,6 +17,7 @@ GPU_IDS="${1:-}"
 OCCUPY_MEM_MB="${2:-}"
 
 GPU_MAX_UTIL=${GPU_MAX_UTIL:-10}
+GPU_START_MAX_USED_MB=${GPU_START_MAX_USED_MB:-}
 GPU_IDLE_CHECKS=${GPU_IDLE_CHECKS:-2}
 GPU_WAIT_INTERVAL=${GPU_WAIT_INTERVAL:-30}
 OCCUPY_TARGET_UTIL=${OCCUPY_TARGET_UTIL:-60}
@@ -24,6 +25,7 @@ OCCUPY_CYCLE_SEC=${OCCUPY_CYCLE_SEC:-1.0}
 OCCUPY_MATMUL_SIZE=${OCCUPY_MATMUL_SIZE:-2048}
 LOG_DIR=${LOG_DIR:-logs}
 LOG_FILE=${LOG_FILE:-}
+PYTHON_BIN=${PYTHON_BIN:-$(command -v python)}
 
 usage() {
     echo "Usage: bash run_exp_2_gpu_occupier.sh \"GPU_IDS\" OCCUPY_MEM_MB"
@@ -37,6 +39,12 @@ fi
 
 if ! [[ "$OCCUPY_MEM_MB" =~ ^[0-9]+$ ]]; then
     echo "Error: OCCUPY_MEM_MB must be an integer MB value."
+    usage
+    exit 1
+fi
+
+if [ -n "$GPU_START_MAX_USED_MB" ] && ! [[ "$GPU_START_MAX_USED_MB" =~ ^[0-9]+$ ]]; then
+    echo "Error: GPU_START_MAX_USED_MB must be an integer MB value when set."
     usage
     exit 1
 fi
@@ -76,7 +84,11 @@ wait_for_gpu() {
     fi
 
     local idle_rounds=0
-    echo "GPU $gpu: waiting until free_mem>=${OCCUPY_MEM_MB}MB and util<=${GPU_MAX_UTIL}% for ${GPU_IDLE_CHECKS} consecutive check(s)."
+    if [ -n "$GPU_START_MAX_USED_MB" ]; then
+        echo "GPU $gpu: waiting until used_mem<${GPU_START_MAX_USED_MB}MB, free_mem>=${OCCUPY_MEM_MB}MB, and util<=${GPU_MAX_UTIL}% for ${GPU_IDLE_CHECKS} consecutive check(s)."
+    else
+        echo "GPU $gpu: waiting until free_mem>=${OCCUPY_MEM_MB}MB and util<=${GPU_MAX_UTIL}% for ${GPU_IDLE_CHECKS} consecutive check(s)."
+    fi
     while true; do
         local state=""
         state=$(query_gpu_state "$gpu" || true)
@@ -90,7 +102,18 @@ wait_for_gpu() {
         local mem_used mem_free util
         read -r mem_used mem_free util <<< "$state"
         echo "$(date '+%F %T') GPU $gpu: used=${mem_used}MB free=${mem_free}MB util=${util}%"
-        if [ "$mem_free" -ge "$OCCUPY_MEM_MB" ] && [ "$util" -le "$GPU_MAX_UTIL" ]; then
+        local memory_condition=0
+        if [ -n "$GPU_START_MAX_USED_MB" ]; then
+            if [ "$mem_used" -lt "$GPU_START_MAX_USED_MB" ] && [ "$mem_free" -ge "$OCCUPY_MEM_MB" ]; then
+                memory_condition=1
+            fi
+        else
+            if [ "$mem_free" -ge "$OCCUPY_MEM_MB" ]; then
+                memory_condition=1
+            fi
+        fi
+
+        if [ "$memory_condition" -eq 1 ] && [ "$util" -le "$GPU_MAX_UTIL" ]; then
             idle_rounds=$((idle_rounds + 1))
             echo "$(date '+%F %T') GPU $gpu: idle check ${idle_rounds}/${GPU_IDLE_CHECKS} passed."
             if [ "$idle_rounds" -ge "$GPU_IDLE_CHECKS" ]; then
@@ -99,7 +122,7 @@ wait_for_gpu() {
             fi
         else
             idle_rounds=0
-            echo "$(date '+%F %T') GPU $gpu: insufficient free memory or busy. Recheck after ${GPU_WAIT_INTERVAL}s."
+            echo "$(date '+%F %T') GPU $gpu: start condition not met. Recheck after ${GPU_WAIT_INTERVAL}s."
         fi
         sleep "$GPU_WAIT_INTERVAL"
     done
@@ -109,7 +132,7 @@ occupy_gpu() {
     local gpu="$1"
     wait_for_gpu "$gpu"
 
-    CUDA_VISIBLE_DEVICES="$gpu" python -c "
+    CUDA_VISIBLE_DEVICES="$gpu" "$PYTHON_BIN" -c "
 import time
 import torch
 
@@ -150,11 +173,13 @@ echo "========================================="
 echo "GPU_IDS: $GPU_IDS"
 echo "OCCUPY_MEM_MB: $OCCUPY_MEM_MB"
 echo "GPU_MAX_UTIL: $GPU_MAX_UTIL"
+echo "GPU_START_MAX_USED_MB: ${GPU_START_MAX_USED_MB:-disabled}"
 echo "GPU_IDLE_CHECKS: $GPU_IDLE_CHECKS"
 echo "GPU_WAIT_INTERVAL: $GPU_WAIT_INTERVAL"
 echo "OCCUPY_TARGET_UTIL: $OCCUPY_TARGET_UTIL"
 echo "OCCUPY_CYCLE_SEC: $OCCUPY_CYCLE_SEC"
 echo "OCCUPY_MATMUL_SIZE: $OCCUPY_MATMUL_SIZE"
+echo "PYTHON_BIN: $PYTHON_BIN"
 echo "LOG_FILE: $LOG_FILE"
 echo "Press Ctrl+C to stop"
 echo "========================================="

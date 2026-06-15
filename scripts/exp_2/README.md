@@ -29,6 +29,17 @@ UIIS easy + J10 full pipeline:
 bash scripts/exp_2/uiis/run_exp_2_uiis_easy_j10_full.sh
 ```
 
+UIIS10K easy Faster R-CNN self-eval:
+
+```bash
+bash scripts/exp_2/uiis/run_exp_2_uiis_easy_faster_self_eval.sh
+```
+
+This trains Faster R-CNN on
+`UIIS10K/coco/annotations/cross_split_det/easy_merged.json` and evaluates on
+the same easy set. It uses bbox annotations converted from the original
+instance-segmentation labels.
+
 USOD10K objectness expansion:
 
 ```bash

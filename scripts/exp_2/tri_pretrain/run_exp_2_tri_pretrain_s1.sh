@@ -10,6 +10,7 @@ set -euo pipefail
 # EXP_ID:
 #   j6  = keyu-tian/SparK ResNet-50
 #   j7  = facebookresearch/dino ResNet-50
+#   j14 = facebookresearch/dino ViT-Small
 #   j11 = MMPreTrain MAE ViT-Base
 #   j12 = MMPreTrain SimMIM/MixMIM SwinV2/Swin-Base
 #   j13 = MMPreTrain SparK ConvNeXtV2-Tiny
@@ -60,6 +61,7 @@ fi
 case "$EXP_ID" in
     j6) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j6_spark_resnet50_realuw.sh" ;;
     j7) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j7_dino_resnet50_realuw.sh" ;;
+    j14) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j14_dino_vits_realuw_100e.sh" ;;
     j11) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j11_mae_vit_base_realuw.sh" ;;
     j12) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j12_simmim_swin_base_realuw.sh" ;;
     j13) DEFAULT_TASK_CONFIG="configs/exp_2/tri_pretrain/s1_j13_spark_convnextv2_tiny_realuw.sh" ;;
@@ -228,7 +230,7 @@ run_mmpretrain() {
 }
 
 run_dino_resnet50() {
-    local name="j7_realuw_dino_resnet50"
+    local name="${DINO_NAME:-j7_realuw_dino_resnet50}"
     local work_dir="$WORK_ROOT/$name"
     local log_file="$LOG_DIR/${name}_s1.log"
     local data_path="$REALUW_IMAGEFOLDER/train"
@@ -342,6 +344,9 @@ case "$EXP_ID" in
     j7)
         run_dino_resnet50
         ;;
+    j14)
+        run_dino_resnet50
+        ;;
     j11)
         run_mmpretrain \
             "j11_realuw_mae_vit_base" \
@@ -370,7 +375,7 @@ case "$EXP_ID" in
         ;;
     *)
         echo "Error: unsupported EXP_ID=$EXP_ID"
-        echo "Supported: j6, j7, j11, j12, j13"
+        echo "Supported: j6, j7, j11, j12, j13, j14"
         exit 1
         ;;
 esac

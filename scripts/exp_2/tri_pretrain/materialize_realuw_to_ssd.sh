@@ -8,7 +8,7 @@ CHECK_WORKERS="${CHECK_WORKERS:-16}"
 
 cd "$(dirname "$0")/../../.."
 
-python tools/materialize_realuw_imagefolder.py \
+python -u tools/materialize_realuw_imagefolder.py \
   --src-root "$SRC_ROOT" \
   --out-root "$OUT_ROOT" \
   --workers "$WORKERS" \

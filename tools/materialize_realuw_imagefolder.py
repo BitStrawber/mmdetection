@@ -105,7 +105,7 @@ def parse_args():
 
 
 def iter_images(split_dir):
-    for path in sorted(split_dir.iterdir()):
+    for path in split_dir.iterdir():
         if path.is_file() or path.is_symlink():
             if path.suffix.lower() in IMG_SUFFIXES:
                 yield path
@@ -366,7 +366,9 @@ def main():
             split_summary['error_message'] = 'source split does not exist'
             continue
 
+        print('scan source split:', src_split, flush=True)
         paths = list(iter_images(src_split))
+        print('  found images:', len(paths), flush=True)
         split_summary['source_images'] = len(paths)
         if args.limit > 0:
             paths = paths[:args.limit]
@@ -387,11 +389,11 @@ def main():
                 'file_name': str(Path('imagefolder') / out_split / args.class_name / dst.name),
             })
 
-    print('src_root:', src_root)
-    print('out_root:', out_root)
-    print('planned images:', len(all_jobs))
-    print('workers:', args.workers)
-    print('dry_run:', args.dry_run)
+    print('src_root:', src_root, flush=True)
+    print('out_root:', out_root, flush=True)
+    print('planned images:', len(all_jobs), flush=True)
+    print('workers:', args.workers, flush=True)
+    print('dry_run:', args.dry_run, flush=True)
 
     if not args.dry_run and all_jobs:
         jobs = [(src, dst, args.overwrite) for _, _, src, dst in all_jobs]

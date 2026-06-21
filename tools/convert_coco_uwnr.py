@@ -1,4 +1,4 @@
-"""Convert clean COCO images to underwater images using UWNR.
+"""Convert clean COCO images to underwater images using UWNR and MegaDepth maps.
 
 Usage:
     python tools/convert_coco_uwnr.py \
@@ -7,7 +7,12 @@ Usage:
         --output-dir /path/to/coco_uwnr \
         --uwnr-dir /path/to/UWNR \
         --uwnr-model /path/to/uwnr_epoch200.pth \
-        [--depth-dir /path/to/depth_maps]
+        --depth-dir /path/to/megadepth_maps
+
+``--depth-dir`` must mirror the image directory hierarchy. A source image
+``train/n01440764/foo.JPEG`` therefore uses
+``train/n01440764/foo.png`` under the depth directory. Generate those maps
+with ``tools/generate_megadepth_maps.py``.
 """
 import argparse
 import os
@@ -17,7 +22,6 @@ import shutil
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F
 import torchvision.transforms as transforms
 from tqdm import tqdm
 
@@ -43,34 +47,21 @@ def _compute_a_map(img_rgb):
     return MutiScaleLuminanceEstimation(img_rgb)
 
 
-def load_midas(device):
-    model_type = "MiDaS_small"
-    midas = torch.hub.load("intel-isl/MiDaS", model_type)
-    midas.to(device)
-    midas.eval()
-    midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
-    transform = midas_transforms.small_transform
-    return midas, transform
+def resolve_depth_path(depth_dir, file_name):
+    relative = os.path.normpath(file_name)
+    stem, _ = os.path.splitext(relative)
+    candidates = [
+        os.path.join(depth_dir, stem + '.png'),
+        os.path.join(depth_dir, relative),
+        os.path.join(depth_dir, os.path.basename(stem) + '.png'),
+    ]
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+    return None
 
 
-def estimate_depth(img_np, midas_model, midas_transform, device):
-    img_rgb = cv2.cvtColor(img_np, cv2.COLOR_BGR2RGB)
-    input_batch = midas_transform(img_rgb).to(device)
-    with torch.no_grad():
-        prediction = midas_model(input_batch)
-        prediction = F.interpolate(
-            prediction.unsqueeze(1),
-            size=img_np.shape[:2],
-            mode="bicubic",
-            align_corners=False,
-        ).squeeze()
-    depth = prediction.cpu().numpy()
-    depth = (depth - depth.min()) / (depth.max() - depth.min() + 1e-8)
-    return depth.astype(np.float32)
-
-
-def process_single_image(img_path, netG, device, size, midas_model=None,
-                         midas_transform=None, depth_dir=None):
+def process_single_image(img_path, depth_path, netG, device, size):
     img = cv2.imread(img_path)
     if img is None:
         return None
@@ -82,19 +73,10 @@ def process_single_image(img_path, netG, device, size, midas_model=None,
     A_map = _compute_a_map(img_rgb)
     A_map_tensor = transforms.ToTensor()(np.float32(A_map) / 255.0)
 
-    basename = os.path.splitext(os.path.basename(img_path))[0]
-    if depth_dir and os.path.exists(os.path.join(depth_dir, basename + '.png')):
-        depth = cv2.imread(os.path.join(depth_dir, basename + '.png'), cv2.IMREAD_GRAYSCALE)
-        depth = cv2.resize(depth, (size, size)).astype(np.float32) / 255.0
-    elif depth_dir and os.path.exists(os.path.join(depth_dir, basename + '.npy')):
-        depth = np.load(os.path.join(depth_dir, basename + '.npy'))
-        depth = cv2.resize(depth, (size, size)).astype(np.float32)
-        if depth.max() > 1.0:
-            depth = depth / 255.0
-    elif midas_model is not None:
-        depth = estimate_depth(img_resized, midas_model, midas_transform, device)
-    else:
-        depth = np.ones((size, size), dtype=np.float32) * 0.5
+    depth = cv2.imread(depth_path, cv2.IMREAD_GRAYSCALE)
+    if depth is None:
+        return None
+    depth = cv2.resize(depth, (size, size)).astype(np.float32) / 255.0
 
     depth_tensor = torch.from_numpy(depth).unsqueeze(0)
     img_tensor = transforms.ToTensor()(img_rgb)
@@ -120,7 +102,8 @@ def main():
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--uwnr-dir', required=True)
     parser.add_argument('--uwnr-model', required=True)
-    parser.add_argument('--depth-dir', default=None)
+    parser.add_argument('--depth-dir', required=True,
+                        help='MegaDepth PNG root mirroring --img-dir.')
     parser.add_argument('--size', type=int, default=256)
     parser.add_argument('--device', default='cuda:0')
     args = parser.parse_args()
@@ -145,12 +128,7 @@ def main():
     print(f'Loading UWNR model from {args.uwnr_model} ...')
     netG = load_uwnr_generator(args.uwnr_model, args.uwnr_dir, device)
 
-    midas_model, midas_transform = None, None
-    if args.depth_dir is None:
-        print('Loading MiDaS for on-the-fly depth estimation...')
-        midas_model, midas_transform = load_midas(device)
-
-    skipped = 0
+    skipped = missing_depth = 0
     for i, img_info in enumerate(tqdm(images, desc='UWNR converting')):
         filename = img_info['file_name']
         src_path = os.path.join(args.img_dir, filename)
@@ -159,11 +137,14 @@ def main():
         if os.path.exists(dst_path):
             continue
 
+        depth_path = resolve_depth_path(args.depth_dir, filename)
+        if depth_path is None:
+            print(f'Warning: missing MegaDepth map for {filename}')
+            missing_depth += 1
+            continue
+
         result = process_single_image(
-            src_path, netG, device, args.size,
-            midas_model=midas_model,
-            midas_transform=midas_transform,
-            depth_dir=args.depth_dir
+            src_path, depth_path, netG, device, args.size
         )
 
         if result is None:
@@ -171,9 +152,11 @@ def main():
             skipped += 1
             continue
 
+        os.makedirs(os.path.dirname(dst_path), exist_ok=True)
         cv2.imwrite(dst_path, cv2.cvtColor(result, cv2.COLOR_RGB2BGR))
 
-    print(f'Done. Processed: {len(images) - skipped}, Skipped: {skipped}')
+    print(f'Done. Processed: {len(images) - skipped - missing_depth}, '
+          f'failed_images: {skipped}, missing_depth: {missing_depth}')
     print(f'Output: {img_out_dir}')
 
 

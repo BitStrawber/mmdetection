@@ -230,6 +230,183 @@ EXP_ID=j7 GPU_IDS=0,1,2,3,4,5,6,7 \
 bash scripts/exp_2/tri_pretrain/run_exp_2_tri_pretrain_s1.sh
 ```
 
+## ImageNet Underwater Synthesis Plan
+
+The ImageNet-1K copy is used as the clean-image source for building synthetic
+underwater variants. It has ImageNet class directories and image pixels, but
+does not provide metric depth, camera intrinsics, or underwater imaging
+parameters.
+
+```text
+Clean source:       ${EXP2_DATA_ROOT_HDD1}/imagenet1k/train/
+Real underwater:    DFUI train split
+Depth input:        MegaDepth pseudo-depth estimated per ImageNet image
+Output convention:  synthetic_imagenet/<method>/train/<synset>/<image>
+```
+
+Keep ImageNet synset directories and source filenames whenever possible. This
+preserves ImageNet class labels for classification and ImageFolder loaders.
+MAE/DINO-style self-supervised pretraining does not consume those labels.
+ImageNet is not a source of RUOD-compatible detection boxes; do not treat the
+generated ImageNet variants as labelled RUOD detection data.
+
+### Method Roles and Inputs
+
+| Method | Intended input under this plan | Intended output | Status and main constraint |
+| --- | --- | --- | --- |
+| UWNR | ImageNet RGB + MegaDepth pseudo-depth + compatible UWNR checkpoint | Underwater-rendered ImageNet | The local converter estimates an `A_map` from each source image and does not require DFUI at inference. The official UWNR test command also accepts real underwater exemplar/FID paths, so this local route is an adaptation of the released inference procedure. |
+| WaterGAN | ImageNet RGB + MegaDepth pseudo-depth + unpaired DFUI images | WaterGAN-style underwater ImageNet | Requires conversion of each depth map to the repository's expected `.mat` format and input resolution. Pseudo-depth is not metric depth. |
+| SyreaNet | ImageNet RGB + matching MegaDepth maps + the released `synthesize/coeffs.json` water coefficients | Physically degraded underwater ImageNet | The released physically guided synthesis module is independent of `test.py` and does not need an enhancement checkpoint. It requires flat, filename-aligned image/depth directories. |
+| CUT | ImageNet as domain A and DFUI train images as domain B | DFUI-style ImageNet | No depth needed. Inspect for object/geometry changes before large-scale generation. |
+
+Use only the DFUI training split for unsupervised domain learning by default.
+This keeps validation and test images out of the domain-model training set.
+
+### Known Gaps and Validation Requirements
+
+1. **Relative depth ambiguity:** MegaDepth predicts relative depth.
+   Choose and document one depth normalization policy. Per-image normalization
+   is convenient but does not give a common physical scale across images.
+2. **DFUI domain bias:** DFUI is detection-friendly and may be clearer than
+   severely degraded underwater data. CUT and WaterGAN trained only against
+   DFUI may produce friendly underwater images rather than a broad degradation
+   distribution.
+3. **Degradation-level control:** Define light, medium, and heavy generation
+   settings before a full run. CUT has implicit strength driven by its target
+   domain; physical routes require explicit depth/water-parameter choices.
+4. **Geometry preservation:** Generated data is safe for self-supervised
+   pretraining if it decodes correctly. For later detection use, output image
+   size and any crop/resize/flip transform must be tracked with the boxes.
+   UWNR is the most suitable initial route because its local converter restores
+   the source image size.
+5. **No paired quality ground truth:** Evaluate with fixed-seed visual samples,
+   decode/count checks, distribution statistics, and downstream RUOD results;
+   paired PSNR/SSIM is not applicable.
+6. **Storage:** Do not generate four full PNG copies at once. Run a fixed
+   200-image smoke test for every method first, then generate one JPEG-based
+   full variant at a time after visual inspection.
+
+Recommended execution order:
+
+1. UWNR with ImageNet RGB and MegaDepth pseudo-depth. Validate the local
+   `A_map` adaptation against the official exemplar-based inference inputs.
+2. CUT with ImageNet domain A and DFUI domain B.
+3. SyreaNet after ImageNet images and pseudo-depth maps are converted to
+   filename-aligned PNG files and its released coefficient sampling is checked.
+4. WaterGAN after pseudo-depth `.mat` compatibility and a small training run
+   are verified.
+
+### Shared MegaDepth Preparation
+
+Use one MegaDepth depth export for every depth-aware synthesis method. The
+official MegaDepth checkout and its `best_generalization_net_G.pth` checkpoint
+remain external dependencies; their locations are supplied explicitly.
+
+```bash
+export IMAGENET_TRAIN=${EXP2_DATA_ROOT_HDD1}/imagenet1k/train
+export IMAGENET_DEPTH=${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet/megadepth/train
+export MEGADEPTH_DIR=/path/to/MegaDepth
+export MEGADEPTH_CKPT=/path/to/best_generalization_net_G.pth
+
+python tools/generate_megadepth_maps.py \
+  --image-dir ${IMAGENET_TRAIN} \
+  --out-dir ${IMAGENET_DEPTH} \
+  --megadepth-dir ${MEGADEPTH_DIR} \
+  --checkpoint ${MEGADEPTH_CKPT} \
+  --device cuda:0
+```
+
+Create the minimal image-only COCO manifest used by the UWNR converter:
+
+```bash
+python tools/build_imagefolder_coco_manifest.py \
+  --image-dir ${IMAGENET_TRAIN} \
+  --out ${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet/manifests/imagenet_train.json
+```
+
+Run the local UWNR adapter with precomputed MegaDepth maps:
+
+```bash
+python tools/convert_coco_uwnr.py \
+  --ann ${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet/manifests/imagenet_train.json \
+  --img-dir ${IMAGENET_TRAIN} \
+  --depth-dir ${IMAGENET_DEPTH} \
+  --output-dir ${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet/uwnr_adapted \
+  --uwnr-dir /path/to/UWNR \
+  --uwnr-model /path/to/uwnr_pretrained.pk \
+  --device cuda:0
+```
+
+Prepare legacy flat image/depth pairs from the same MegaDepth maps. SyreaNet
+requires matching PNG names. WaterGAN requires matching PNG images and `.mat`
+files whose variable is named `depth`.
+
+```bash
+python tools/prepare_physics_synthesis_pairs.py \
+  --mode syreanet \
+  --image-dir ${IMAGENET_TRAIN} \
+  --depth-dir ${IMAGENET_DEPTH} \
+  --out-root ${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet/syreanet_input
+
+python tools/prepare_physics_synthesis_pairs.py \
+  --mode watergan \
+  --image-dir ${IMAGENET_TRAIN} \
+  --depth-dir ${IMAGENET_DEPTH} \
+  --out-root ${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet/watergan_input
+```
+
+Use `--limit 200` for a smoke test. CUT is intentionally excluded from this
+preparation because it consumes ImageNet and DFUI image domains directly and
+does not use depth maps.
+
+### Five-Method ImageNet Sampling Plan
+
+The intended synthetic pretraining pool contains 200,000 generated training
+images per method and 10,000 generated validation images per method:
+
+```text
+5 methods x 1,000 ImageNet classes x 200 train images = 1,000,000 train images
+5 methods x 1,000 ImageNet classes x  10 val images   =    50,000 val images
+```
+
+The sampling step creates only the per-method source selection. Each method's
+`generated/` directory is created later when that synthesis pipeline is run:
+
+```text
+${SYNTHETIC_ROOT}/
+  uwnr/source/train/<synset>/...
+  uwnr/source/val/<synset>/...
+  watergan/...
+  syreanet/...
+  cut/...
+  method5/...
+  manifests/selection.jsonl
+  manifests/selection_summary.json
+```
+
+Create the reproducible source selections with links rather than copies:
+
+```bash
+export SYNTHETIC_ROOT=${EXP2_DATA_ROOT_HDD1}/synthetic_imagenet
+
+python tools/select_imagenet_synthesis_sources.py \
+  --train-root ${EXP2_DATA_ROOT_HDD1}/imagenet1k/train \
+  --val-root ${EXP2_DATA_ROOT_HDD1}/imagenet1k/val \
+  --out-root ${SYNTHETIC_ROOT} \
+  --methods uwnr watergan syreanet cut method5 \
+  --train-per-class 200 \
+  --val-per-class 10 \
+  --seed 20260621 \
+  --link-mode symlink
+```
+
+Train draws are independently randomized for each method. This is deliberate:
+some ImageNet classes have fewer than 1,000 train images, so five fully
+disjoint 200-image selections per class are impossible. The generated images
+remain method-specific. Validation allocation is disjoint by class: standard
+ImageNet validation has 50 images per class, exactly enough for five methods
+times ten images.
+
 ## Tri-pretrain Task Matrix
 
 Tri-pretrain uses a two-stage idea:

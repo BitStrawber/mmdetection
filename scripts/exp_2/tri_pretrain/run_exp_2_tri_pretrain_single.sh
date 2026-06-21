@@ -6,8 +6,6 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 EXP_ID="${EXP_ID:?EXP_ID is required, for example j6}"
-DET_CONFIG="${DET_CONFIG:?DET_CONFIG is required}"
-MASK_CONFIG="${MASK_CONFIG:?MASK_CONFIG is required}"
 
 GPU_IDS="${GPU_IDS:-0,1}"
 PORT="${PORT:-29680}"
@@ -22,6 +20,17 @@ RUN_DET="${RUN_DET:-1}"
 RUN_MASK="${RUN_MASK:-1}"
 RUN_TEST="${RUN_TEST:-0}"
 EXTRA_CFG_OPTIONS="${EXTRA_CFG_OPTIONS:-}"
+
+DET_CONFIG="${DET_CONFIG:-}"
+MASK_CONFIG="${MASK_CONFIG:-}"
+if [ "$RUN_DET" = "1" ] && [ -z "$DET_CONFIG" ]; then
+    echo "Error: DET_CONFIG is required when RUN_DET=1"
+    exit 1
+fi
+if [ "$RUN_MASK" = "1" ] && [ -z "$MASK_CONFIG" ]; then
+    echo "Error: MASK_CONFIG is required when RUN_MASK=1"
+    exit 1
+fi
 
 WAIT_FOR_GPUS="${WAIT_FOR_GPUS:-1}"
 GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-3000}"

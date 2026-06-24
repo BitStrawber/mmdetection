@@ -46,6 +46,10 @@ def parse_args():
     parser.add_argument('--input-width', type=int, default=512)
     parser.add_argument('--limit', type=int, default=0,
                         help='Process at most this many images; 0 means all.')
+    parser.add_argument('--num-shards', type=int, default=1,
+                        help='Split the sorted image list into this many shards.')
+    parser.add_argument('--shard-index', type=int, default=0,
+                        help='Process only this shard index, 0-based.')
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -147,6 +151,12 @@ def main():
     images = list_images(image_dir)
     if args.limit:
         images = images[:args.limit]
+    if args.num_shards <= 0:
+        raise ValueError('--num-shards must be positive.')
+    if args.shard_index < 0 or args.shard_index >= args.num_shards:
+        raise ValueError('--shard-index must satisfy 0 <= shard-index < num-shards.')
+    if args.num_shards > 1:
+        images = images[args.shard_index::args.num_shards]
     if not images:
         raise RuntimeError(f'No images found under {image_dir}')
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
@@ -175,6 +185,8 @@ def main():
         'megadepth_dir': str(megadepth_dir), 'checkpoint': str(checkpoint),
         'device': str(device), 'total_images': len(images), 'written': written,
         'skipped_existing': skipped, 'failed': failed,
+        'limit': args.limit, 'num_shards': args.num_shards,
+        'shard_index': args.shard_index,
         'depth_semantics': 'normalized relative distance; farther pixels are brighter',
         'failures': failures,
     }

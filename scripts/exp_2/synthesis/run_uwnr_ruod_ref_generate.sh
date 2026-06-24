@@ -32,20 +32,36 @@ LIMIT="${LIMIT:-0}"
 TEST_SIZE="${TEST_SIZE:-256}"
 N_CPU="${N_CPU:-4}"
 FID_SIZE="${FID_SIZE:-${TEST_SIZE}}"
+NUM_SHARDS="${NUM_SHARDS:-1}"
+SHARD_INDEX="${SHARD_INDEX:-0}"
+
+if (( NUM_SHARDS <= 0 )); then
+  echo "Error: NUM_SHARDS must be positive." >&2
+  exit 1
+fi
+if (( SHARD_INDEX < 0 || SHARD_INDEX >= NUM_SHARDS )); then
+  echo "Error: SHARD_INDEX must satisfy 0 <= SHARD_INDEX < NUM_SHARDS." >&2
+  exit 1
+fi
+
+SHARD_TAG=""
+if (( NUM_SHARDS > 1 )); then
+  SHARD_TAG="_shard${SHARD_INDEX}of${NUM_SHARDS}"
+fi
 
 SOURCE_DIR="${SOURCE_DIR:-${SYN_ROOT}/uwnr/source/${SPLIT}}"
-DEPTH_DIR="${DEPTH_DIR:-${SYN_ROOT}/uwnr_ruod_ref/megadepth/${SPLIT}}"
-PREP_DIR="${PREP_DIR:-${SYN_ROOT}/uwnr_ruod_ref/prepared/${SPLIT}}"
-RUOD_REF_ROOT="${RUOD_REF_ROOT:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference_${SPLIT}}"
+DEPTH_DIR="${DEPTH_DIR:-${SYN_ROOT}/uwnr_ruod_ref/megadepth/${SPLIT}${SHARD_TAG}}"
+PREP_DIR="${PREP_DIR:-${SYN_ROOT}/uwnr_ruod_ref/prepared/${SPLIT}${SHARD_TAG}}"
+RUOD_REF_ROOT="${RUOD_REF_ROOT:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference_${SPLIT}${SHARD_TAG}}"
 RUOD_REF_DIR="${RUOD_REF_DIR:-}"
 if [[ -z "${RUOD_REF_DIR}" || "${RUOD_REF_DIR}" == "${RUOD_REF_ROOT}/images" ]]; then
   RUOD_REF_DIR="${RUOD_REF_ROOT}/qingxi"
 fi
-FID_REF_DIR="${FID_REF_DIR:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference_${SPLIT}_fid_resized}"
-FLAT_SAVE_DIR="${FLAT_SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_flat/${SPLIT}}"
+FID_REF_DIR="${FID_REF_DIR:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference_${SPLIT}${SHARD_TAG}_fid_resized}"
+FLAT_SAVE_DIR="${FLAT_SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_flat/${SPLIT}${SHARD_TAG}}"
 RESTORE_DIR="${RESTORE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated/${SPLIT}}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
-PY_COMPAT_DIR="${PY_COMPAT_DIR:-${SYN_ROOT}/uwnr_ruod_ref/python_compat}"
+PY_COMPAT_DIR="${PY_COMPAT_DIR:-${SYN_ROOT}/uwnr_ruod_ref/python_compat${SHARD_TAG}}"
 
 RUN_DEPTH="${RUN_DEPTH:-1}"
 RUN_PREPARE="${RUN_PREPARE:-1}"
@@ -96,6 +112,9 @@ echo "MEGADEPTH_DIR:        ${MEGADEPTH_DIR}"
 echo "MEGADEPTH_CKPT:       ${MEGADEPTH_CKPT}"
 echo "GPU:                  ${GPU}"
 echo "LIMIT:                ${LIMIT}"
+echo "NUM_SHARDS:           ${NUM_SHARDS}"
+echo "SHARD_INDEX:          ${SHARD_INDEX}"
+echo "SHARD_TAG:            ${SHARD_TAG}"
 echo "TEST_SIZE:            ${TEST_SIZE}"
 echo "N_CPU:                ${N_CPU}"
 echo "FID_SIZE:             ${FID_SIZE}"
@@ -121,7 +140,9 @@ if [[ "${RUN_DEPTH}" == "1" ]]; then
     --checkpoint "${MEGADEPTH_CKPT}" \
     --device "cuda:${GPU}" \
     --limit "${LIMIT}" \
-    2>&1 | tee "${LOG_DIR}/uwnr_ruod_ref_megadepth_${SPLIT}.log"
+    --num-shards "${NUM_SHARDS}" \
+    --shard-index "${SHARD_INDEX}" \
+    2>&1 | tee "${LOG_DIR}/uwnr_ruod_ref_megadepth_${SPLIT}${SHARD_TAG}.log"
 else
   echo
   echo "Step 1/5: Skip MegaDepth generation"
@@ -131,7 +152,7 @@ if [[ "${RUN_PREPARE}" == "1" ]]; then
   echo
   echo "Step 2/5: Prepare flat clean/depth pairs"
   mkdir -p "${PREP_DIR}/clean" "${PREP_DIR}/depth"
-  SOURCE_DIR="${SOURCE_DIR}" DEPTH_DIR="${DEPTH_DIR}" PREP_DIR="${PREP_DIR}" LIMIT="${LIMIT}" python - <<'PY'
+SOURCE_DIR="${SOURCE_DIR}" DEPTH_DIR="${DEPTH_DIR}" PREP_DIR="${PREP_DIR}" LIMIT="${LIMIT}" NUM_SHARDS="${NUM_SHARDS}" SHARD_INDEX="${SHARD_INDEX}" python - <<'PY'
 from pathlib import Path
 import json
 import os
@@ -140,6 +161,8 @@ source_root = Path(os.environ["SOURCE_DIR"])
 depth_root = Path(os.environ["DEPTH_DIR"])
 out = Path(os.environ["PREP_DIR"])
 limit = int(os.environ["LIMIT"])
+num_shards = int(os.environ["NUM_SHARDS"])
+shard_index = int(os.environ["SHARD_INDEX"])
 
 clean_out = out / "clean"
 depth_out = out / "depth"
@@ -156,6 +179,8 @@ exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 images = sorted(p for p in source_root.rglob("*") if p.is_file() and p.suffix.lower() in exts)
 if limit > 0:
     images = images[:limit]
+if num_shards > 1:
+    images = images[shard_index::num_shards]
 
 records = []
 missing_depth = 0
@@ -193,6 +218,8 @@ with manifest.open("w", encoding="utf-8") as f:
 print(f"candidate images: {len(images)}")
 print(f"prepared pairs: {len(records)}")
 print(f"missing depth: {missing_depth}")
+print(f"num_shards: {num_shards}")
+print(f"shard_index: {shard_index}")
 print(f"manifest: {manifest}")
 if not records:
     raise SystemExit("No clean/depth pairs prepared.")
@@ -344,7 +371,7 @@ PY
       --underwater_path "${RUOD_REF_ROOT}" \
       --fid_gt_path "${FID_PATH}" \
       --model_path "${UWNR_CKPT}"
-  ) 2>&1 | tee "${LOG_DIR}/uwnr_ruod_ref_generate_${SPLIT}.log"
+  ) 2>&1 | tee "${LOG_DIR}/uwnr_ruod_ref_generate_${SPLIT}${SHARD_TAG}.log"
 else
   echo
   echo "Step 4/5: Skip UWNR generation"
@@ -353,7 +380,7 @@ fi
 if [[ "${RUN_RESTORE}" == "1" ]]; then
   echo
   echo "Step 5/5: Restore flat UWNR outputs to ImageNet synset directories"
-  PAIR_MANIFEST="${PAIR_MANIFEST}" FLAT_SAVE_DIR="${FLAT_SAVE_DIR}" RESTORE_DIR="${RESTORE_DIR}" CLEAR_RESTORE_OUTPUT="${CLEAR_RESTORE_OUTPUT}" python - <<'PY'
+  PAIR_MANIFEST="${PAIR_MANIFEST}" FLAT_SAVE_DIR="${FLAT_SAVE_DIR}" RESTORE_DIR="${RESTORE_DIR}" CLEAR_RESTORE_OUTPUT="${CLEAR_RESTORE_OUTPUT}" SHARD_TAG="${SHARD_TAG}" python - <<'PY'
 from pathlib import Path
 import json
 import os
@@ -363,6 +390,7 @@ manifest = Path(os.environ["PAIR_MANIFEST"])
 flat_root = Path(os.environ["FLAT_SAVE_DIR"])
 restore_root = Path(os.environ["RESTORE_DIR"])
 clear_restore = os.environ.get("CLEAR_RESTORE_OUTPUT", "0") == "1"
+shard_tag = os.environ.get("SHARD_TAG", "")
 
 records = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
 if not records:
@@ -404,7 +432,8 @@ summary = {
     "written": written,
     "skipped_existing": skipped,
 }
-(restore_root / "restore_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+summary_name = f"restore_summary{shard_tag}.json" if shard_tag else "restore_summary.json"
+(restore_root / summary_name).write_text(json.dumps(summary, indent=2), encoding="utf-8")
 print(json.dumps(summary, indent=2))
 PY
 else

@@ -312,13 +312,22 @@ import os
 
 src = Path(os.environ["UWNR_DIR"]) / "test.py"
 dst = Path(os.environ["UWNR_TEST_SCRIPT"])
-text = src.read_text(encoding="utf-8")
-text = text.replace(
-    "    fid = calculate_fid_given_paths([opt.save_path,opt.fid_gt_path],50,'cuda:0',2048,1)\n",
-    "    fid = float('nan')\n"
-    "    print('Skipping FID during generation; run resized FID evaluation separately if needed.')\n",
-)
-dst.write_text(text, encoding="utf-8")
+lines = src.read_text(encoding="utf-8").splitlines(keepends=True)
+patched = []
+replaced = 0
+for line in lines:
+    if "calculate_fid_given_paths" in line and "fid" in line:
+        indent = line[:len(line) - len(line.lstrip())]
+        patched.append(f"{indent}fid = float('nan')\n")
+        patched.append(
+            f"{indent}print('Skipping FID during generation; run resized FID evaluation separately if needed.')\n"
+        )
+        replaced += 1
+    else:
+        patched.append(line)
+if replaced != 1:
+    raise SystemExit(f"Expected to patch exactly one FID line in {src}, patched={replaced}")
+dst.write_text("".join(patched), encoding="utf-8")
 print(f"Using FID-skipping UWNR test copy: {dst}")
 PY
   fi

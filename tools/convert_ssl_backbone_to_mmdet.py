@@ -7,6 +7,7 @@ projection and teacher momentum branches.
 """
 
 import argparse
+import pickle
 from collections import OrderedDict
 
 import torch
@@ -100,9 +101,24 @@ def should_drop(key, allow_decoder):
     return any(part in lower for part in DROP_KEYWORDS)
 
 
+def load_checkpoint(path):
+    """Load trusted SSL checkpoints across PyTorch versions.
+
+    PyTorch 2.6 changed torch.load's default weights_only value to True.
+    Some official SSL checkpoints, including facebookresearch/dino logs,
+    contain numpy scalar metadata and therefore require weights_only=False.
+    """
+    try:
+        return torch.load(path, map_location='cpu')
+    except pickle.UnpicklingError:
+        return torch.load(path, map_location='cpu', weights_only=False)
+    except TypeError:
+        return torch.load(path, map_location='cpu')
+
+
 def main():
     args = parse_args()
-    ckpt = torch.load(args.checkpoint, map_location='cpu')
+    ckpt = load_checkpoint(args.checkpoint)
     source_state = get_state_dict(ckpt, args.source)
 
     converted = OrderedDict()

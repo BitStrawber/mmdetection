@@ -23,7 +23,7 @@ N_CPU="${N_CPU:-4}"
 
 SOURCE_DIR="${SOURCE_DIR:-${SYN_ROOT}/uwnr/source/train}"
 DEPTH_DIR="${DEPTH_DIR:-${SYN_ROOT}/uwnr_ruod_ref/megadepth_smoke/train}"
-RUOD_REF_ROOT="${RUOD_REF_ROOT:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference}"
+RUOD_REF_ROOT="${RUOD_REF_ROOT:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference_smoke}"
 # Official UWNR dataloader expects underwater images under
 # ${underwater_path}/qingxi, so --underwater_path points to RUOD_REF_ROOT.
 RUOD_REF_DIR="${RUOD_REF_DIR:-}"
@@ -34,6 +34,7 @@ PREP_DIR="${PREP_DIR:-${SYN_ROOT}/uwnr_ruod_ref/prepared_smoke/train}"
 SAVE_DIR="${SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_smoke_flat/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
 PY_COMPAT_DIR="${PY_COMPAT_DIR:-${SYN_ROOT}/uwnr_ruod_ref/python_compat}"
+RUOD_REF_COUNT="${RUOD_REF_COUNT:-${LIMIT}}"
 
 RUN_RUOD_REF="${RUN_RUOD_REF:-1}"
 RUN_DEPTH="${RUN_DEPTH:-1}"
@@ -71,6 +72,7 @@ echo "GPU:            ${GPU}"
 echo "LIMIT:          ${LIMIT}"
 echo "TEST_SIZE:      ${TEST_SIZE}"
 echo "N_CPU:          ${N_CPU}"
+echo "RUOD_REF_COUNT: ${RUOD_REF_COUNT}"
 echo "========================================="
 
 check_path "${SOURCE_DIR}" "ImageNet UWNR source directory"
@@ -84,29 +86,39 @@ if [[ "${RUN_RUOD_REF}" == "1" ]]; then
   echo
   echo "Step 1/4: Build flat RUOD reference symlink directory"
   mkdir -p "${RUOD_REF_DIR}"
-  RUOD_REF_SRC="${RUOD_REF_SRC}" RUOD_REF_DIR="${RUOD_REF_DIR}" python - <<'PY'
+  RUOD_REF_SRC="${RUOD_REF_SRC}" RUOD_REF_DIR="${RUOD_REF_DIR}" RUOD_REF_COUNT="${RUOD_REF_COUNT}" python - <<'PY'
 from pathlib import Path
 import os
 
 src = Path(os.environ["RUOD_REF_SRC"])
 dst = Path(os.environ["RUOD_REF_DIR"])
+target_count = int(os.environ["RUOD_REF_COUNT"])
 dst.mkdir(parents=True, exist_ok=True)
 
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 files = sorted(p for p in src.rglob("*") if p.is_file() and p.suffix.lower() in exts)
 if not files:
     raise SystemExit(f"No reference images found under {src}")
+if target_count <= 0:
+    target_count = len(files)
+
+# Keep the official UWNR reference loader length aligned with the smoke clean
+# set length. Stale links from earlier runs would otherwise make test.py loop
+# over too many reference images and index beyond the clean/depth pairs.
+for old in dst.iterdir():
+    if old.is_file() or old.is_symlink():
+        old.unlink()
 
 created = 0
-for i, path in enumerate(files):
+for i in range(target_count):
+    path = files[i % len(files)]
     target = dst / f"{i:08d}{path.suffix.lower()}"
-    if target.exists() or target.is_symlink():
-        continue
     os.symlink(path, target)
     created += 1
 
 total = sum(1 for p in dst.iterdir() if p.is_file() or p.is_symlink())
 print(f"RUOD source images: {len(files)}")
+print(f"requested reference images: {target_count}")
 print(f"new symlinks: {created}")
 print(f"reference images ready: {total}")
 PY

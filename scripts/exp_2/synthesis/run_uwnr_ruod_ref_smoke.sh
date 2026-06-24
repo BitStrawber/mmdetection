@@ -23,7 +23,10 @@ N_CPU="${N_CPU:-4}"
 
 SOURCE_DIR="${SOURCE_DIR:-${SYN_ROOT}/uwnr/source/train}"
 DEPTH_DIR="${DEPTH_DIR:-${SYN_ROOT}/uwnr_ruod_ref/megadepth_smoke/train}"
-RUOD_REF_DIR="${RUOD_REF_DIR:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference/images}"
+RUOD_REF_ROOT="${RUOD_REF_ROOT:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference}"
+# Official UWNR dataloader expects underwater images under
+# ${underwater_path}/qingxi, so --underwater_path points to RUOD_REF_ROOT.
+RUOD_REF_DIR="${RUOD_REF_DIR:-${RUOD_REF_ROOT}/qingxi}"
 PREP_DIR="${PREP_DIR:-${SYN_ROOT}/uwnr_ruod_ref/prepared_smoke/train}"
 SAVE_DIR="${SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_smoke_flat/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
@@ -50,6 +53,7 @@ echo "========================================="
 echo "SYN_ROOT:       ${SYN_ROOT}"
 echo "SOURCE_DIR:     ${SOURCE_DIR}"
 echo "RUOD_REF_SRC:   ${RUOD_REF_SRC}"
+echo "RUOD_REF_ROOT:  ${RUOD_REF_ROOT}"
 echo "RUOD_REF_DIR:   ${RUOD_REF_DIR}"
 echo "DEPTH_DIR:      ${DEPTH_DIR}"
 echo "PREP_DIR:       ${PREP_DIR}"
@@ -203,8 +207,8 @@ if [[ "${RUN_UWNR}" == "1" ]]; then
       --save_path "${SAVE_DIR}" \
       --clean_img_path "${PREP_DIR}/clean" \
       --depth_img_path "${PREP_DIR}/depth" \
-      --underwater_path "${RUOD_REF_DIR}" \
-      --fid_gt_path "${RUOD_REF_DIR}" \
+      --underwater_path "${RUOD_REF_ROOT}" \
+      --fid_gt_path "${RUOD_REF_ROOT}" \
       --model_path "${UWNR_CKPT}"
   ) 2>&1 | tee "${LOG_DIR}/uwnr_ruod_ref_smoke_test.log"
 else

@@ -1,5 +1,6 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 import math
+from collections import OrderedDict
 
 import torch
 import torch.nn as nn
@@ -431,8 +432,26 @@ class ViT(BaseModule):
             ckpt = CheckpointLoader.load_checkpoint(
                 self.init_cfg.checkpoint, logger=logger, map_location='cpu')
             if 'model' in ckpt:
-                _state_dict = ckpt['model']
-            self.load_state_dict(_state_dict, False)
+                state_dict = ckpt['model']
+            elif 'state_dict' in ckpt:
+                state_dict = ckpt['state_dict']
+            else:
+                state_dict = ckpt
+
+            converted_state_dict = OrderedDict()
+            strip_prefixes = ('module.', 'model.', 'backbone.')
+            for key, value in state_dict.items():
+                new_key = key
+                changed = True
+                while changed:
+                    changed = False
+                    for prefix in strip_prefixes:
+                        if new_key.startswith(prefix):
+                            new_key = new_key[len(prefix):]
+                            changed = True
+                converted_state_dict[new_key] = value
+
+            self.load_state_dict(converted_state_dict, False)
 
     def forward(self, x):
         x = self.patch_embed(x)

@@ -236,7 +236,7 @@ PY
       --clean_img_path "${PREP_DIR}/clean" \
       --depth_img_path "${PREP_DIR}/depth" \
       --underwater_path "${RUOD_REF_ROOT}" \
-      --fid_gt_path "${RUOD_REF_ROOT}" \
+      --fid_gt_path "${RUOD_REF_DIR}" \
       --model_path "${UWNR_CKPT}"
   ) 2>&1 | tee "${LOG_DIR}/uwnr_ruod_ref_smoke_test.log"
 else

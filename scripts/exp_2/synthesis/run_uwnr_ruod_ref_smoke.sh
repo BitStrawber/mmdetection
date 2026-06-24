@@ -35,6 +35,7 @@ SAVE_DIR="${SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_smoke_flat/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
 PY_COMPAT_DIR="${PY_COMPAT_DIR:-${SYN_ROOT}/uwnr_ruod_ref/python_compat}"
 RUOD_REF_COUNT="${RUOD_REF_COUNT:-${LIMIT}}"
+SKIP_FID="${SKIP_FID:-1}"
 
 RUN_RUOD_REF="${RUN_RUOD_REF:-1}"
 RUN_DEPTH="${RUN_DEPTH:-1}"
@@ -73,6 +74,7 @@ echo "LIMIT:          ${LIMIT}"
 echo "TEST_SIZE:      ${TEST_SIZE}"
 echo "N_CPU:          ${N_CPU}"
 echo "RUOD_REF_COUNT: ${RUOD_REF_COUNT}"
+echo "SKIP_FID:       ${SKIP_FID}"
 echo "========================================="
 
 check_path "${SOURCE_DIR}" "ImageNet UWNR source directory"
@@ -226,9 +228,28 @@ if not hasattr(np, "int"):
 if not hasattr(np, "bool"):
     np.bool = bool
 PY
+  UWNR_TEST_SCRIPT="${UWNR_DIR}/test.py"
+  if [[ "${SKIP_FID}" == "1" ]]; then
+    UWNR_TEST_SCRIPT="${PY_COMPAT_DIR}/test_skip_fid.py"
+    UWNR_DIR="${UWNR_DIR}" UWNR_TEST_SCRIPT="${UWNR_TEST_SCRIPT}" python - <<'PY'
+from pathlib import Path
+import os
+
+src = Path(os.environ["UWNR_DIR"]) / "test.py"
+dst = Path(os.environ["UWNR_TEST_SCRIPT"])
+text = src.read_text(encoding="utf-8")
+text = text.replace(
+    "    fid = calculate_fid_given_paths([opt.save_path,opt.fid_gt_path],50,'cuda:0',2048,1)\n",
+    "    fid = float('nan')\n"
+    "    print('Skipping FID for smoke test; generated images are kept for visual inspection.')\n",
+)
+dst.write_text(text, encoding="utf-8")
+print(f"Using FID-skipping UWNR test copy: {dst}")
+PY
+  fi
   (
     cd "${UWNR_DIR}"
-    PYTHONPATH="${PY_COMPAT_DIR}:${PYTHONPATH:-}" CUDA_VISIBLE_DEVICES="${GPU}" python test.py \
+    PYTHONPATH="${PY_COMPAT_DIR}:${PYTHONPATH:-}" CUDA_VISIBLE_DEVICES="${GPU}" python "${UWNR_TEST_SCRIPT}" \
       --cuda \
       --test_size "${TEST_SIZE}" \
       --n_cpu "${N_CPU}" \

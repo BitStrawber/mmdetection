@@ -33,6 +33,7 @@ fi
 PREP_DIR="${PREP_DIR:-${SYN_ROOT}/uwnr_ruod_ref/prepared_smoke/train}"
 SAVE_DIR="${SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_smoke_flat/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
+PY_COMPAT_DIR="${PY_COMPAT_DIR:-${SYN_ROOT}/uwnr_ruod_ref/python_compat}"
 
 RUN_RUOD_REF="${RUN_RUOD_REF:-1}"
 RUN_DEPTH="${RUN_DEPTH:-1}"
@@ -61,6 +62,7 @@ echo "RUOD_REF_DIR:   ${RUOD_REF_DIR}"
 echo "DEPTH_DIR:      ${DEPTH_DIR}"
 echo "PREP_DIR:       ${PREP_DIR}"
 echo "SAVE_DIR:       ${SAVE_DIR}"
+echo "PY_COMPAT_DIR:  ${PY_COMPAT_DIR}"
 echo "UWNR_DIR:       ${UWNR_DIR}"
 echo "UWNR_CKPT:      ${UWNR_CKPT}"
 echo "MEGADEPTH_DIR:  ${MEGADEPTH_DIR}"
@@ -201,9 +203,20 @@ if [[ "${RUN_UWNR}" == "1" ]]; then
   echo
   echo "Step 4/4: Run official UWNR test.py with RUOD reference"
   mkdir -p "${SAVE_DIR}"
+  mkdir -p "${PY_COMPAT_DIR}"
+  cat > "${PY_COMPAT_DIR}/sitecustomize.py" <<'PY'
+import numpy as np
+
+if not hasattr(np, "float"):
+    np.float = float
+if not hasattr(np, "int"):
+    np.int = int
+if not hasattr(np, "bool"):
+    np.bool = bool
+PY
   (
     cd "${UWNR_DIR}"
-    CUDA_VISIBLE_DEVICES="${GPU}" python test.py \
+    PYTHONPATH="${PY_COMPAT_DIR}:${PYTHONPATH:-}" CUDA_VISIBLE_DEVICES="${GPU}" python test.py \
       --cuda \
       --test_size "${TEST_SIZE}" \
       --n_cpu "${N_CPU}" \

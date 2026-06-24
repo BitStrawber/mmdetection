@@ -26,7 +26,10 @@ DEPTH_DIR="${DEPTH_DIR:-${SYN_ROOT}/uwnr_ruod_ref/megadepth_smoke/train}"
 RUOD_REF_ROOT="${RUOD_REF_ROOT:-${SYN_ROOT}/uwnr_ruod_ref/ruod_reference}"
 # Official UWNR dataloader expects underwater images under
 # ${underwater_path}/qingxi, so --underwater_path points to RUOD_REF_ROOT.
-RUOD_REF_DIR="${RUOD_REF_DIR:-${RUOD_REF_ROOT}/qingxi}"
+RUOD_REF_DIR="${RUOD_REF_DIR:-}"
+if [[ -z "${RUOD_REF_DIR}" || "${RUOD_REF_DIR}" == "${RUOD_REF_ROOT}/images" ]]; then
+  RUOD_REF_DIR="${RUOD_REF_ROOT}/qingxi"
+fi
 PREP_DIR="${PREP_DIR:-${SYN_ROOT}/uwnr_ruod_ref/prepared_smoke/train}"
 SAVE_DIR="${SAVE_DIR:-${SYN_ROOT}/uwnr_ruod_ref/generated_smoke_flat/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"

@@ -28,12 +28,7 @@ SYREANET_DIR="${SYREANET_DIR:-/home/fcp/xcx/exp_2/syn/SyreaNet}"
 SYREANET_CKPT="${SYREANET_CKPT:-${SYREANET_DIR}/checkpoints/pretrained.pth}"
 SYREANET_BASE_CONFIG="${SYREANET_BASE_CONFIG:-${SYREANET_DIR}/configs/syreanet_test.yaml}"
 
-DEFAULT_SOURCE_DIR="${SYN_ROOT}/syreanet/source/${SPLIT}"
-FALLBACK_SOURCE_DIR="${SYN_ROOT}/uwnr/source/${SPLIT}"
-SOURCE_DIR="${SOURCE_DIR:-${DEFAULT_SOURCE_DIR}}"
-if [[ ! -d "${SOURCE_DIR}" && -d "${FALLBACK_SOURCE_DIR}" ]]; then
-  SOURCE_DIR="${FALLBACK_SOURCE_DIR}"
-fi
+SOURCE_DIR="${SOURCE_DIR:-${SYN_ROOT}/syreanet/source/${SPLIT}}"
 
 SHARD_TAG=""
 if [[ "${NUM_SHARDS}" != "1" ]]; then
@@ -105,10 +100,13 @@ img_size = int(sys.argv[7])
 img_ext = sys.argv[8].lower().lstrip(".")
 
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".JPEG"}
-all_images = sorted(
-    p for p in source_dir.rglob("*")
-    if p.is_file() and p.suffix.lower() in {e.lower() for e in exts}
-)
+print(f"scanning images: {source_dir}", flush=True)
+all_images = []
+for p in tqdm(source_dir.rglob("*"), desc=f"scan {source_dir.name}", unit="entry"):
+    if p.is_file() and p.suffix.lower() in {e.lower() for e in exts}:
+        all_images.append(p)
+all_images.sort()
+print(f"found images under {source_dir}: {len(all_images)}", flush=True)
 if limit > 0:
     all_images = all_images[:limit]
 images = all_images[shard_index::num_shards]

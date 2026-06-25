@@ -40,6 +40,14 @@ fi
 
 mkdir -p "${SYN_ROOT}/cut/logs"
 
+echo "Dataset file counts:"
+echo "  trainA: $(find "${DATA_ROOT}/trainA" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null | wc -l)"
+echo "  trainB: $(find "${DATA_ROOT}/trainB" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null | wc -l)"
+echo "  testA:  $(find "${DATA_ROOT}/testA" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null | wc -l)"
+echo "  testB:  $(find "${DATA_ROOT}/testB" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null | wc -l)"
+echo "Training log: ${SYN_ROOT}/cut/logs/${EXP_NAME}_train.log"
+echo
+
 (
   cd "${CUT_DIR}"
   python train.py \

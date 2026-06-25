@@ -145,10 +145,13 @@ for directory in (image_out, depth_out):
                 old.unlink()
 
 image_suffixes = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-images = sorted(
-    p for p in source_root.rglob("*")
-    if p.is_file() and p.suffix.lower() in image_suffixes
-)
+print(f"scanning images: {source_root}", flush=True)
+images = []
+for p in tqdm(source_root.rglob("*"), desc=f"scan {source_root.name}", unit="entry"):
+    if p.is_file() and p.suffix.lower() in image_suffixes:
+        images.append(p)
+images.sort()
+print(f"found images under {source_root}: {len(images)}", flush=True)
 if limit > 0:
     images = images[:limit]
 if num_shards > 1:

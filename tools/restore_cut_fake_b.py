@@ -30,6 +30,7 @@ def parse_args():
 
 
 def collect_outputs(root: Path) -> dict[str, Path]:
+    print(f'scanning CUT outputs: {root}', flush=True)
     candidates = []
     if (root / 'fake_B').is_dir():
         candidates.append(root / 'fake_B')
@@ -40,13 +41,14 @@ def collect_outputs(root: Path) -> dict[str, Path]:
 
     outputs: dict[str, Path] = {}
     for directory in candidates:
-        for path in directory.rglob('*'):
+        for path in tqdm(directory.rglob('*'), desc=f'scan {directory.name}', unit='entry'):
             if not path.is_file() or path.suffix.lower() not in IMAGE_SUFFIXES:
                 continue
             stem = path.stem
             if stem.endswith('_fake_B'):
                 stem = stem[:-7]
             outputs.setdefault(stem, path)
+    print(f'found CUT output stems: {len(outputs)}', flush=True)
     return outputs
 
 

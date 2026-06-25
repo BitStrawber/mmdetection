@@ -55,8 +55,14 @@ def parse_args():
 
 
 def list_images(root):
-    return sorted(path for path in root.rglob('*')
-                  if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
+    print(f'scanning images: {root}', flush=True)
+    images = []
+    for path in tqdm(root.rglob('*'), desc=f'scan {root.name}', unit='entry'):
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES:
+            images.append(path)
+    images.sort()
+    print(f'found images under {root}: {len(images)}', flush=True)
+    return images
 
 
 def checkpoint_state(checkpoint_path):

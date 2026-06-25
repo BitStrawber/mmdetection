@@ -32,7 +32,7 @@ MEGADEPTH_DIR="${MEGADEPTH_DIR:-/home/fcp/xcx/exp_2/syn/MegaDepth}"
 MEGADEPTH_CKPT="${MEGADEPTH_CKPT:-${MEGADEPTH_DIR}/checkpoints/best_generalization_net_G.pth}"
 
 IMG_EXT="${IMG_EXT:-jpg}"
-DEPTH_EXT="${DEPTH_EXT:-png}"
+DEPTH_EXT="${DEPTH_EXT:-${IMG_EXT}}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
 
 SHARD_TAG=""

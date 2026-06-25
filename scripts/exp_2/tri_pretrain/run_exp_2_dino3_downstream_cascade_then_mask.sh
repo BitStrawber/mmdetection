@@ -30,6 +30,7 @@ FORCE_CONVERT="${FORCE_CONVERT:-0}"
 RUN_TEST="${RUN_TEST:-1}"
 RUN_CASCADE_STAGE="${RUN_CASCADE_STAGE:-1}"
 RUN_MASK_STAGE="${RUN_MASK_STAGE:-1}"
+PIPELINE_PER_TASK="${PIPELINE_PER_TASK:-1}"
 
 OFFICIAL_URL="${OFFICIAL_URL:-https://dl.fbaipublicfiles.com/dino/example_runs_logs/dino_rn50_checkpoint.pth}"
 OFFICIAL_RAW_CKPT="${OFFICIAL_RAW_CKPT:-$PRETRAIN_DIR/dino_rn50_checkpoint.pth}"
@@ -317,52 +318,50 @@ run_one() {
         exit 1
     fi
 
-    (
-        wait_for_gpu_group "$gpu_ids" "$exp_name $stage"
+    wait_for_gpu_group "$gpu_ids" "$exp_name $stage"
 
-        mkdir -p "$work_dir"
-        export PORT="$port"
-        export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
+    mkdir -p "$work_dir"
+    export PORT="$port"
+    export MKL_THREADING_LAYER="${MKL_THREADING_LAYER:-GNU}"
 
-        echo "========================================="
-        echo "$exp_name $stage"
-        echo "task: $task"
-        echo "config: $config"
-        echo "pretrain: $pretrain_ckpt"
-        echo "gpu_ids: $gpu_ids"
-        echo "port: $port"
-        echo "work_dir: $work_dir"
-        echo "log: $log_file"
-        echo "========================================="
+    echo "========================================="
+    echo "$exp_name $stage"
+    echo "task: $task"
+    echo "config: $config"
+    echo "pretrain: $pretrain_ckpt"
+    echo "gpu_ids: $gpu_ids"
+    echo "port: $port"
+    echo "work_dir: $work_dir"
+    echo "log: $log_file"
+    echo "========================================="
 
-        CUDA_VISIBLE_DEVICES="$gpu_ids" bash tools/dist_train.sh \
-            "$config" \
-            "$num_gpus" \
-            --work-dir "$work_dir" \
-            --cfg-options \
-                model.backbone.init_cfg.checkpoint="$pretrain_ckpt" \
-                default_hooks.checkpoint.save_best="$CHECKPOINT_SAVE_BEST" \
-                default_hooks.checkpoint.max_keep_ckpts="$MAX_KEEP_CKPTS" \
-            2>&1 | tee "$log_file"
+    CUDA_VISIBLE_DEVICES="$gpu_ids" bash tools/dist_train.sh \
+        "$config" \
+        "$num_gpus" \
+        --work-dir "$work_dir" \
+        --cfg-options \
+            model.backbone.init_cfg.checkpoint="$pretrain_ckpt" \
+            default_hooks.checkpoint.save_best="$CHECKPOINT_SAVE_BEST" \
+            default_hooks.checkpoint.max_keep_ckpts="$MAX_KEEP_CKPTS" \
+        2>&1 | tee "$log_file"
 
-        if [ "$RUN_TEST" = "1" ]; then
-            local best_ckpt
-            local test_log="$LOG_DIR/${exp_name}_${stage}_test.log"
-            best_ckpt=$(ls -t "$work_dir"/best_*.pth 2>/dev/null | head -1 || true)
-            [ -z "$best_ckpt" ] && best_ckpt="$work_dir/latest.pth"
-            if [ ! -f "$best_ckpt" ]; then
-                echo "Error: no checkpoint found for test in $work_dir"
-                exit 1
-            fi
-            echo "Test $exp_name $stage with $best_ckpt"
-            CUDA_VISIBLE_DEVICES="$gpu_ids" bash tools/dist_test.sh \
-                "$config" \
-                "$best_ckpt" \
-                "$num_gpus" \
-                --cfg-options model.backbone.init_cfg.checkpoint="$pretrain_ckpt" \
-                2>&1 | tee "$test_log"
+    if [ "$RUN_TEST" = "1" ]; then
+        local best_ckpt
+        local test_log="$LOG_DIR/${exp_name}_${stage}_test.log"
+        best_ckpt=$(ls -t "$work_dir"/best_*.pth 2>/dev/null | head -1 || true)
+        [ -z "$best_ckpt" ] && best_ckpt="$work_dir/latest.pth"
+        if [ ! -f "$best_ckpt" ]; then
+            echo "Error: no checkpoint found for test in $work_dir"
+            exit 1
         fi
-    ) &
+        echo "Test $exp_name $stage with $best_ckpt"
+        CUDA_VISIBLE_DEVICES="$gpu_ids" bash tools/dist_test.sh \
+            "$config" \
+            "$best_ckpt" \
+            "$num_gpus" \
+            --cfg-options model.backbone.init_cfg.checkpoint="$pretrain_ckpt" \
+            2>&1 | tee "$test_log"
+    fi
 }
 
 run_stage() {
@@ -387,7 +386,7 @@ run_stage() {
             config="$MASK_CONFIG"
         fi
         echo "Launch $stage: task=$task exp=$EXP_NAME gpu=$gpu_group port=$port"
-        run_one "$task" "$stage" "$config" "$gpu_group" "$port" "$EXP_NAME" "$PRETRAIN_CKPT"
+        run_one "$task" "$stage" "$config" "$gpu_group" "$port" "$EXP_NAME" "$PRETRAIN_CKPT" &
         pids+=("$!")
         i=$((i + 1))
     done
@@ -404,22 +403,92 @@ run_stage() {
     echo "$stage stage finished."
 }
 
+run_task_pipeline() {
+    local task="$1"
+    local gpu_group="$2"
+    local index="$3"
+
+    set_task_info "$task"
+    local exp_name="$EXP_NAME"
+    local pretrain_ckpt="$PRETRAIN_CKPT"
+    local cascade_config="$CASCADE_CONFIG"
+    local mask_config="$MASK_CONFIG"
+    local cascade_port=$((CASCADE_BASE_PORT + index))
+    local mask_port=$((MASK_BASE_PORT + index))
+
+    echo "========================================="
+    echo "Run task pipeline"
+    echo "task: $task"
+    echo "exp: $exp_name"
+    echo "gpu_group: $gpu_group"
+    echo "cascade_port: $cascade_port"
+    echo "mask_port: $mask_port"
+    echo "========================================="
+
+    if [ "$RUN_CASCADE_STAGE" = "1" ]; then
+        run_one "$task" cascade "$cascade_config" "$gpu_group" "$cascade_port" "$exp_name" "$pretrain_ckpt"
+    else
+        echo "RUN_CASCADE_STAGE=$RUN_CASCADE_STAGE, skip cascade stage for $task."
+    fi
+
+    if [ "$RUN_MASK_STAGE" = "1" ]; then
+        run_one "$task" mask "$mask_config" "$gpu_group" "$mask_port" "$exp_name" "$pretrain_ckpt"
+    else
+        echo "RUN_MASK_STAGE=$RUN_MASK_STAGE, skip mask stage for $task."
+    fi
+}
+
+run_pipelines() {
+    local pids=()
+    local status=0
+    local i=0
+
+    echo "========================================="
+    echo "Run per-task pipelines"
+    echo "TASKS: $TASKS"
+    echo "GPU_GROUPS: $GPU_GROUPS"
+    echo "========================================="
+
+    for task in "${task_array[@]}"; do
+        local gpu_group="${gpu_group_array[$i]}"
+        echo "Launch pipeline: task=$task gpu=$gpu_group"
+        run_task_pipeline "$task" "$gpu_group" "$i" &
+        pids+=("$!")
+        i=$((i + 1))
+    done
+
+    for pid in "${pids[@]}"; do
+        if ! wait "$pid"; then
+            status=1
+        fi
+    done
+    if [ "$status" -ne 0 ]; then
+        echo "Error: at least one task pipeline failed."
+        exit "$status"
+    fi
+    echo "All task pipelines finished."
+}
+
 prepare_checkpoints
 if [ "$RUN_CASCADE_STAGE" != "1" ] && [ "$RUN_MASK_STAGE" != "1" ]; then
     echo "Error: at least one of RUN_CASCADE_STAGE or RUN_MASK_STAGE must be 1."
     exit 1
 fi
 
-if [ "$RUN_CASCADE_STAGE" = "1" ]; then
-    run_stage cascade "$CASCADE_BASE_PORT"
+if [ "$PIPELINE_PER_TASK" = "1" ]; then
+    run_pipelines
 else
-    echo "RUN_CASCADE_STAGE=$RUN_CASCADE_STAGE, skip cascade stage."
-fi
+    if [ "$RUN_CASCADE_STAGE" = "1" ]; then
+        run_stage cascade "$CASCADE_BASE_PORT"
+    else
+        echo "RUN_CASCADE_STAGE=$RUN_CASCADE_STAGE, skip cascade stage."
+    fi
 
-if [ "$RUN_MASK_STAGE" = "1" ]; then
-    run_stage mask "$MASK_BASE_PORT"
-else
-    echo "RUN_MASK_STAGE=$RUN_MASK_STAGE, skip mask stage."
+    if [ "$RUN_MASK_STAGE" = "1" ]; then
+        run_stage mask "$MASK_BASE_PORT"
+    else
+        echo "RUN_MASK_STAGE=$RUN_MASK_STAGE, skip mask stage."
+    fi
 fi
 
 echo "========================================="

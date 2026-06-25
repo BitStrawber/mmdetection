@@ -26,12 +26,13 @@ GPU="${GPU:-2}"
 NUM_SHARDS="${NUM_SHARDS:-1}"
 SHARD_INDEX="${SHARD_INDEX:-0}"
 
-SOURCE_DIR="${SOURCE_DIR:-${SYN_ROOT}/uwnr/source/${SPLIT}}"
+SOURCE_DIR="${SOURCE_DIR:-${SYN_ROOT}/syreanet/source/${SPLIT}}"
 SYREANET_DIR="${SYREANET_DIR:-/home/fcp/xcx/exp_2/syn/SyreaNet}"
 MEGADEPTH_DIR="${MEGADEPTH_DIR:-/home/fcp/xcx/exp_2/syn/MegaDepth}"
 MEGADEPTH_CKPT="${MEGADEPTH_CKPT:-${MEGADEPTH_DIR}/checkpoints/best_generalization_net_G.pth}"
 
-IMG_EXT="${IMG_EXT:-jpg}"
+PREP_SIZE="${PREP_SIZE:-512}"
+IMG_EXT="${IMG_EXT:-png}"
 DEPTH_EXT="${DEPTH_EXT:-${IMG_EXT}}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs}"
 
@@ -78,6 +79,7 @@ echo "SHARD_INDEX:    ${SHARD_INDEX}"
 echo "SOURCE_DIR:     ${SOURCE_DIR}"
 echo "DEPTH_DIR:      ${DEPTH_DIR}"
 echo "PREP_DIR:       ${PREP_DIR}"
+echo "PREP_SIZE:      ${PREP_SIZE}"
 echo "FLAT_SAVE_DIR:  ${FLAT_SAVE_DIR}"
 echo "RESTORE_DIR:    ${RESTORE_DIR}"
 echo "SYREANET_DIR:   ${SYREANET_DIR}"
@@ -109,10 +111,11 @@ fi
 if [[ "${RUN_PREPARE}" == "1" ]]; then
   echo
   echo "Step 2/4: Prepare flat image/depth pairs"
-  SOURCE_DIR="${SOURCE_DIR}" DEPTH_DIR="${DEPTH_DIR}" PREP_DIR="${PREP_DIR}" LIMIT="${LIMIT}" NUM_SHARDS="${NUM_SHARDS}" SHARD_INDEX="${SHARD_INDEX}" IMG_EXT="${IMG_EXT}" DEPTH_EXT="${DEPTH_EXT}" CLEAR_PREPARE="${CLEAR_PREPARE}" python - <<'PY'
+  SOURCE_DIR="${SOURCE_DIR}" DEPTH_DIR="${DEPTH_DIR}" PREP_DIR="${PREP_DIR}" LIMIT="${LIMIT}" NUM_SHARDS="${NUM_SHARDS}" SHARD_INDEX="${SHARD_INDEX}" IMG_EXT="${IMG_EXT}" DEPTH_EXT="${DEPTH_EXT}" PREP_SIZE="${PREP_SIZE}" CLEAR_PREPARE="${CLEAR_PREPARE}" python - <<'PY'
 from pathlib import Path
 import json
 import os
+from PIL import Image, ImageOps
 
 try:
     from tqdm import tqdm
@@ -128,6 +131,7 @@ num_shards = int(os.environ["NUM_SHARDS"])
 shard_index = int(os.environ["SHARD_INDEX"])
 img_ext = os.environ["IMG_EXT"].lower().lstrip(".")
 depth_ext = os.environ["DEPTH_EXT"].lower().lstrip(".")
+prep_size = int(os.environ["PREP_SIZE"])
 clear_prepare = os.environ.get("CLEAR_PREPARE", "1") == "1"
 
 image_out = prep_root / "image"
@@ -167,8 +171,31 @@ for source_index, image_path in enumerate(tqdm(images, desc="prepare SyreaNet sy
         image_link.unlink()
     if depth_link.exists() or depth_link.is_symlink():
         depth_link.unlink()
-    os.symlink(image_path, image_link)
-    os.symlink(depth_path, depth_link)
+
+    with Image.open(image_path) as image:
+        image = image.convert("RGB")
+        if prep_size > 0:
+            image = ImageOps.fit(
+                image,
+                (prep_size, prep_size),
+                method=Image.Resampling.BICUBIC,
+                centering=(0.5, 0.5),
+            )
+        image.save(image_link)
+
+    with Image.open(depth_path) as depth:
+        depth = depth.convert("L")
+        if prep_size > 0:
+            depth = ImageOps.fit(
+                depth,
+                (prep_size, prep_size),
+                method=Image.Resampling.BICUBIC,
+                centering=(0.5, 0.5),
+            )
+        # SyreaNet looks up the depth file by the same basename and suffix as
+        # the input image. Save a real image instead of a symlink so image/depth
+        # dimensions cannot diverge or be interpreted with swapped axes.
+        depth.save(depth_link)
 
     records.append({
         "index": index,
@@ -195,6 +222,9 @@ summary = {
     "prepared_pairs": len(records),
     "missing_depth": len(missing_depth),
     "missing_depth_samples": missing_depth[:20],
+    "prep_size": prep_size,
+    "image_ext": img_ext,
+    "depth_ext": depth_ext,
     "num_shards": num_shards,
     "shard_index": shard_index,
     "manifest": str(manifest),

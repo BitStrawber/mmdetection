@@ -28,6 +28,8 @@ RUN_DOWNLOAD="${RUN_DOWNLOAD:-1}"
 RUN_CONVERT="${RUN_CONVERT:-1}"
 FORCE_CONVERT="${FORCE_CONVERT:-0}"
 RUN_TEST="${RUN_TEST:-1}"
+RUN_CASCADE_STAGE="${RUN_CASCADE_STAGE:-1}"
+RUN_MASK_STAGE="${RUN_MASK_STAGE:-1}"
 
 OFFICIAL_URL="${OFFICIAL_URL:-https://dl.fbaipublicfiles.com/dino/example_runs_logs/dino_rn50_checkpoint.pth}"
 OFFICIAL_RAW_CKPT="${OFFICIAL_RAW_CKPT:-$PRETRAIN_DIR/dino_rn50_checkpoint.pth}"
@@ -103,8 +105,42 @@ convert_if_needed() {
         exit 1
     fi
     if [ "$FORCE_CONVERT" != "1" ] && [ -f "$output_ckpt" ]; then
-        echo "Converted checkpoint exists for $name: $output_ckpt"
-        return
+        if python - "$output_ckpt" "$prepend" <<'PY'
+import sys
+import torch
+
+path, prepend = sys.argv[1], sys.argv[2]
+ckpt = torch.load(path, map_location='cpu')
+if isinstance(ckpt, dict):
+    state_dict = ckpt.get('state_dict', ckpt.get('model', ckpt))
+else:
+    state_dict = ckpt
+
+keys = list(state_dict.keys())
+if not keys:
+    sys.exit(1)
+
+probe_keys = [
+    key for key in keys
+    if any(part in key for part in (
+        'conv1.weight',
+        'bn1.weight',
+        'layer1.0',
+        'patch_embed.proj.weight',
+        'blocks.0'))
+]
+probe_keys = probe_keys or keys[:20]
+
+if prepend:
+    sys.exit(0 if all(key.startswith(prepend) for key in probe_keys) else 1)
+
+sys.exit(1 if any(key.startswith('backbone.') for key in probe_keys) else 0)
+PY
+        then
+            echo "Converted checkpoint exists for $name and matches prepend=${prepend:-<empty>}: $output_ckpt"
+            return
+        fi
+        echo "Converted checkpoint exists for $name but prefix format is stale; reconvert: $output_ckpt"
     fi
 
     mkdir -p "$(dirname "$output_ckpt")"
@@ -369,8 +405,22 @@ run_stage() {
 }
 
 prepare_checkpoints
-run_stage cascade "$CASCADE_BASE_PORT"
-run_stage mask "$MASK_BASE_PORT"
+if [ "$RUN_CASCADE_STAGE" != "1" ] && [ "$RUN_MASK_STAGE" != "1" ]; then
+    echo "Error: at least one of RUN_CASCADE_STAGE or RUN_MASK_STAGE must be 1."
+    exit 1
+fi
+
+if [ "$RUN_CASCADE_STAGE" = "1" ]; then
+    run_stage cascade "$CASCADE_BASE_PORT"
+else
+    echo "RUN_CASCADE_STAGE=$RUN_CASCADE_STAGE, skip cascade stage."
+fi
+
+if [ "$RUN_MASK_STAGE" = "1" ]; then
+    run_stage mask "$MASK_BASE_PORT"
+else
+    echo "RUN_MASK_STAGE=$RUN_MASK_STAGE, skip mask stage."
+fi
 
 echo "========================================="
 echo "DINO three-backbone downstream pipeline finished: $(date)"

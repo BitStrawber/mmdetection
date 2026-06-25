@@ -93,6 +93,10 @@ convert_if_needed() {
     local input_ckpt="$2"
     local output_ckpt="$3"
     local source="${4:-teacher}"
+    local prepend="backbone."
+    if [ "$#" -ge 5 ]; then
+        prepend="$5"
+    fi
 
     if [ ! -f "$input_ckpt" ]; then
         echo "Error: missing input checkpoint for $name: $input_ckpt"
@@ -108,9 +112,11 @@ convert_if_needed() {
     echo "  input : $input_ckpt"
     echo "  output: $output_ckpt"
     echo "  source: $source"
+    echo "  prepend: ${prepend:-<empty>}"
     python tools/convert_ssl_backbone_to_mmdet.py \
         --checkpoint "$input_ckpt" \
         --source "$source" \
+        --prepend "$prepend" \
         --out "$output_ckpt" \
         2>&1 | tee "$LOG_DIR/${name}_convert_backbone.log"
 }
@@ -126,14 +132,14 @@ prepare_checkpoints() {
     fi
 
     if [[ " $TASKS " == *" official_rn50 "* ]]; then
-        convert_if_needed official_rn50 "$OFFICIAL_RAW_CKPT" "$OFFICIAL_BACKBONE_CKPT" teacher
+        convert_if_needed official_rn50 "$OFFICIAL_RAW_CKPT" "$OFFICIAL_BACKBONE_CKPT" teacher ""
     fi
 
     if [[ " $TASKS " == *" realuw_r50_hdd "* ]]; then
-        convert_if_needed realuw_r50_hdd "$REALUW_R50_HDD_S1_CKPT" "$REALUW_R50_HDD_BACKBONE_CKPT" teacher
+        convert_if_needed realuw_r50_hdd "$REALUW_R50_HDD_S1_CKPT" "$REALUW_R50_HDD_BACKBONE_CKPT" teacher ""
     fi
     if [[ " $TASKS " == *" realuw_r50_ssd "* ]]; then
-        convert_if_needed realuw_r50_ssd "$REALUW_R50_SSD_S1_CKPT" "$REALUW_R50_SSD_BACKBONE_CKPT" teacher
+        convert_if_needed realuw_r50_ssd "$REALUW_R50_SSD_S1_CKPT" "$REALUW_R50_SSD_BACKBONE_CKPT" teacher ""
     fi
     if [[ " $TASKS " == *" realuw_vits "* ]]; then
         convert_if_needed realuw_vits "$REALUW_VITS_S1_CKPT" "$REALUW_VITS_BACKBONE_CKPT" teacher

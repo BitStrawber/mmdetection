@@ -57,6 +57,9 @@ sigmoid_ce_targets = re.compile(
     r"tf\.nn\.sigmoid_cross_entropy_with_logits\(([^)]*)targets=",
     flags=re.DOTALL,
 )
+batch_idx_division = re.compile(
+    r"(\b\w*batch_idxs\s*=\s*min\([^\n]+?\))\s*/\s*config\.batch_size"
+)
 
 SCIPY_MISC_COMPAT = '''
 
@@ -124,6 +127,7 @@ for path in files:
         if new_text == text:
             break
         text = new_text
+    text = batch_idx_division.sub(r"\1 // config.batch_size", text)
     if "scipy.misc." in text and "Compatibility for SciPy versions where scipy.misc image I/O was removed" not in text:
         if "import scipy.misc" in text:
             text = text.replace("import scipy.misc", "import scipy.misc" + SCIPY_MISC_COMPAT, 1)
@@ -153,6 +157,10 @@ grep -RInE "tf\\.(pack|unpack|mul|sub|neg|initialize_all_variables|train\\.Summa
 echo
 echo "Remaining sigmoid_cross_entropy targets= usages:"
 grep -RIn "sigmoid_cross_entropy_with_logits.*targets=" "${WATERGAN_DIR}"/*.py || true
+
+echo
+echo "Remaining Python 2 style batch index divisions:"
+grep -RInE "batch_idxs\\s*=.* / config\\.batch_size" "${WATERGAN_DIR}"/*.py || true
 
 echo
 echo "SciPy image I/O compatibility status:"

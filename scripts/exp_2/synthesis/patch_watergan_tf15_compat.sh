@@ -155,7 +155,27 @@ echo "Remaining sigmoid_cross_entropy targets= usages:"
 grep -RIn "sigmoid_cross_entropy_with_logits.*targets=" "${WATERGAN_DIR}"/*.py || true
 
 echo
-echo "Remaining scipy.misc image I/O usages without compatibility marker:"
+echo "SciPy image I/O compatibility status:"
+python - "${WATERGAN_DIR}" <<'PY'
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+marker = "Compatibility for SciPy versions where scipy.misc image I/O was removed"
+for path in sorted(root.glob("*.py")):
+    text = path.read_text(encoding="utf-8")
+    uses_scipy_io = any(
+        token in text
+        for token in ("scipy.misc.imread", "scipy.misc.imresize", "scipy.misc.imsave")
+    )
+    if not uses_scipy_io:
+        continue
+    status = "OK compat marker present" if marker in text else "MISSING compat marker"
+    print(f"  {path}: {status}")
+PY
+
+echo
+echo "Remaining scipy.misc image I/O call sites are expected if the files above are OK:"
 grep -RInE "scipy\\.misc\\.(imread|imresize|imsave)" "${WATERGAN_DIR}"/*.py || true
 
 echo

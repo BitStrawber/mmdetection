@@ -58,6 +58,51 @@ sigmoid_ce_targets = re.compile(
     flags=re.DOTALL,
 )
 
+SCIPY_MISC_COMPAT = '''
+
+# Compatibility for SciPy versions where scipy.misc image I/O was removed.
+try:
+    scipy.misc.imread
+except AttributeError:
+    from PIL import Image as _PILImage
+    import numpy as _watergan_np
+
+    def _watergan_imread(filename, flatten=False, mode=None):
+        image = _PILImage.open(filename)
+        if flatten:
+            image = image.convert('L')
+        elif mode is not None:
+            image = image.convert(mode)
+        else:
+            image = image.convert('RGB')
+        return _watergan_np.asarray(image)
+
+    def _watergan_imresize(arr, size, interp='bilinear', mode=None):
+        image = _PILImage.fromarray(_watergan_np.asarray(arr))
+        if isinstance(size, (int, float)):
+            if isinstance(size, int):
+                scale = size / 100.0
+            else:
+                scale = float(size)
+            new_size = (
+                max(1, int(round(image.size[0] * scale))),
+                max(1, int(round(image.size[1] * scale))),
+            )
+        else:
+            # scipy.misc.imresize used (height, width); PIL uses (width, height).
+            new_size = (int(size[1]), int(size[0]))
+        resample = _PILImage.BILINEAR if interp != 'nearest' else _PILImage.NEAREST
+        return _watergan_np.asarray(image.resize(new_size, resample))
+
+    def _watergan_imsave(filename, arr):
+        image = _PILImage.fromarray(_watergan_np.asarray(arr))
+        image.save(filename)
+
+    scipy.misc.imread = _watergan_imread
+    scipy.misc.imresize = _watergan_imresize
+    scipy.misc.imsave = _watergan_imsave
+'''
+
 changed = []
 for path in files:
     if not path.exists():
@@ -79,6 +124,13 @@ for path in files:
         if new_text == text:
             break
         text = new_text
+    if "scipy.misc." in text and "Compatibility for SciPy versions where scipy.misc image I/O was removed" not in text:
+        if "import scipy.misc" in text:
+            text = text.replace("import scipy.misc", "import scipy.misc" + SCIPY_MISC_COMPAT, 1)
+        elif "import scipy" in text:
+            text = text.replace("import scipy", "import scipy" + SCIPY_MISC_COMPAT, 1)
+        else:
+            text = "import scipy.misc" + SCIPY_MISC_COMPAT + "\n" + text
     if text != old:
         backup = path.with_suffix(path.suffix + ".tf15bak")
         if not backup.exists():
@@ -101,6 +153,10 @@ grep -RInE "tf\\.(pack|unpack|mul|sub|neg|initialize_all_variables|train\\.Summa
 echo
 echo "Remaining sigmoid_cross_entropy targets= usages:"
 grep -RIn "sigmoid_cross_entropy_with_logits.*targets=" "${WATERGAN_DIR}"/*.py || true
+
+echo
+echo "Remaining scipy.misc image I/O usages without compatibility marker:"
+grep -RInE "scipy\\.misc\\.(imread|imresize|imsave)" "${WATERGAN_DIR}"/*.py || true
 
 echo
 echo "Done. Re-run WaterGAN after activating:"

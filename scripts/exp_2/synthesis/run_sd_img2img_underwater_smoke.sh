@@ -15,6 +15,9 @@ SD_STEPS="${SD_STEPS:-20}"
 SD_STRENGTH="${SD_STRENGTH:-0.35}"
 SD_GUIDANCE_SCALE="${SD_GUIDANCE_SCALE:-5.0}"
 SD_BATCH_SIZE="${SD_BATCH_SIZE:-1}"
+OMP_NUM_THREADS="${OMP_NUM_THREADS:-2}"
+OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-2}"
+MKL_NUM_THREADS="${MKL_NUM_THREADS:-2}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -31,6 +34,7 @@ echo "SD_STEPS:            ${SD_STEPS}"
 echo "SD_STRENGTH:         ${SD_STRENGTH}"
 echo "SD_GUIDANCE_SCALE:   ${SD_GUIDANCE_SCALE}"
 echo "SD_BATCH_SIZE:       ${SD_BATCH_SIZE}"
+echo "OMP_THREADS:         ${OMP_NUM_THREADS}"
 echo "LOG_DIR:             ${LOG_DIR}"
 echo "========================================="
 
@@ -55,6 +59,9 @@ for split in train val; do
   STRENGTH="${SD_STRENGTH}" \
   GUIDANCE_SCALE="${SD_GUIDANCE_SCALE}" \
   BATCH_SIZE="${SD_BATCH_SIZE}" \
+  OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
+  OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \
+  MKL_NUM_THREADS="${MKL_NUM_THREADS}" \
   bash scripts/exp_2/synthesis/run_sd_img2img_underwater_generate.sh \
     2>&1 | tee "${LOG_DIR}/${split}.log"
 done

@@ -11,6 +11,10 @@ LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_smoke/uwnr}"
 GPU="${GPU:-2}"
 SMOKE_TRAIN_LIMIT="${SMOKE_TRAIN_LIMIT:-100}"
 SMOKE_VAL_LIMIT="${SMOKE_VAL_LIMIT:-30}"
+N_CPU="${N_CPU:-8}"
+OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
+OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-4}"
+MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -22,6 +26,8 @@ echo "WORK_ROOT:         ${WORK_ROOT}"
 echo "GPU:               ${GPU}"
 echo "SMOKE_TRAIN_LIMIT: ${SMOKE_TRAIN_LIMIT}"
 echo "SMOKE_VAL_LIMIT:   ${SMOKE_VAL_LIMIT}"
+echo "N_CPU:             ${N_CPU}"
+echo "OMP_THREADS:       ${OMP_NUM_THREADS}"
 echo "LOG_DIR:           ${LOG_DIR}"
 echo "========================================="
 
@@ -47,6 +53,10 @@ for split in train val; do
   SPLIT="${split}" \
   LIMIT=0 \
   GPU="${GPU}" \
+  N_CPU="${N_CPU}" \
+  OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
+  OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \
+  MKL_NUM_THREADS="${MKL_NUM_THREADS}" \
   RUN_DEPTH=0 RUN_PREPARE=0 RUN_RUOD_REF=0 RUN_UWNR=1 RUN_RESTORE=1 \
   bash scripts/exp_2/synthesis/run_uwnr_ruod_ref_generate.sh \
     2>&1 | tee "${LOG_DIR}/${split}.log"

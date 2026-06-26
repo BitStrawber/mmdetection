@@ -10,8 +10,11 @@ WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/watergan}"
 GPU="${GPU:-2}"
 WATERGAN_EPOCH="${WATERGAN_EPOCH:-26}"
-WATERGAN_BATCH_SIZE="${WATERGAN_BATCH_SIZE:-4}"
+WATERGAN_BATCH_SIZE="${WATERGAN_BATCH_SIZE:-8}"
 WATERGAN_TRAIN_SIZE="${WATERGAN_TRAIN_SIZE:-0}"
+OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
+OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-8}"
+MKL_NUM_THREADS="${MKL_NUM_THREADS:-8}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -24,6 +27,7 @@ echo "GPU:                  ${GPU}"
 echo "WATERGAN_EPOCH:       ${WATERGAN_EPOCH}"
 echo "WATERGAN_BATCH_SIZE:  ${WATERGAN_BATCH_SIZE}"
 echo "WATERGAN_TRAIN_SIZE:  ${WATERGAN_TRAIN_SIZE}"
+echo "OMP_THREADS:          ${OMP_NUM_THREADS}"
 echo "LOG_DIR:              ${LOG_DIR}"
 echo "========================================="
 
@@ -46,6 +50,9 @@ GPU="${GPU}" \
 EPOCH="${WATERGAN_EPOCH}" \
 BATCH_SIZE="${WATERGAN_BATCH_SIZE}" \
 TRAIN_SIZE="${WATERGAN_TRAIN_SIZE}" \
+OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
+OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \
+MKL_NUM_THREADS="${MKL_NUM_THREADS}" \
 bash scripts/exp_2/synthesis/run_watergan_train.sh \
   2>&1 | tee "${LOG_DIR}/train.log"
 

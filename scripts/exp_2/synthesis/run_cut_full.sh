@@ -10,9 +10,11 @@ WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 RUOD_REF_SRC="${RUOD_REF_SRC:-/media/HDD0/XCX/exp_2/RUOD/coco/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/cut}"
 GPU="${GPU:-2}"
+GPU_IDS="${GPU_IDS:-${GPU}}"
 CUT_EPOCHS="${CUT_EPOCHS:-100}"
 CUT_EPOCHS_DECAY="${CUT_EPOCHS_DECAY:-100}"
 CUT_BATCH_SIZE="${CUT_BATCH_SIZE:-1}"
+CUT_NUM_THREADS="${CUT_NUM_THREADS:-12}"
 CUT_NUM_TEST="${CUT_NUM_TEST:-100000000}"
 COPY_MODE="${COPY_MODE:-copy}"
 
@@ -25,9 +27,11 @@ echo "SYN_ROOT:         ${SYN_ROOT}"
 echo "WORK_ROOT:        ${WORK_ROOT}"
 echo "RUOD_REF_SRC:     ${RUOD_REF_SRC}"
 echo "GPU:              ${GPU}"
+echo "GPU_IDS:          ${GPU_IDS}"
 echo "CUT_EPOCHS:       ${CUT_EPOCHS}"
 echo "CUT_DECAY:        ${CUT_EPOCHS_DECAY}"
 echo "CUT_BATCH_SIZE:   ${CUT_BATCH_SIZE}"
+echo "CUT_NUM_THREADS:  ${CUT_NUM_THREADS}"
 echo "CUT_NUM_TEST:     ${CUT_NUM_TEST}"
 echo "LOG_DIR:          ${LOG_DIR}"
 echo "========================================="
@@ -50,8 +54,9 @@ DATA_ROOT="${WORK_ROOT}/cut/datasets/${DATA_NAME}"
 DATA_NAME="${DATA_NAME}" \
 DATA_ROOT="${DATA_ROOT}" \
 EXP_NAME="${DATA_NAME}" \
-GPU_IDS="${GPU}" \
+GPU_IDS="${GPU_IDS}" \
 BATCH_SIZE="${CUT_BATCH_SIZE}" \
+NUM_THREADS="${CUT_NUM_THREADS}" \
 N_EPOCHS="${CUT_EPOCHS}" \
 N_EPOCHS_DECAY="${CUT_EPOCHS_DECAY}" \
 SAVE_EPOCH_FREQ=10 \
@@ -62,7 +67,7 @@ DATA_NAME="${DATA_NAME}" \
 DATA_ROOT="${DATA_ROOT}" \
 EXP_NAME="${DATA_NAME}" \
 SPLIT=val \
-GPU_IDS="${GPU}" \
+GPU_IDS="${GPU_IDS}" \
 NUM_TEST="${CUT_NUM_TEST}" \
 RESULTS_ROOT="${WORK_ROOT}/cut/results/${DATA_NAME}_val" \
 RESTORE_DIR="${SYN_ROOT}/cut/generated/val" \
@@ -89,7 +94,7 @@ DATA_NAME="${TRAIN_GEN_NAME}" \
 DATA_ROOT="${TRAIN_GEN_ROOT}" \
 EXP_NAME="${DATA_NAME}" \
 SPLIT=train \
-GPU_IDS="${GPU}" \
+GPU_IDS="${GPU_IDS}" \
 NUM_TEST="${CUT_NUM_TEST}" \
 RESULTS_ROOT="${WORK_ROOT}/cut/results/${DATA_NAME}_train" \
 RESTORE_DIR="${SYN_ROOT}/cut/generated/train" \

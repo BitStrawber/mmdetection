@@ -37,6 +37,7 @@ MODE="${MODE:-smoke}"
 SPLITS="${SPLITS:-train val}"
 GPU="${GPU:-2}"
 METHODS="${METHODS:-uwnr syreanet syreanet_synthesis cut watergan stable_diffusion_img2img}"
+SOURCE_ONLY="${SOURCE_ONLY:-0}"
 
 SMOKE_TRAIN_LIMIT="${SMOKE_TRAIN_LIMIT:-200}"
 SMOKE_VAL_LIMIT="${SMOKE_VAL_LIMIT:-50}"
@@ -396,6 +397,7 @@ echo "RUOD_REF_SRC:   ${RUOD_REF_SRC}"
 echo "MODE:           ${MODE}"
 echo "SPLITS:         ${SPLITS}"
 echo "METHODS:        ${METHODS}"
+echo "SOURCE_ONLY:    ${SOURCE_ONLY}"
 echo "GPU:            ${GPU}"
 echo "COPY_MODE:      ${COPY_MODE}"
 echo "OVERWRITE:      ${OVERWRITE}"
@@ -416,35 +418,53 @@ for method in ${METHODS}; do
       for split in train val; do
         copy_sampled_source "${method}" "${split}"
       done
+      if [[ "${SOURCE_ONLY}" == "1" ]]; then
+        continue
+      fi
       prepare_cut
       ;;
     uwnr)
       for split in ${SPLITS}; do
         copy_sampled_source "${method}" "${split}"
+        if [[ "${SOURCE_ONLY}" == "1" ]]; then
+          continue
+        fi
         prepare_uwnr "${split}"
       done
       ;;
     syreanet)
       for split in ${SPLITS}; do
         copy_sampled_source "${method}" "${split}"
+        if [[ "${SOURCE_ONLY}" == "1" ]]; then
+          continue
+        fi
         prepare_syreanet "${split}"
       done
       ;;
     syreanet_synthesis)
       for split in ${SPLITS}; do
         copy_sampled_source "${method}" "${split}"
+        if [[ "${SOURCE_ONLY}" == "1" ]]; then
+          continue
+        fi
         prepare_syreanet_synthesis "${split}"
       done
       ;;
     watergan)
       for split in ${SPLITS}; do
         copy_sampled_source "${method}" "${split}"
+        if [[ "${SOURCE_ONLY}" == "1" ]]; then
+          continue
+        fi
         prepare_watergan "${split}"
       done
       ;;
     stable_diffusion_img2img)
       for split in ${SPLITS}; do
         copy_sampled_source "${method}" "${split}"
+        if [[ "${SOURCE_ONLY}" == "1" ]]; then
+          continue
+        fi
         prepare_stable_diffusion "${split}"
       done
       ;;

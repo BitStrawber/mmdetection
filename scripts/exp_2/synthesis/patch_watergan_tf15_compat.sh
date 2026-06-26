@@ -58,7 +58,8 @@ sigmoid_ce_targets = re.compile(
     flags=re.DOTALL,
 )
 batch_idx_division = re.compile(
-    r"(\b\w*batch_idxs\s*=\s*min\([^\n]+?\))\s*/\s*config\.batch_size"
+    r"^(\s*\w*batch_idxs\s*=\s*)(.+?)\s*/\s*config\.batch_size\s*$",
+    flags=re.MULTILINE,
 )
 ceil_int_division = re.compile(
     r"int\(math\.ceil\(([^()\n]+?)\)\s*/\s*config\.batch_size\)"
@@ -156,7 +157,7 @@ for path in files:
         if new_text == text:
             break
         text = new_text
-    text = batch_idx_division.sub(r"\1 // config.batch_size", text)
+    text = batch_idx_division.sub(r"\1int((\2) // config.batch_size)", text)
     text = ceil_int_division.sub(r"int(math.ceil(\1 / float(config.batch_size)))", text)
     if "scipy.misc." in text:
         if "Compatibility for SciPy versions where scipy.misc image I/O was removed" in text:

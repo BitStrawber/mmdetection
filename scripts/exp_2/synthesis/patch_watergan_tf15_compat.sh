@@ -53,6 +53,10 @@ replacements = [
 sigmoid_ce = re.compile(
     r"tf\.nn\.sigmoid_cross_entropy_with_logits\(([^,\n]+),\s*([^)]+)\)"
 )
+sigmoid_ce_targets = re.compile(
+    r"tf\.nn\.sigmoid_cross_entropy_with_logits\(([^)]*)targets=",
+    flags=re.DOTALL,
+)
 
 changed = []
 for path in files:
@@ -66,6 +70,15 @@ for path in files:
         r"tf.nn.sigmoid_cross_entropy_with_logits(logits=\1, labels=\2)",
         text,
     )
+    while True:
+        new_text = sigmoid_ce_targets.sub(
+            r"tf.nn.sigmoid_cross_entropy_with_logits(\1labels=",
+            text,
+            count=1,
+        )
+        if new_text == text:
+            break
+        text = new_text
     if text != old:
         backup = path.with_suffix(path.suffix + ".tf15bak")
         if not backup.exists():
@@ -84,6 +97,10 @@ echo
 echo "Remaining suspicious old TensorFlow symbols:"
 grep -RInE "tf\\.(pack|unpack|mul|sub|neg|initialize_all_variables|train\\.SummaryWriter)" \
   "${WATERGAN_DIR}"/*.py || true
+
+echo
+echo "Remaining sigmoid_cross_entropy targets= usages:"
+grep -RIn "sigmoid_cross_entropy_with_logits.*targets=" "${WATERGAN_DIR}"/*.py || true
 
 echo
 echo "Done. Re-run WaterGAN after activating:"

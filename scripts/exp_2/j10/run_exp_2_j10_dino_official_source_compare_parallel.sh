@@ -50,8 +50,10 @@ S1_CONFIGS=(${S1_CONFIGS:-configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_df
 GPU_GROUPS=(${GPU_GROUPS:-2,3 4,5 6,7})
 PORTS=(${PORTS:-29731 29732 29733})
 
-FROZEN_STAGES="${FROZEN_STAGES:-2}"
-S1_LR="${S1_LR:-0.001875}"
+# Use the previously selected J10 scheme-C recipe by default:
+#   frozen_stages=1, lr=0.00375, epochs=48, milestones=[32,44].
+FROZEN_STAGES="${FROZEN_STAGES:-1}"
+S1_LR="${S1_LR:-0.00375}"
 S1_EPOCHS="${S1_EPOCHS:-48}"
 S1_MILESTONES="${S1_MILESTONES:-[32,44]}"
 S1_WEIGHT_DECAY="${S1_WEIGHT_DECAY:-0.0001}"

@@ -76,13 +76,6 @@ def image_files(root: Path) -> list[Path]:
     return sorted(p for p in root.rglob("*") if is_image(p))
 
 
-def build_source_index(root: Path) -> dict[str, Path]:
-    index: dict[str, Path] = {}
-    for path in tqdm(image_files(root), desc="index source images", unit="image"):
-        index.setdefault(path.stem, path)
-    return index
-
-
 def make_compare(original: Path, generated: Path, out: Path) -> bool:
     try:
         with Image.open(original) as a, Image.open(generated) as b:
@@ -123,13 +116,34 @@ def generated_to_source_stem(path: Path) -> str:
     return path.stem.split("_underwater_")[0]
 
 
+def find_original(source_stem: str) -> Path | None:
+    synset = source_stem.split("_", 1)[0]
+    candidate_dirs = [src_root / synset, src_root]
+    candidate_suffixes = [".JPEG", ".jpeg", ".jpg", ".png", ".bmp", ".webp"]
+
+    for candidate_dir in candidate_dirs:
+        if not candidate_dir.is_dir():
+            continue
+        for suffix in candidate_suffixes:
+            candidate = candidate_dir / f"{source_stem}{suffix}"
+            if candidate.exists():
+                return candidate
+
+    # Slow fallback for unusual layouts only. The normal ImageNet-style layout
+    # should match above without scanning the whole source tree.
+    for suffix in candidate_suffixes:
+        hits = list(src_root.rglob(f"{source_stem}{suffix}"))
+        if hits:
+            return hits[0]
+    return None
+
+
 generated_images = image_files(gen_dir)
-source_index = build_source_index(src_root)
 
 records = []
 for idx, gen in enumerate(tqdm(generated_images, desc="export SD comparisons", unit="image")):
     source_stem = generated_to_source_stem(gen)
-    ori = source_index.get(source_stem)
+    ori = find_original(source_stem)
     if ori is None:
         records.append({
             "index": idx,

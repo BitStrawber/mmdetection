@@ -88,6 +88,16 @@ def find_by_stem(root: Path, stem: str) -> Path | None:
     return None
 
 
+def build_stem_index(source_roots: list[Path]) -> dict[str, Path]:
+    index: dict[str, Path] = {}
+    for source_root in source_roots:
+        if not source_root.is_dir():
+            continue
+        for path in tqdm(image_files(source_root), desc=f"index {source_root.name}", unit="image"):
+            index.setdefault(path.stem, path)
+    return index
+
+
 def copy_image(src: Path, dst: Path) -> None:
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(src, dst)
@@ -202,11 +212,13 @@ def export_tree_pairs(method: str, source_roots: list[Path], generated_roots: li
     written = 0
     missing = 0
     used_generated_root = None
+    generated_images = []
     for generated_root in generated_roots:
         generated_images = image_files(generated_root)
         if not generated_images:
             continue
         used_generated_root = generated_root
+        source_stem_index = build_stem_index(source_roots)
         for generated in tqdm(generated_images, desc=f"export {method}", unit="pair"):
             if written >= max_per_method:
                 break
@@ -224,9 +236,9 @@ def export_tree_pairs(method: str, source_roots: list[Path], generated_roots: li
                     if candidate.exists():
                         original = candidate
                     else:
-                        original = find_by_stem(source_root, generated.stem)
+                        original = source_stem_index.get(generated.stem)
                 else:
-                    original = find_by_stem(source_root, generated.stem)
+                    original = source_stem_index.get(generated.stem)
                 if original is not None and original.exists():
                     rel_original = original
                     break

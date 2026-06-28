@@ -122,6 +122,9 @@ def get_args_parser():
     parser.add_argument('--data_path', default='/path/to/imagenet/train/', type=str,
         help='Please specify path to the ImageNet training data.')
     parser.add_argument('--output_dir', default=".", type=str, help='Path to save logs and checkpoints.')
+    parser.add_argument('--init_checkpoint', default='', type=str, help="""Optional checkpoint used to initialize
+        student/teacher weights before starting a new training run. This is intended for domain-adaptive
+        continued pretraining; it does not restore optimizer state or epoch.""")
     parser.add_argument('--saveckp_freq', default=20, type=int, help='Save checkpoint every x epochs.')
     parser.add_argument('--seed', default=0, type=int, help='Random seed.')
     parser.add_argument('--num_workers', default=10, type=int, help='Number of data loading workers per GPU.')
@@ -129,6 +132,37 @@ def get_args_parser():
         distributed training; see https://pytorch.org/docs/stable/distributed.html""")
     parser.add_argument("--local_rank", default=0, type=int, help="Please ignore and do not set this argument.")
     return parser
+
+
+def load_init_checkpoint(init_checkpoint, student, teacher, dino_loss, output_dir):
+    resume_checkpoint = os.path.join(output_dir, "checkpoint.pth")
+    if not init_checkpoint:
+        return
+    if os.path.isfile(resume_checkpoint):
+        print(f"Skip init_checkpoint because resume checkpoint exists: {resume_checkpoint}")
+        return
+    if not os.path.isfile(init_checkpoint):
+        raise FileNotFoundError(f"init_checkpoint not found: {init_checkpoint}")
+
+    print(f"Initializing DINO training from checkpoint: {init_checkpoint}")
+    try:
+        checkpoint = torch.load(init_checkpoint, map_location="cpu", weights_only=False)
+    except TypeError:
+        checkpoint = torch.load(init_checkpoint, map_location="cpu")
+
+    loaded_any = False
+    for key, module in (("student", student), ("teacher", teacher), ("dino_loss", dino_loss)):
+        if key not in checkpoint:
+            print(f"=> init checkpoint has no key '{key}', skip")
+            continue
+        msg = module.load_state_dict(checkpoint[key], strict=False)
+        print(f"=> initialized '{key}' from '{init_checkpoint}' with msg {msg}")
+        loaded_any = True
+
+    if not loaded_any:
+        raise RuntimeError(
+            f"No student/teacher/dino_loss keys were loaded from init_checkpoint: {init_checkpoint}"
+        )
 
 
 def train_dino(args):
@@ -252,6 +286,9 @@ def train_dino(args):
     momentum_schedule = utils.cosine_scheduler(args.momentum_teacher, 1,
                                                args.epochs, len(data_loader))
     print(f"Loss, optimizer and schedulers ready.")
+
+    # ============ optionally initialize from another DINO run ... ============
+    load_init_checkpoint(args.init_checkpoint, student, teacher, dino_loss, args.output_dir)
 
     # ============ optionally resume training ... ============
     to_restore = {"epoch": 0}

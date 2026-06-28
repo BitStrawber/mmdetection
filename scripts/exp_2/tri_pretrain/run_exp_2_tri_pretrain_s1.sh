@@ -267,12 +267,17 @@ run_dino_resnet50() {
         --weight_decay "${DINO_WEIGHT_DECAY:-1e-4}" \
         --weight_decay_end "${DINO_WEIGHT_DECAY_END:-1e-4}" \
         --warmup_epochs "${DINO_WARMUP_EPOCHS:-10}" \
+        --min_lr "${DINO_MIN_LR:-1e-6}" \
+        --momentum_teacher "${DINO_MOMENTUM_TEACHER:-0.996}" \
+        --freeze_last_layer "${DINO_FREEZE_LAST_LAYER:-1}" \
         --global_crops_scale ${DINO_GLOBAL_CROPS_SCALE:-0.14 1} \
+        --local_crops_number "${DINO_LOCAL_CROPS_NUMBER:-8}" \
         --local_crops_scale ${DINO_LOCAL_CROPS_SCALE:-0.05 0.14} \
         --epochs "${DINO_EPOCHS:-100}" \
         --batch_size_per_gpu "${DINO_BATCH_SIZE_PER_GPU:-64}" \
         --num_workers "${DINO_NUM_WORKERS:-10}" \
         --saveckp_freq "${DINO_SAVECKP_FREQ:-50}" \
+        --init_checkpoint "${DINO_INIT_CHECKPOINT:-}" \
         --data_path "$data_path" \
         --output_dir "$work_dir" \
         2>&1 | tee "$log_file"

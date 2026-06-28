@@ -47,7 +47,8 @@ echo "NEG_PROMPT:    ${NEGATIVE_PROMPT}"
 echo "========================================="
 
 TMP_LIST="$(mktemp)"
-trap 'rm -f "${TMP_LIST}"' EXIT
+TMP_ALL_LIST="$(mktemp)"
+trap 'rm -f "${TMP_LIST}" "${TMP_ALL_LIST}" "${TMP_ALL_LIST}.sorted"' EXIT
 
 if [[ -n "${TEST_IMG}" ]]; then
   if [[ ! -e "${TEST_IMG}" ]]; then
@@ -64,9 +65,9 @@ else
       \( -type f -o -type l \) \
       \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.bmp' -o -iname '*.webp' \) \
       -print \
-    | sort \
-    | head -n "${LIMIT}" \
-    > "${TMP_LIST}"
+    > "${TMP_ALL_LIST}"
+  sort "${TMP_ALL_LIST}" > "${TMP_ALL_LIST}.sorted"
+  head -n "${LIMIT}" "${TMP_ALL_LIST}.sorted" > "${TMP_LIST}"
 fi
 
 if [[ ! -s "${TMP_LIST}" ]]; then

@@ -58,10 +58,11 @@ fi
 echo
 echo "Step 3/4: Install batch-generation dependencies"
 conda run -p "${ENV_PREFIX}" python -m pip install \
-  "diffusers>=0.25.0" \
-  "transformers>=4.30.0" \
-  "accelerate>=0.20.0" \
-  "safetensors" \
+  "huggingface-hub==0.20.3" \
+  "diffusers==0.25.1" \
+  "transformers==4.36.2" \
+  "accelerate==0.25.0" \
+  "safetensors==0.4.2" \
   "tqdm" \
   "pillow"
 

@@ -53,8 +53,8 @@ if [[ -z "${TEST_IMG}" ]]; then
     find "${SOURCE_DIR}" \
       \( -type f -o -type l \) \
       \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.bmp' -o -iname '*.webp' \) \
-      | sort \
-      | head -n 1
+      -print \
+      -quit
   )"
 fi
 

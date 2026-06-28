@@ -9,6 +9,7 @@ SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 OUT_ROOT="${OUT_ROOT:-/media/HDD1/XCX/exp_2/synthesis_visual_pairs}"
 MAX_PER_METHOD="${MAX_PER_METHOD:-20}"
+METHOD_TIMEOUT_SEC="${METHOD_TIMEOUT_SEC:-60}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-syn:datasets/exp2_synthesis_visual/}"
 ARCHIVE_PATH="${ARCHIVE_PATH:-${OUT_ROOT}.tar.gz}"
@@ -21,6 +22,7 @@ echo "SYN_ROOT:       ${SYN_ROOT}"
 echo "WORK_ROOT:      ${WORK_ROOT}"
 echo "OUT_ROOT:       ${OUT_ROOT}"
 echo "MAX_PER_METHOD: ${MAX_PER_METHOD}"
+echo "METHOD_TIMEOUT_SEC: ${METHOD_TIMEOUT_SEC}"
 echo "ARCHIVE_PATH:   ${ARCHIVE_PATH}"
 echo "UPLOAD:         ${UPLOAD}"
 echo "RCLONE_DEST:    ${RCLONE_DEST}"
@@ -36,12 +38,14 @@ SYN_ROOT="${SYN_ROOT}" \
 WORK_ROOT="${WORK_ROOT}" \
 OUT_ROOT="${OUT_ROOT}" \
 MAX_PER_METHOD="${MAX_PER_METHOD}" \
+METHOD_TIMEOUT_SEC="${METHOD_TIMEOUT_SEC}" \
 python - <<'PY'
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import time
 from pathlib import Path
 
 try:
@@ -63,6 +67,7 @@ syn_root = Path(os.environ["SYN_ROOT"])
 work_root = Path(os.environ["WORK_ROOT"])
 out_root = Path(os.environ["OUT_ROOT"])
 max_per_method = int(os.environ["MAX_PER_METHOD"])
+method_timeout_sec = float(os.environ["METHOD_TIMEOUT_SEC"])
 
 
 def is_image(path: Path) -> bool:
@@ -96,6 +101,23 @@ def build_stem_index(source_roots: list[Path]) -> dict[str, Path]:
         for path in tqdm(image_files(source_root), desc=f"index {source_root.name}", unit="image"):
             index.setdefault(path.stem, path)
     return index
+
+
+def build_generated_index(generated_root: Path) -> dict[str, Path]:
+    index: dict[str, Path] = {}
+    for path in tqdm(image_files(generated_root), desc=f"index generated {generated_root.name}", unit="image"):
+        stems = {path.stem}
+        if path.stem.endswith("_fake_B"):
+            stems.add(path.stem[:-7])
+        if "_underwater_" in path.stem:
+            stems.add(path.stem.split("_underwater_")[0])
+        for stem in stems:
+            index.setdefault(stem, path)
+    return index
+
+
+def timed_out(start_time: float) -> bool:
+    return method_timeout_sec > 0 and (time.monotonic() - start_time) > method_timeout_sec
 
 
 def copy_image(src: Path, dst: Path) -> None:
@@ -161,6 +183,7 @@ def export_pair(method: str, original: Path, generated: Path, index: int, rel_hi
 def export_manifest_pairs(method: str, manifest: Path, generated_root: Path) -> dict:
     written = 0
     missing = 0
+    start_time = time.monotonic()
     if not manifest.is_file() or not generated_root.is_dir():
         return {
             "method": method,
@@ -171,8 +194,15 @@ def export_manifest_pairs(method: str, manifest: Path, generated_root: Path) -> 
         }
 
     records = [json.loads(line) for line in manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    generated_index = build_generated_index(generated_root)
+    status = "ok"
+    reason = ""
     for rec in tqdm(records, desc=f"export {method}", unit="pair"):
         if written >= max_per_method:
+            break
+        if timed_out(start_time):
+            status = "timeout"
+            reason = f"method exceeded {method_timeout_sec:g}s; kept partial results"
             break
         original = Path(rec.get("source") or rec.get("destination") or "")
         if not original.exists() and rec.get("destination"):
@@ -182,15 +212,13 @@ def export_manifest_pairs(method: str, manifest: Path, generated_root: Path) -> 
         original_name = Path(rec.get("original_name", stem)).stem
 
         generated = None
-        candidates = []
         if synset:
-            candidates.extend((generated_root / synset).glob(f"{original_name}.*"))
-        candidates.extend(generated_root.rglob(f"{stem}*"))
-        candidates.extend(generated_root.rglob(f"{original_name}*"))
-        for cand in candidates:
-            if is_image(cand):
-                generated = cand
-                break
+            for cand in (generated_root / synset).glob(f"{original_name}.*"):
+                if is_image(cand):
+                    generated = cand
+                    break
+        if generated is None:
+            generated = generated_index.get(stem) or generated_index.get(original_name)
 
         if generated is None or not original.exists():
             missing += 1
@@ -200,7 +228,8 @@ def export_manifest_pairs(method: str, manifest: Path, generated_root: Path) -> 
 
     return {
         "method": method,
-        "status": "ok",
+        "status": status,
+        "reason": reason,
         "written": written,
         "missing": missing,
         "manifest": str(manifest),
@@ -213,14 +242,26 @@ def export_tree_pairs(method: str, source_roots: list[Path], generated_roots: li
     missing = 0
     used_generated_root = None
     generated_images = []
+    start_time = time.monotonic()
+    status = "skipped"
+    reason = ""
     for generated_root in generated_roots:
+        if timed_out(start_time):
+            status = "timeout"
+            reason = f"method exceeded {method_timeout_sec:g}s before finding generated images"
+            break
         generated_images = image_files(generated_root)
         if not generated_images:
             continue
         used_generated_root = generated_root
+        status = "ok"
         source_stem_index = build_stem_index(source_roots)
         for generated in tqdm(generated_images, desc=f"export {method}", unit="pair"):
             if written >= max_per_method:
+                break
+            if timed_out(start_time):
+                status = "timeout"
+                reason = f"method exceeded {method_timeout_sec:g}s; kept partial results"
                 break
             rel_original = None
             for source_root in source_roots:
@@ -251,7 +292,8 @@ def export_tree_pairs(method: str, source_roots: list[Path], generated_roots: li
 
     return {
         "method": method,
-        "status": "ok" if used_generated_root else "skipped",
+        "status": status,
+        "reason": reason,
         "written": written,
         "missing": missing,
         "generated_root": str(used_generated_root) if used_generated_root else "",
@@ -276,15 +318,19 @@ def export_sd_single() -> dict:
     ]
     written = 0
     missing = 0
+    start_time = time.monotonic()
+    source_index = build_stem_index(source_roots)
+    status = "ok"
+    reason = ""
     for generated in generated_images:
         if written >= max_per_method:
             break
+        if timed_out(start_time):
+            status = "timeout"
+            reason = f"method exceeded {method_timeout_sec:g}s; kept partial results"
+            break
         stem = generated.stem.split("_underwater_")[0]
-        original = None
-        for source_root in source_roots:
-            original = find_by_stem(source_root, stem)
-            if original is not None:
-                break
+        original = source_index.get(stem)
         if original is None:
             missing += 1
             continue
@@ -292,7 +338,8 @@ def export_sd_single() -> dict:
             written += 1
     return {
         "method": method,
-        "status": "ok",
+        "status": status,
+        "reason": reason,
         "written": written,
         "missing": missing,
         "generated_root": str(generated_root),

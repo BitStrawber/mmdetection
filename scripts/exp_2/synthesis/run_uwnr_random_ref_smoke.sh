@@ -19,6 +19,8 @@ NUM="${NUM:-20}"
 SEED="${SEED:-2026}"
 GPU="${GPU:-2}"
 TEST_SIZE="${TEST_SIZE:-256}"
+RUN_PIPELINE="${RUN_PIPELINE:-1}"
+RUN_TRIPLET="${RUN_TRIPLET:-1}"
 
 SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/uwnr/source/train}"
 REF_ROOT="${REF_ROOT:-/media/SSD1/XCX/exp_2/UWNR_ref_underwater/lnrud_like_ref/qingxi}"
@@ -41,6 +43,8 @@ echo "NUM:                ${NUM}"
 echo "SEED:               ${SEED}"
 echo "GPU:                ${GPU}"
 echo "TEST_SIZE:          ${TEST_SIZE}"
+echo "RUN_PIPELINE:       ${RUN_PIPELINE}"
+echo "RUN_TRIPLET:        ${RUN_TRIPLET}"
 echo "SOURCE_ROOT:        ${SOURCE_ROOT}"
 echo "REF_ROOT:           ${REF_ROOT}"
 echo "RANDOM_SOURCE_DIR:  ${RANDOM_SOURCE_DIR}"
@@ -134,39 +138,50 @@ print(f"picked references: {len(picked_refs)}")
 print(f"manifest: {manifest}")
 PY
 
-SOURCE_DIR="${RANDOM_SOURCE_DIR}" \
-RUOD_REF_ROOT="${RANDOM_REF_ROOT}" \
-FID_REF_DIR="${RANDOM_REF_ROOT}" \
-DEPTH_DIR="${DEPTH_DIR}" \
-PREP_DIR="${PREP_DIR}" \
-FLAT_SAVE_DIR="${FLAT_SAVE_DIR}" \
-RESTORE_DIR="${RESTORE_DIR}" \
-LIMIT="${NUM}" \
-GPU="${GPU}" \
-TEST_SIZE="${TEST_SIZE}" \
-RUN_DEPTH=1 \
-RUN_PREPARE=1 \
-RUN_RUOD_REF=0 \
-RUN_UWNR=1 \
-RUN_RESTORE=1 \
-bash scripts/exp_2/synthesis/run_uwnr_ruod_ref_generate.sh
+if [[ "${RUN_PIPELINE}" == "1" ]]; then
+  SOURCE_DIR="${RANDOM_SOURCE_DIR}" \
+  RUOD_REF_ROOT="${RANDOM_REF_ROOT}" \
+  FID_REF_DIR="${RANDOM_REF_ROOT}" \
+  DEPTH_DIR="${DEPTH_DIR}" \
+  PREP_DIR="${PREP_DIR}" \
+  FLAT_SAVE_DIR="${FLAT_SAVE_DIR}" \
+  RESTORE_DIR="${RESTORE_DIR}" \
+  LIMIT="${NUM}" \
+  GPU="${GPU}" \
+  TEST_SIZE="${TEST_SIZE}" \
+  RUN_DEPTH=1 \
+  RUN_PREPARE=1 \
+  RUN_RUOD_REF=0 \
+  RUN_UWNR=1 \
+  RUN_RESTORE=1 \
+  bash scripts/exp_2/synthesis/run_uwnr_ruod_ref_generate.sh
+else
+  echo
+  echo "Skip UWNR pipeline generation; rebuild triplets from existing outputs."
+fi
 
-echo
-echo "Build source/reference/generated triplets"
+if [[ "${RUN_TRIPLET}" == "1" ]]; then
+  echo
+  echo "Build source/reference/generated triplets"
 python - <<PY
 from pathlib import Path
 from PIL import Image, ImageDraw
 import json
 
 manifest_path = Path("${WORK_ROOT}") / "random_selection_manifest.json"
+pair_manifest_path = Path("${PREP_DIR}") / "pair_manifest.jsonl"
 gen_dir = Path("${FLAT_SAVE_DIR}")
 out_dir = Path("${TRIPLET_DIR}")
 out_dir.mkdir(parents=True, exist_ok=True)
 
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-data = json.loads(manifest_path.read_text(encoding="utf-8"))
-sources = data.get("sources", [])
-refs = data.get("references", [])
+random_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+pair_records = [
+    json.loads(line)
+    for line in pair_manifest_path.read_text(encoding="utf-8").splitlines()
+    if line.strip()
+]
+refs = random_data.get("references", [])
 generated = sorted(p for p in gen_dir.rglob("*")
                    if p.is_file() and p.suffix.lower() in exts)
 
@@ -191,19 +206,20 @@ def with_label(img, text):
     return out
 
 clear_outputs(out_dir)
-n = min(len(sources), len(refs), len(generated))
+n = min(len(pair_records), len(refs), len(generated))
 if n == 0:
     raise RuntimeError(
-        f"No valid triplet data: sources={len(sources)}, refs={len(refs)}, generated={len(generated)}")
+        f"No valid triplet data: pair_records={len(pair_records)}, refs={len(refs)}, generated={len(generated)}")
 
 for i in range(n):
-    src_path = Path(sources[i]["selected"])
+    record = pair_records[i]
+    src_path = Path(record["source"])
     ref_path = Path(refs[i]["selected"])
     gen_path = generated[i]
 
-    src_img = with_label(load_image(src_path), f"source: {src_path.parent.name}")
-    ref_img = with_label(load_image(ref_path), "reference")
-    gen_img = with_label(load_image(gen_path), "uwnr generated")
+    src_img = with_label(load_image(src_path), f"source: {record.get('synset', src_path.parent.name)}")
+    ref_img = with_label(load_image(ref_path), f"reference: {ref_path.name}")
+    gen_img = with_label(load_image(gen_path), f"uwnr generated: {gen_path.name}")
 
     w, h = src_img.size
     triplet = Image.new("RGB", (w * 3, h), (255, 255, 255))
@@ -212,12 +228,16 @@ for i in range(n):
     triplet.paste(gen_img, (w * 2, 0))
     triplet.save(out_dir / f"{i + 1:03d}_uwnr_triplet.jpg", quality=95)
 
-print(f"sources: {len(sources)}")
+print(f"pair_records: {len(pair_records)}")
 print(f"refs: {len(refs)}")
 print(f"generated: {len(generated)}")
 print(f"triplets: {n}")
 print(f"triplet_dir: {out_dir}")
 PY
+else
+  echo
+  echo "Skip triplet export."
+fi
 
 echo
 echo "Done."

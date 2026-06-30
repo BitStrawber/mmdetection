@@ -32,6 +32,7 @@ DEPTH_DIR="${DEPTH_DIR:-${WORK_ROOT}/megadepth/train}"
 PREP_DIR="${PREP_DIR:-${WORK_ROOT}/prepared/train}"
 FLAT_SAVE_DIR="${FLAT_SAVE_DIR:-${WORK_ROOT}/generated_flat/train}"
 RESTORE_DIR="${RESTORE_DIR:-${WORK_ROOT}/generated/train}"
+TRIPLET_DIR="${TRIPLET_DIR:-${WORK_ROOT}/triplets}"
 
 echo "========================================="
 echo "UWNR random clean/reference smoke"
@@ -45,6 +46,7 @@ echo "REF_ROOT:           ${REF_ROOT}"
 echo "RANDOM_SOURCE_DIR:  ${RANDOM_SOURCE_DIR}"
 echo "RANDOM_REF_ROOT:    ${RANDOM_REF_ROOT}"
 echo "WORK_ROOT:          ${WORK_ROOT}"
+echo "TRIPLET_DIR:        ${TRIPLET_DIR}"
 echo "========================================="
 
 python - <<PY
@@ -150,7 +152,76 @@ RUN_RESTORE=1 \
 bash scripts/exp_2/synthesis/run_uwnr_ruod_ref_generate.sh
 
 echo
+echo "Build source/reference/generated triplets"
+python - <<PY
+from pathlib import Path
+from PIL import Image, ImageDraw
+import json
+
+manifest_path = Path("${WORK_ROOT}") / "random_selection_manifest.json"
+gen_dir = Path("${FLAT_SAVE_DIR}")
+out_dir = Path("${TRIPLET_DIR}")
+out_dir.mkdir(parents=True, exist_ok=True)
+
+exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+data = json.loads(manifest_path.read_text(encoding="utf-8"))
+sources = data.get("sources", [])
+refs = data.get("references", [])
+generated = sorted(p for p in gen_dir.rglob("*")
+                   if p.is_file() and p.suffix.lower() in exts)
+
+def clear_outputs(path):
+    for p in path.glob("*_uwnr_triplet.jpg"):
+        p.unlink()
+
+def load_image(path, size=(320, 320)):
+    img = Image.open(path).convert("RGB")
+    img.thumbnail(size, Image.Resampling.LANCZOS)
+    canvas = Image.new("RGB", size, (255, 255, 255))
+    canvas.paste(img, ((size[0] - img.width) // 2, (size[1] - img.height) // 2))
+    return canvas
+
+def with_label(img, text):
+    label_h = 34
+    out = Image.new("RGB", (img.width, img.height + label_h), (255, 255, 255))
+    draw = ImageDraw.Draw(out)
+    draw.rectangle([0, 0, img.width, label_h], fill=(245, 245, 245))
+    draw.text((8, 9), text, fill=(0, 0, 0))
+    out.paste(img, (0, label_h))
+    return out
+
+clear_outputs(out_dir)
+n = min(len(sources), len(refs), len(generated))
+if n == 0:
+    raise RuntimeError(
+        f"No valid triplet data: sources={len(sources)}, refs={len(refs)}, generated={len(generated)}")
+
+for i in range(n):
+    src_path = Path(sources[i]["selected"])
+    ref_path = Path(refs[i]["selected"])
+    gen_path = generated[i]
+
+    src_img = with_label(load_image(src_path), f"source: {src_path.parent.name}")
+    ref_img = with_label(load_image(ref_path), "reference")
+    gen_img = with_label(load_image(gen_path), "uwnr generated")
+
+    w, h = src_img.size
+    triplet = Image.new("RGB", (w * 3, h), (255, 255, 255))
+    triplet.paste(src_img, (0, 0))
+    triplet.paste(ref_img, (w, 0))
+    triplet.paste(gen_img, (w * 2, 0))
+    triplet.save(out_dir / f"{i + 1:03d}_uwnr_triplet.jpg", quality=95)
+
+print(f"sources: {len(sources)}")
+print(f"refs: {len(refs)}")
+print(f"generated: {len(generated)}")
+print(f"triplets: {n}")
+print(f"triplet_dir: {out_dir}")
+PY
+
+echo
 echo "Done."
 echo "Flat outputs:     ${FLAT_SAVE_DIR}"
 echo "Restored outputs: ${RESTORE_DIR}"
+echo "Triplets:         ${TRIPLET_DIR}"
 echo "Manifest:         ${WORK_ROOT}/random_selection_manifest.json"

@@ -10,6 +10,7 @@ WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/syreanet_synthesis}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${SYN_ROOT}/syreanet_synthesis/generated}"
 SOURCE_ROOT="${SOURCE_ROOT:-}"
+PREP_SIZE="${PREP_SIZE:-512}"
 GPU="${GPU:-2}"
 GPU_IDS="${GPU_IDS:-2,3,4,5,6,7}"
 PROCS_PER_GPU="${PROCS_PER_GPU:-2}"
@@ -27,6 +28,7 @@ echo "SYN_ROOT:      ${SYN_ROOT}"
 echo "WORK_ROOT:     ${WORK_ROOT}"
 echo "OUTPUT_ROOT:   ${OUTPUT_ROOT}"
 echo "SOURCE_ROOT:   ${SOURCE_ROOT:-<prepare to SSD first>}"
+echo "PREP_SIZE:     ${PREP_SIZE}"
 echo "GPU:           ${GPU}"
 echo "GPU_IDS:       ${GPU_IDS}"
 echo "PROCS_PER_GPU: ${PROCS_PER_GPU}"
@@ -80,6 +82,7 @@ for split in ${SPLITS}; do
       RESTORE_DIR="${OUTPUT_ROOT}/${split}" \
       SPLIT="${split}" \
       LIMIT=0 \
+      PREP_SIZE="${PREP_SIZE}" \
       GPU="${gpu_id}" \
       NUM_SHARDS="${NUM_SHARDS}" \
       SHARD_INDEX="${idx}" \

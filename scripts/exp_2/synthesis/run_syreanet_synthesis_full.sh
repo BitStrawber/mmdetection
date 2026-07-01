@@ -9,6 +9,7 @@ SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/syreanet_synthesis}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${SYN_ROOT}/syreanet_synthesis/generated}"
+SOURCE_ROOT="${SOURCE_ROOT:-}"
 GPU="${GPU:-2}"
 GPU_IDS="${GPU_IDS:-2,3,4,5,6,7}"
 PROCS_PER_GPU="${PROCS_PER_GPU:-2}"
@@ -25,6 +26,7 @@ echo "========================================="
 echo "SYN_ROOT:      ${SYN_ROOT}"
 echo "WORK_ROOT:     ${WORK_ROOT}"
 echo "OUTPUT_ROOT:   ${OUTPUT_ROOT}"
+echo "SOURCE_ROOT:   ${SOURCE_ROOT:-<prepare to SSD first>}"
 echo "GPU:           ${GPU}"
 echo "GPU_IDS:       ${GPU_IDS}"
 echo "PROCS_PER_GPU: ${PROCS_PER_GPU}"
@@ -33,16 +35,20 @@ echo "OMP_THREADS:   ${OMP_NUM_THREADS}"
 echo "LOG_DIR:       ${LOG_DIR}"
 echo "========================================="
 
-MODE=full \
-METHODS="syreanet_synthesis" \
-SPLITS="${SPLITS}" \
-GPU="${GPU}" \
-FULL_LIMIT=0 \
-SOURCE_ONLY=1 \
-SYN_ROOT="${SYN_ROOT}" \
-WORK_ROOT="${WORK_ROOT}" \
-bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh \
-  2>&1 | tee "${LOG_DIR}/prepare.log"
+if [[ -z "${SOURCE_ROOT}" ]]; then
+  MODE=full \
+  METHODS="syreanet_synthesis" \
+  SPLITS="${SPLITS}" \
+  GPU="${GPU}" \
+  FULL_LIMIT=0 \
+  SOURCE_ONLY=1 \
+  SYN_ROOT="${SYN_ROOT}" \
+  WORK_ROOT="${WORK_ROOT}" \
+  bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh \
+    2>&1 | tee "${LOG_DIR}/prepare.log"
+else
+  echo "Skip prepare_synthesis_ssd_inputs.sh because SOURCE_ROOT is set." | tee "${LOG_DIR}/prepare.log"
+fi
 
 for split in ${SPLITS}; do
   IFS=', ' read -r -a GPU_ARRAY <<< "${GPU_IDS}"
@@ -60,9 +66,14 @@ for split in ${SPLITS}; do
     gpu_id="${EXPANDED_GPU_IDS[$idx]}"
     shard_tag="_shard${idx}of${NUM_SHARDS}"
     shard_log="${LOG_DIR}/${split}${shard_tag}.log"
+    if [[ -n "${SOURCE_ROOT}" ]]; then
+      source_dir="${SOURCE_ROOT}/${split}"
+    else
+      source_dir="${WORK_ROOT}/sources/syreanet_synthesis/${split}"
+    fi
     echo "  shard ${idx}/${NUM_SHARDS} -> GPU ${gpu_id}; log=${shard_log}" | tee -a "${LOG_DIR}/${split}.log"
     (
-      SOURCE_DIR="${WORK_ROOT}/sources/syreanet_synthesis/${split}" \
+      SOURCE_DIR="${source_dir}" \
       DEPTH_DIR="${WORK_ROOT}/syreanet_synthesis/depth/${split}${shard_tag}" \
       PREP_DIR="${WORK_ROOT}/syreanet_synthesis/prepared/${split}${shard_tag}" \
       FLAT_SAVE_DIR="${WORK_ROOT}/syreanet_synthesis/generated_flat/${split}${shard_tag}" \

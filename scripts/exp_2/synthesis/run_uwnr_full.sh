@@ -8,6 +8,8 @@ cd "${REPO_ROOT}"
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/uwnr}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/uwnr/source}"
+DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwnr}"
 GPU="${GPU:-2}"
 GPU_IDS="${GPU_IDS:-2,3,4,5,6,7}"
 PROCS_PER_GPU="${PROCS_PER_GPU:-1}"
@@ -24,6 +26,8 @@ echo "UWNR full generation"
 echo "========================================="
 echo "SYN_ROOT:      ${SYN_ROOT}"
 echo "WORK_ROOT:     ${WORK_ROOT}"
+echo "SOURCE_ROOT:   ${SOURCE_ROOT}"
+echo "DEPTH_ROOT:    ${DEPTH_ROOT}"
 echo "GPU:           ${GPU}"
 echo "GPU_IDS:       ${GPU_IDS}"
 echo "PROCS_PER_GPU: ${PROCS_PER_GPU}"
@@ -33,16 +37,7 @@ echo "OMP_THREADS:   ${OMP_NUM_THREADS}"
 echo "LOG_DIR:       ${LOG_DIR}"
 echo "========================================="
 
-MODE=full \
-METHODS="uwnr" \
-SPLITS="${SPLITS}" \
-GPU="${GPU}" \
-FULL_LIMIT=0 \
-SOURCE_ONLY=1 \
-SYN_ROOT="${SYN_ROOT}" \
-WORK_ROOT="${WORK_ROOT}" \
-bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh \
-  2>&1 | tee "${LOG_DIR}/prepare.log"
+echo "Skip prepare_synthesis_ssd_inputs.sh; using SOURCE_ROOT and precomputed DEPTH_ROOT." | tee "${LOG_DIR}/prepare.log"
 
 for split in ${SPLITS}; do
   IFS=', ' read -r -a GPU_ARRAY <<< "${GPU_IDS}"
@@ -62,8 +57,8 @@ for split in ${SPLITS}; do
     shard_log="${LOG_DIR}/${split}${shard_tag}.log"
     echo "  shard ${idx}/${NUM_SHARDS} -> GPU ${gpu_id}; log=${shard_log}" | tee -a "${LOG_DIR}/${split}.log"
     (
-      SOURCE_DIR="${WORK_ROOT}/sources/uwnr/${split}" \
-      DEPTH_DIR="${WORK_ROOT}/uwnr_ruod_ref/megadepth/${split}${shard_tag}" \
+      SOURCE_DIR="${SOURCE_ROOT}/${split}" \
+      DEPTH_DIR="${DEPTH_ROOT}/${split}" \
       PREP_DIR="${WORK_ROOT}/uwnr_ruod_ref/prepared/${split}${shard_tag}" \
       RUOD_REF_ROOT="${WORK_ROOT}/uwnr_ruod_ref/ruod_reference_${split}${shard_tag}" \
       FID_REF_DIR="${WORK_ROOT}/uwnr_ruod_ref/ruod_reference_${split}${shard_tag}_fid_resized" \
@@ -78,7 +73,7 @@ for split in ${SPLITS}; do
       OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
       OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \
       MKL_NUM_THREADS="${MKL_NUM_THREADS}" \
-      RUN_DEPTH=1 RUN_PREPARE=1 RUN_RUOD_REF=1 RUN_UWNR=1 RUN_RESTORE=1 \
+      RUN_DEPTH=0 RUN_PREPARE=1 RUN_RUOD_REF=1 RUN_UWNR=1 RUN_RESTORE=1 \
       bash scripts/exp_2/synthesis/run_uwnr_ruod_ref_generate.sh
     ) > "${shard_log}" 2>&1 &
     pids+=("$!")

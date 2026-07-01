@@ -4,7 +4,7 @@ set -euo pipefail
 # Prepare the flat data layout expected by the original TensorFlow WaterGAN
 # code:
 #   air_images/*.png   ImageNet RGB images resized to 640x480
-#   air_depth/*.mat    matching MegaDepth pseudo-depth maps
+#   air_depth/*.mat    matching pseudo-depth maps
 #   water_images/*.png RUOD real underwater reference images resized to 1360x1024
 #
 # Smoke:
@@ -60,6 +60,7 @@ echo "DEPTH_DIR:      ${DEPTH_DIR}"
 echo "DATA_ROOT:      ${DATA_ROOT}"
 echo "MEGADEPTH_DIR:  ${MEGADEPTH_DIR}"
 echo "MEGADEPTH_CKPT: ${MEGADEPTH_CKPT}"
+echo "RUN_DEPTH:      ${RUN_DEPTH}"
 echo "AIR_LIMIT:      ${AIR_LIMIT}"
 echo "WATER_LIMIT:    ${WATER_LIMIT}"
 echo "AIR_SIZE:       ${AIR_WIDTH}x${AIR_HEIGHT}"
@@ -69,8 +70,10 @@ echo
 
 check_path "${SOURCE_DIR}" "WaterGAN sampled ImageNet source"
 check_path "${WATER_SOURCE}" "RUOD/reference underwater image source"
-check_path "${MEGADEPTH_DIR}" "MegaDepth directory"
-check_path "${MEGADEPTH_CKPT}" "MegaDepth checkpoint"
+if [[ "${RUN_DEPTH}" == "1" ]]; then
+  check_path "${MEGADEPTH_DIR}" "MegaDepth directory"
+  check_path "${MEGADEPTH_CKPT}" "MegaDepth checkpoint"
+fi
 
 mkdir -p "${DEPTH_DIR}" "${DATA_ROOT}"
 

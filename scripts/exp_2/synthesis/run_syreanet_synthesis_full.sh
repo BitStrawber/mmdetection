@@ -10,6 +10,7 @@ WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/syreanet_synthesis}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${SYN_ROOT}/syreanet_synthesis/generated}"
 SOURCE_ROOT="${SOURCE_ROOT:-}"
+DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/syreanet}"
 PREP_SIZE="${PREP_SIZE:-512}"
 GPU="${GPU:-2}"
 GPU_IDS="${GPU_IDS:-2,3,4,5,6,7}"
@@ -28,6 +29,7 @@ echo "SYN_ROOT:      ${SYN_ROOT}"
 echo "WORK_ROOT:     ${WORK_ROOT}"
 echo "OUTPUT_ROOT:   ${OUTPUT_ROOT}"
 echo "SOURCE_ROOT:   ${SOURCE_ROOT:-<prepare to SSD first>}"
+echo "DEPTH_ROOT:    ${DEPTH_ROOT:-<generate with MegaDepth>}"
 echo "PREP_SIZE:     ${PREP_SIZE}"
 echo "GPU:           ${GPU}"
 echo "GPU_IDS:       ${GPU_IDS}"
@@ -73,10 +75,17 @@ for split in ${SPLITS}; do
     else
       source_dir="${WORK_ROOT}/sources/syreanet_synthesis/${split}"
     fi
+    if [[ -n "${DEPTH_ROOT}" ]]; then
+      depth_dir="${DEPTH_ROOT}/${split}"
+      run_depth=0
+    else
+      depth_dir="${WORK_ROOT}/syreanet_synthesis/depth/${split}${shard_tag}"
+      run_depth=1
+    fi
     echo "  shard ${idx}/${NUM_SHARDS} -> GPU ${gpu_id}; log=${shard_log}" | tee -a "${LOG_DIR}/${split}.log"
     (
       SOURCE_DIR="${source_dir}" \
-      DEPTH_DIR="${WORK_ROOT}/syreanet_synthesis/depth/${split}${shard_tag}" \
+      DEPTH_DIR="${depth_dir}" \
       PREP_DIR="${WORK_ROOT}/syreanet_synthesis/prepared/${split}${shard_tag}" \
       FLAT_SAVE_DIR="${WORK_ROOT}/syreanet_synthesis/generated_flat/${split}${shard_tag}" \
       RESTORE_DIR="${OUTPUT_ROOT}/${split}" \
@@ -89,7 +98,7 @@ for split in ${SPLITS}; do
       OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
       OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \
       MKL_NUM_THREADS="${MKL_NUM_THREADS}" \
-      RUN_DEPTH=1 RUN_PREPARE=1 RUN_SYREANET=1 RUN_RESTORE=1 \
+      RUN_DEPTH="${run_depth}" RUN_PREPARE=1 RUN_SYREANET=1 RUN_RESTORE=1 \
       bash scripts/exp_2/synthesis/run_syreanet_synthesis_generate.sh
     ) > "${shard_log}" 2>&1 &
     pids+=("$!")

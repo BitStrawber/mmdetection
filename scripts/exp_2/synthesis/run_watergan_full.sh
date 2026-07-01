@@ -8,6 +8,9 @@ cd "${REPO_ROOT}"
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/watergan}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/watergan/source}"
+DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/watergan}"
+WATER_SOURCE="${WATER_SOURCE:-/media/SSD1/XCX/exp_2/UWNR_ref_underwater/lnrud_like_ref/qingxi}"
 GPU="${GPU:-2}"
 WATERGAN_EPOCH="${WATERGAN_EPOCH:-26}"
 WATERGAN_BATCH_SIZE="${WATERGAN_BATCH_SIZE:-8}"
@@ -23,6 +26,9 @@ echo "WaterGAN full prepare + train"
 echo "========================================="
 echo "SYN_ROOT:             ${SYN_ROOT}"
 echo "WORK_ROOT:            ${WORK_ROOT}"
+echo "SOURCE_ROOT:          ${SOURCE_ROOT}"
+echo "DEPTH_ROOT:           ${DEPTH_ROOT}"
+echo "WATER_SOURCE:         ${WATER_SOURCE}"
 echo "GPU:                  ${GPU}"
 echo "WATERGAN_EPOCH:       ${WATERGAN_EPOCH}"
 echo "WATERGAN_BATCH_SIZE:  ${WATERGAN_BATCH_SIZE}"
@@ -31,15 +37,22 @@ echo "OMP_THREADS:          ${OMP_NUM_THREADS}"
 echo "LOG_DIR:              ${LOG_DIR}"
 echo "========================================="
 
-MODE=full \
-METHODS="watergan" \
-SPLITS="train val" \
-GPU="${GPU}" \
-FULL_LIMIT=0 \
-SYN_ROOT="${SYN_ROOT}" \
-WORK_ROOT="${WORK_ROOT}" \
-bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh \
-  2>&1 | tee "${LOG_DIR}/prepare.log"
+for split in train val; do
+  DATA_NAME="imagenet_ruod_watergan_${split}_full_ssd"
+  DATA_ROOT="${WORK_ROOT}/watergan/datasets/${DATA_NAME}"
+  SOURCE_DIR="${SOURCE_ROOT}/${split}" \
+  DEPTH_DIR="${DEPTH_ROOT}/${split}" \
+  WATER_SOURCE="${WATER_SOURCE}" \
+  DATA_NAME="${DATA_NAME}" \
+  DATA_ROOT="${DATA_ROOT}" \
+  SPLIT="${split}" \
+  GPU="${GPU}" \
+  RUN_DEPTH=0 \
+  AIR_LIMIT=0 \
+  WATER_LIMIT=0 \
+  bash scripts/exp_2/synthesis/run_watergan_prepare_dataset.sh \
+    2>&1 | tee "${LOG_DIR}/prepare_${split}.log"
+done
 
 DATA_NAME="imagenet_ruod_watergan_train_full_ssd"
 DATA_ROOT="${WORK_ROOT}/watergan/datasets/${DATA_NAME}"

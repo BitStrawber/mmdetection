@@ -90,8 +90,10 @@ echo
 
 check_path "${SOURCE_DIR}" "ImageNet sampled source"
 check_path "${SYREANET_DIR}/synthesize/synthesize.py" "SyreaNet synthesis script"
-check_path "${MEGADEPTH_DIR}" "MegaDepth directory"
-check_path "${MEGADEPTH_CKPT}" "MegaDepth checkpoint"
+if [[ "${RUN_DEPTH}" == "1" ]]; then
+  check_path "${MEGADEPTH_DIR}" "MegaDepth directory"
+  check_path "${MEGADEPTH_CKPT}" "MegaDepth checkpoint"
+fi
 
 if [[ "${RUN_DEPTH}" == "1" ]]; then
   echo "Step 1/4: Generate MegaDepth maps"

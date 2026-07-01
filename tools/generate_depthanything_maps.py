@@ -158,6 +158,9 @@ def main():
     if not torch.cuda.is_available() and str(args.device).startswith('cuda'):
         raise RuntimeError('CUDA device was requested but CUDA is unavailable.')
 
+    if str(args.device).startswith('cuda') and torch.cuda.is_available():
+        torch.cuda.set_device(torch.device(args.device))
+
     images = list_images(image_dir)
     if args.limit:
         images = images[:args.limit]

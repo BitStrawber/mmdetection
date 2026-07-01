@@ -86,6 +86,8 @@ do
   fi
 done
 
+export SPLIT DEBUG_ROOT DEPTH_DIR PREP_DIR FLAT_SAVE_DIR RESTORE_DIR OUT_ROOT
+
 python - <<'PY'
 from pathlib import Path
 import json

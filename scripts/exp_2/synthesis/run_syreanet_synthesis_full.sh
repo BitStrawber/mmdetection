@@ -8,6 +8,7 @@ cd "${REPO_ROOT}"
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/syreanet_synthesis}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-${SYN_ROOT}/syreanet_synthesis/generated}"
 GPU="${GPU:-2}"
 GPU_IDS="${GPU_IDS:-2,3,4,5,6,7}"
 PROCS_PER_GPU="${PROCS_PER_GPU:-2}"
@@ -23,6 +24,7 @@ echo "SyreaNet synthesis full generation"
 echo "========================================="
 echo "SYN_ROOT:      ${SYN_ROOT}"
 echo "WORK_ROOT:     ${WORK_ROOT}"
+echo "OUTPUT_ROOT:   ${OUTPUT_ROOT}"
 echo "GPU:           ${GPU}"
 echo "GPU_IDS:       ${GPU_IDS}"
 echo "PROCS_PER_GPU: ${PROCS_PER_GPU}"
@@ -64,7 +66,7 @@ for split in ${SPLITS}; do
       DEPTH_DIR="${WORK_ROOT}/syreanet_synthesis/depth/${split}${shard_tag}" \
       PREP_DIR="${WORK_ROOT}/syreanet_synthesis/prepared/${split}${shard_tag}" \
       FLAT_SAVE_DIR="${WORK_ROOT}/syreanet_synthesis/generated_flat/${split}${shard_tag}" \
-      RESTORE_DIR="${SYN_ROOT}/syreanet_synthesis/generated/${split}" \
+      RESTORE_DIR="${OUTPUT_ROOT}/${split}" \
       SPLIT="${split}" \
       LIMIT=0 \
       GPU="${gpu_id}" \
@@ -92,5 +94,6 @@ for split in ${SPLITS}; do
 done
 
 echo "SyreaNet synthesis full outputs:"
-echo "  ${SYN_ROOT}/syreanet_synthesis/generated/train"
-echo "  ${SYN_ROOT}/syreanet_synthesis/generated/val"
+for split in ${SPLITS}; do
+  echo "  ${OUTPUT_ROOT}/${split}"
+done

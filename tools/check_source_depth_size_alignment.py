@@ -11,6 +11,7 @@ import argparse
 import csv
 import json
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -62,6 +63,18 @@ def parse_args() -> argparse.Namespace:
         default=200,
         help="Maximum mismatch records embedded in the summary json/txt.",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Number of parallel worker processes. 1 keeps the old serial behavior.",
+    )
+    parser.add_argument(
+        "--chunksize",
+        type=int,
+        default=64,
+        help="ProcessPoolExecutor map chunksize when --workers > 1.",
+    )
     return parser.parse_args()
 
 
@@ -87,6 +100,47 @@ def classify_size(source_size: Tuple[int, int], depth_size: Tuple[int, int]) -> 
     return "other_mismatch"
 
 
+def check_one(task: Tuple[str, str, str, bool]) -> Dict[str, Any]:
+    source_path_str, source_root_str, depth_root_str, apply_exif = task
+    source_path = Path(source_path_str)
+    source_root = Path(source_root_str)
+    depth_root = Path(depth_root_str)
+    rel = source_path.relative_to(source_root)
+    depth_path = (depth_root / rel).with_suffix(".png")
+
+    row: Dict[str, Any] = {
+        "relative": str(rel).replace("\\", "/"),
+        "source": str(source_path),
+        "depth": str(depth_path),
+        "source_width": "",
+        "source_height": "",
+        "depth_width": "",
+        "depth_height": "",
+        "status": "",
+        "error": "",
+    }
+
+    if not depth_path.exists():
+        row["status"] = "missing_depth"
+        return row
+
+    try:
+        source_size = read_size(source_path, apply_exif)
+        depth_size = read_size(depth_path, apply_exif)
+        status = classify_size(source_size, depth_size)
+        row.update({
+            "source_width": source_size[0],
+            "source_height": source_size[1],
+            "depth_width": depth_size[0],
+            "depth_height": depth_size[1],
+            "status": status,
+        })
+    except Exception as exc:  # noqa: BLE001
+        row["status"] = "read_error"
+        row["error"] = f"{type(exc).__name__}: {exc}"
+    return row
+
+
 def main() -> None:
     args = parse_args()
     source_root = Path(args.source_root)
@@ -110,50 +164,26 @@ def main() -> None:
     mismatch_records: List[Dict[str, Any]] = []
     csv_rows: List[Dict[str, Any]] = []
 
-    for source_path in tqdm(sources, desc="check source/depth sizes", unit="image"):
-        rel = source_path.relative_to(source_root)
-        depth_path = (depth_root / rel).with_suffix(".png")
-
-        row: Dict[str, Any] = {
-            "relative": str(rel).replace("\\", "/"),
-            "source": str(source_path),
-            "depth": str(depth_path),
-            "source_width": "",
-            "source_height": "",
-            "depth_width": "",
-            "depth_height": "",
-            "status": "",
-            "error": "",
-        }
-
-        if not depth_path.exists():
-            row["status"] = "missing_depth"
-            counters["missing_depth"] += 1
-            mismatch_records.append(dict(row))
-            csv_rows.append(row)
-            continue
-
-        try:
-            source_size = read_size(source_path, apply_exif)
-            depth_size = read_size(depth_path, apply_exif)
-            status = classify_size(source_size, depth_size)
-            row.update({
-                "source_width": source_size[0],
-                "source_height": source_size[1],
-                "depth_width": depth_size[0],
-                "depth_height": depth_size[1],
-                "status": status,
-            })
-            counters[status] += 1
-            if status != "match":
+    task_iter = (
+        (str(source_path), str(source_root), str(depth_root), apply_exif)
+        for source_path in sources
+    )
+    if args.workers > 1:
+        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+            rows = executor.map(check_one, task_iter, chunksize=max(1, args.chunksize))
+            row_iter = tqdm(rows, total=len(sources), desc="check source/depth sizes", unit="image")
+            for row in row_iter:
+                counters[row["status"]] += 1
+                if row["status"] != "match":
+                    mismatch_records.append(dict(row))
+                csv_rows.append(row)
+    else:
+        row_iter = (check_one(task) for task in task_iter)
+        for row in tqdm(row_iter, total=len(sources), desc="check source/depth sizes", unit="image"):
+            counters[row["status"]] += 1
+            if row["status"] != "match":
                 mismatch_records.append(dict(row))
-        except Exception as exc:  # noqa: BLE001
-            row["status"] = "read_error"
-            row["error"] = f"{type(exc).__name__}: {exc}"
-            counters["read_error"] += 1
-            mismatch_records.append(dict(row))
-
-        csv_rows.append(row)
+            csv_rows.append(row)
 
     total_checked = len(sources)
     total_problem = total_checked - counters["match"]
@@ -162,6 +192,8 @@ def main() -> None:
         "depth_root": str(depth_root),
         "out_prefix": str(out_prefix),
         "apply_exif_transpose": apply_exif,
+        "workers": args.workers,
+        "chunksize": args.chunksize,
         "limit": args.limit,
         "total_before_limit": total_before_limit,
         "total_checked": total_checked,

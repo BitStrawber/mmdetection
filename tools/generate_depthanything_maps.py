@@ -128,20 +128,26 @@ def normalize_to_uint8(depth, invert=False):
     return out
 
 
-def infer_depth(model, image_path, input_size):
-    bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
-    if bgr is None:
-        raise ValueError(f'OpenCV cannot read image: {image_path}')
-    depth = model.infer_image(bgr, input_size)
-    source_h, source_w = bgr.shape[:2]
-    if depth.shape[:2] != (source_h, source_w):
-        depth = cv2.resize(depth, (source_w, source_h), interpolation=cv2.INTER_CUBIC)
-    return depth
+def load_pil_rgb(path):
+    with Image.open(path) as image:
+        image = image.convert('RGB')
+        return image.copy()
 
 
 def image_size(path):
     with Image.open(path) as image:
         return image.size
+
+
+def infer_depth(model, image_path, input_size, target_size):
+    image = load_pil_rgb(image_path)
+    rgb = np.asarray(image)
+    bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    depth = model.infer_image(bgr, input_size)
+    target_w, target_h = target_size
+    if depth.shape[:2] != (target_h, target_w):
+        depth = cv2.resize(depth, (target_w, target_h), interpolation=cv2.INTER_CUBIC)
+    return depth
 
 
 def main():
@@ -185,12 +191,12 @@ def main():
             skipped += 1
             continue
         try:
-            depth = infer_depth(model, image_path, args.input_size)
+            src_size = image_size(image_path)
+            depth = infer_depth(model, image_path, args.input_size, src_size)
             depth_u8 = normalize_to_uint8(depth, invert=args.invert)
             out_path.parent.mkdir(parents=True, exist_ok=True)
             Image.fromarray(depth_u8, mode='L').save(out_path)
             if args.preserve_size_check:
-                src_size = image_size(image_path)
                 out_size = image_size(out_path)
                 if src_size != out_size:
                     size_mismatch += 1

@@ -178,7 +178,7 @@ for source_index, image_path in enumerate(tqdm(images, desc="prepare SyreaNet sy
         depth_link.unlink()
 
     with Image.open(image_path) as image:
-        image = image.convert("RGB")
+        image = ImageOps.exif_transpose(image).convert("RGB")
         if prep_size > 0:
             image = ImageOps.fit(
                 image,
@@ -186,10 +186,11 @@ for source_index, image_path in enumerate(tqdm(images, desc="prepare SyreaNet sy
                 method=Image.Resampling.BICUBIC,
                 centering=(0.5, 0.5),
             )
+        image_size = image.size
         image.save(image_link)
 
     with Image.open(depth_path) as depth:
-        depth = depth.convert("L")
+        depth = ImageOps.exif_transpose(depth).convert("L")
         if prep_size > 0:
             depth = ImageOps.fit(
                 depth,
@@ -197,6 +198,8 @@ for source_index, image_path in enumerate(tqdm(images, desc="prepare SyreaNet sy
                 method=Image.Resampling.BICUBIC,
                 centering=(0.5, 0.5),
             )
+        elif depth.size != image_size:
+            depth = depth.resize(image_size, Image.Resampling.BICUBIC)
         # SyreaNet looks up the depth file by the same basename and suffix as
         # the input image. Save a real image instead of a symlink so image/depth
         # dimensions cannot diverge or be interpreted with swapped axes.

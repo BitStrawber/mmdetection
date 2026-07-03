@@ -37,6 +37,8 @@ TILE_SIZE="${TILE_SIZE:-320}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 OVERWRITE="${OVERWRITE:-1}"
+AUTO_DETECT_EXP_ROOT="${AUTO_DETECT_EXP_ROOT:-1}"
+SYNTHESIS_WORK_ROOT="${SYNTHESIS_WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 
 echo "========================================="
 echo "Export UWDF depth ablation multi-grid"
@@ -51,11 +53,49 @@ echo "TILE_SIZE:    ${TILE_SIZE}"
 echo "UPLOAD:       ${UPLOAD}"
 echo "RCLONE_DEST:  ${RCLONE_DEST}"
 echo "OVERWRITE:    ${OVERWRITE}"
+echo "AUTO_DETECT:  ${AUTO_DETECT_EXP_ROOT}"
 echo "========================================="
 
 if [[ ! -d "${EXP_ROOT}" ]]; then
-  echo "Error: EXP_ROOT not found: ${EXP_ROOT}" >&2
-  exit 1
+  if [[ "${AUTO_DETECT_EXP_ROOT}" == "1" && -d "${SYNTHESIS_WORK_ROOT}" ]]; then
+    echo "Warning: EXP_ROOT not found: ${EXP_ROOT}" >&2
+    echo "Try auto-detecting experiment root under ${SYNTHESIS_WORK_ROOT}" >&2
+    detected="$(
+      SYNTHESIS_WORK_ROOT="${SYNTHESIS_WORK_ROOT}" \
+      EXPERIMENTS="${EXPERIMENTS}" \
+      python - <<'PY'
+from pathlib import Path
+import os
+
+root = Path(os.environ["SYNTHESIS_WORK_ROOT"])
+experiments = os.environ["EXPERIMENTS"].split()
+best = None
+best_count = 0
+for child in sorted(root.iterdir()):
+    if not child.is_dir():
+        continue
+    count = sum(1 for exp in experiments if (child / exp).is_dir())
+    if count > best_count:
+        best = child
+        best_count = count
+if best is not None and best_count > 0:
+    print(best)
+PY
+    )"
+    if [[ -n "${detected}" && -d "${detected}" ]]; then
+      EXP_ROOT="${detected}"
+      echo "Auto-detected EXP_ROOT: ${EXP_ROOT}" >&2
+    else
+      echo "Error: EXP_ROOT not found and auto-detect found no matching experiment root." >&2
+      echo "Candidate directories under ${SYNTHESIS_WORK_ROOT}:" >&2
+      find "${SYNTHESIS_WORK_ROOT}" -maxdepth 2 -type d 2>/dev/null | sed -n '1,120p' >&2
+      exit 1
+    fi
+  else
+    echo "Error: EXP_ROOT not found: ${EXP_ROOT}" >&2
+    echo "Set EXP_ROOT to the parent directory that contains the five experiment folders." >&2
+    exit 1
+  fi
 fi
 
 if [[ "${OVERWRITE}" == "1" && -d "${OUT_ROOT}" ]]; then

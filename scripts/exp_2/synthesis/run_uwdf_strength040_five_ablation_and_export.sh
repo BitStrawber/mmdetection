@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run five UWDF SDXL ablation experiments at STRENGTH=0.40 in parallel,
-# then build multi-panel comparison grids and upload them.
+# Run five UWDF SDXL ablation experiments in parallel, then build multi-panel
+# comparison grids and upload them.
 #
 # Experiments:
-#   1. e1_image_only_empty_prompt_oldneg
-#      image latent only, empty positive prompt, old negative prompt
-#   2. e2_text_oldneg
+#   1. e1_text_oldneg_s040
 #      image latent + text, old negative prompt
-#   3. e3_text_ref_oldneg
+#   2. e2_text_ref_oldneg_s040
 #      image latent + text + IP-Adapter reference, old negative prompt
-#   4. e4_text_ref_depth_oldneg
+#   3. e3_text_ref_depth_oldneg_s040
 #      image latent + text + reference + ControlNet depth, old negative prompt
-#   5. e5_text_ref_depth_cleanneg
+#   4. e4_text_ref_depth_cleanneg_s040
 #      image latent + text + reference + ControlNet depth, cleaner negative prompt
+#   5. e5_text_ref_depth_cleanneg_s050
+#      same as #4, but STRENGTH=0.50
 #
 # Each experiment uses a different GPU from GPU_IDS and the same selected
 # source/reference/depth samples for a fair visual comparison.
@@ -42,11 +42,11 @@ HEIGHT="${HEIGHT:-1024}"
 WIDTH="${WIDTH:-1024}"
 STEPS="${STEPS:-20}"
 STRENGTH="${STRENGTH:-0.40}"
+HIGH_STRENGTH="${HIGH_STRENGTH:-0.50}"
 GUIDANCE_SCALE="${GUIDANCE_SCALE:-5.0}"
 IP_ADAPTER_SCALE="${IP_ADAPTER_SCALE:-0.75}"
 CONTROLNET_SCALE="${CONTROLNET_SCALE:-0.65}"
 PROMPT="${PROMPT:-a realistic underwater photograph}"
-EMPTY_PROMPT="${EMPTY_PROMPT:-}"
 OLD_NEGATIVE_PROMPT="${OLD_NEGATIVE_PROMPT:-cartoon, painting, illustration, deformed object, extra objects, fish, coral, diver, text, watermark, blurry, low quality, worst quality}"
 CLEAN_NEGATIVE_PROMPT="${CLEAN_NEGATIVE_PROMPT:-cartoon, painting, illustration, deformed object, duplicated object, text, watermark, low quality, worst quality}"
 
@@ -56,7 +56,7 @@ TILE_SIZE="${TILE_SIZE:-640}"
 GRID_COLUMNS="${GRID_COLUMNS:-3}"
 OVERWRITE="${OVERWRITE:-1}"
 
-EXPERIMENTS="e1_image_only_empty_prompt_oldneg e2_text_oldneg e3_text_ref_oldneg e4_text_ref_depth_oldneg e5_text_ref_depth_cleanneg"
+EXPERIMENTS="e1_text_oldneg_s040 e2_text_ref_oldneg_s040 e3_text_ref_depth_oldneg_s040 e4_text_ref_depth_cleanneg_s040 e5_text_ref_depth_cleanneg_s050"
 LOG_DIR="${WORK_ROOT}/logs"
 SELECTED_SOURCE_DIR="${SELECT_ROOT}/source/${SPLIT}"
 SELECTED_DEPTH_DIR="${SELECT_ROOT}/depth/${SPLIT}"
@@ -80,6 +80,7 @@ echo "GPU_IDS:          ${GPU_IDS}"
 echo "SIZE:             ${WIDTH}x${HEIGHT}"
 echo "STEPS:            ${STEPS}"
 echo "STRENGTH:         ${STRENGTH}"
+echo "HIGH_STRENGTH:    ${HIGH_STRENGTH}"
 echo "GUIDANCE_SCALE:   ${GUIDANCE_SCALE}"
 echo "IP_ADAPTER_SCALE: ${IP_ADAPTER_SCALE}"
 echo "CONTROLNET_SCALE: ${CONTROLNET_SCALE}"
@@ -253,6 +254,7 @@ run_img2img_exp() {
   local prompt="$3"
   local negative_prompt="$4"
   local ip_scale="$5"
+  local strength="$6"
   local out_dir="${EXP_ROOT}/${exp_name}"
   local log_file="${LOG_DIR}/${exp_name}.log"
 
@@ -265,7 +267,7 @@ run_img2img_exp() {
     OUT_DIR="${out_dir}" \
     HEIGHT="${HEIGHT}" \
     WIDTH="${WIDTH}" \
-    STRENGTH="${STRENGTH}" \
+    STRENGTH="${strength}" \
     GUIDANCE_SCALE="${GUIDANCE_SCALE}" \
     IP_ADAPTER_SCALE="${ip_scale}" \
     STEPS="${STEPS}" \
@@ -285,6 +287,7 @@ run_controlnet_exp() {
   local negative_prompt="$4"
   local ip_scale="$5"
   local control_scale="$6"
+  local strength="$7"
   local out_dir="${EXP_ROOT}/${exp_name}"
   local log_file="${LOG_DIR}/${exp_name}.log"
 
@@ -298,7 +301,7 @@ run_controlnet_exp() {
     OUT_DIR="${out_dir}" \
     HEIGHT="${HEIGHT}" \
     WIDTH="${WIDTH}" \
-    STRENGTH="${STRENGTH}" \
+    STRENGTH="${strength}" \
     GUIDANCE_SCALE="${GUIDANCE_SCALE}" \
     IP_ADAPTER_SCALE="${ip_scale}" \
     CONTROLNET_SCALE="${control_scale}" \
@@ -314,24 +317,24 @@ run_controlnet_exp() {
 
 echo
 echo "Step 2/3: Run five experiments in parallel"
-run_img2img_exp "e1_image_only_empty_prompt_oldneg" "${gpu_array[0]}" "${EMPTY_PROMPT}" "${OLD_NEGATIVE_PROMPT}" "0.0"
+run_img2img_exp "e1_text_oldneg_s040" "${gpu_array[0]}" "${PROMPT}" "${OLD_NEGATIVE_PROMPT}" "0.0" "${STRENGTH}"
 pid1=$!
-run_img2img_exp "e2_text_oldneg" "${gpu_array[1]}" "${PROMPT}" "${OLD_NEGATIVE_PROMPT}" "0.0"
+run_img2img_exp "e2_text_ref_oldneg_s040" "${gpu_array[1]}" "${PROMPT}" "${OLD_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}" "${STRENGTH}"
 pid2=$!
-run_img2img_exp "e3_text_ref_oldneg" "${gpu_array[2]}" "${PROMPT}" "${OLD_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}"
+run_controlnet_exp "e3_text_ref_depth_oldneg_s040" "${gpu_array[2]}" "${PROMPT}" "${OLD_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}" "${CONTROLNET_SCALE}" "${STRENGTH}"
 pid3=$!
-run_controlnet_exp "e4_text_ref_depth_oldneg" "${gpu_array[3]}" "${PROMPT}" "${OLD_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}" "${CONTROLNET_SCALE}"
+run_controlnet_exp "e4_text_ref_depth_cleanneg_s040" "${gpu_array[3]}" "${PROMPT}" "${CLEAN_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}" "${CONTROLNET_SCALE}" "${STRENGTH}"
 pid4=$!
-run_controlnet_exp "e5_text_ref_depth_cleanneg" "${gpu_array[4]}" "${PROMPT}" "${CLEAN_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}" "${CONTROLNET_SCALE}"
+run_controlnet_exp "e5_text_ref_depth_cleanneg_s050" "${gpu_array[4]}" "${PROMPT}" "${CLEAN_NEGATIVE_PROMPT}" "${IP_ADAPTER_SCALE}" "${CONTROLNET_SCALE}" "${HIGH_STRENGTH}"
 pid5=$!
 
 failed=0
 for pair in \
-  "e1_image_only_empty_prompt_oldneg:${pid1}" \
-  "e2_text_oldneg:${pid2}" \
-  "e3_text_ref_oldneg:${pid3}" \
-  "e4_text_ref_depth_oldneg:${pid4}" \
-  "e5_text_ref_depth_cleanneg:${pid5}"
+  "e1_text_oldneg_s040:${pid1}" \
+  "e2_text_ref_oldneg_s040:${pid2}" \
+  "e3_text_ref_depth_oldneg_s040:${pid3}" \
+  "e4_text_ref_depth_cleanneg_s040:${pid4}" \
+  "e5_text_ref_depth_cleanneg_s050:${pid5}"
 do
   name="${pair%%:*}"
   pid="${pair#*:}"

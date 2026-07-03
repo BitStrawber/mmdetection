@@ -32,6 +32,7 @@ EXPERIMENTS="${EXPERIMENTS:-a_text_image b_text_image_ref c_text_image_depth d_t
 OUT_ROOT="${OUT_ROOT:-/media/HDD1/XCX/exp_2/uwdf_depth_ablation_multigrid_export}"
 ARCHIVE_PATH="${ARCHIVE_PATH:-${OUT_ROOT}.tar.gz}"
 LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs}"
+DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/train}"
 MAX_IMAGES="${MAX_IMAGES:-20}"
 TILE_SIZE="${TILE_SIZE:-320}"
 UPLOAD="${UPLOAD:-1}"
@@ -48,6 +49,7 @@ echo "EXPERIMENTS:  ${EXPERIMENTS}"
 echo "OUT_ROOT:     ${OUT_ROOT}"
 echo "ARCHIVE_PATH: ${ARCHIVE_PATH}"
 echo "LOG_ROOT:     ${LOG_ROOT}"
+echo "DEPTH_ROOT:   ${DEPTH_ROOT}"
 echo "MAX_IMAGES:   ${MAX_IMAGES}"
 echo "TILE_SIZE:    ${TILE_SIZE}"
 echo "UPLOAD:       ${UPLOAD}"
@@ -108,6 +110,7 @@ echo "Build multi-panel images"
 EXP_ROOT="${EXP_ROOT}" \
 EXPERIMENTS="${EXPERIMENTS}" \
 OUT_ROOT="${OUT_ROOT}" \
+DEPTH_ROOT="${DEPTH_ROOT}" \
 MAX_IMAGES="${MAX_IMAGES}" \
 TILE_SIZE="${TILE_SIZE}" \
 python - <<'PY'
@@ -121,6 +124,7 @@ import shutil
 exp_root = Path(os.environ["EXP_ROOT"])
 experiments = os.environ["EXPERIMENTS"].split()
 out_root = Path(os.environ["OUT_ROOT"])
+depth_root = Path(os.environ["DEPTH_ROOT"])
 max_images = int(os.environ["MAX_IMAGES"])
 tile_size = int(os.environ["TILE_SIZE"])
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -203,6 +207,37 @@ def normalize_record(record, exp_dir):
         "reference": str(reference) if reference else "",
         "generated": str(generated) if generated else "",
     }
+
+def infer_depth_from_source(source_path, relative=""):
+    if not depth_root.exists():
+        return ""
+    candidates = []
+    if relative:
+        candidates.append((depth_root / relative).with_suffix(".png"))
+    if source_path:
+        p = Path(source_path)
+        # Common source layouts:
+        #   .../source/train/<synset>/<name>.JPEG
+        #   .../selected/source/train/<synset>/<name>.JPEG
+        #   .../<synset>/<name>.JPEG
+        if p.parent.name and p.parent.name.startswith("n"):
+            candidates.append(depth_root / p.parent.name / f"{p.stem}.png")
+        candidates.append(depth_root / f"{p.stem}.png")
+        parts = p.parts
+        for marker in ("train", "val"):
+            if marker in parts:
+                i = parts.index(marker)
+                if i + 2 < len(parts):
+                    rel = Path(*parts[i + 1:])
+                    candidates.append((depth_root / rel).with_suffix(".png"))
+    seen = set()
+    for c in candidates:
+        if c in seen:
+            continue
+        seen.add(c)
+        if c.exists():
+            return str(c)
+    return ""
 
 def records_from_jsonl(path, exp_dir):
     records = []
@@ -306,6 +341,8 @@ for idx, base_rec in enumerate(base_records):
             row["reference"] = row["reference"] or rec.get("reference", "")
         else:
             row["experiments"][exp_data["exp"]] = ""
+    if not row["depth"]:
+        row["depth"] = infer_depth_from_source(row["source"], row["relative"])
     rows.append(row)
 
 label_h = 34
@@ -328,6 +365,7 @@ for row in rows:
 summary = {
     "exp_root": str(exp_root),
     "out_root": str(out_root),
+    "depth_root": str(depth_root),
     "experiments": [
         {
             "name": x["exp"],

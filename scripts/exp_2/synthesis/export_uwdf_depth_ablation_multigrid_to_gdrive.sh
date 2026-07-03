@@ -34,7 +34,8 @@ ARCHIVE_PATH="${ARCHIVE_PATH:-${OUT_ROOT}.tar.gz}"
 LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs}"
 DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/train}"
 MAX_IMAGES="${MAX_IMAGES:-20}"
-TILE_SIZE="${TILE_SIZE:-320}"
+TILE_SIZE="${TILE_SIZE:-512}"
+GRID_COLUMNS="${GRID_COLUMNS:-3}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 OVERWRITE="${OVERWRITE:-1}"
@@ -52,6 +53,7 @@ echo "LOG_ROOT:     ${LOG_ROOT}"
 echo "DEPTH_ROOT:   ${DEPTH_ROOT}"
 echo "MAX_IMAGES:   ${MAX_IMAGES}"
 echo "TILE_SIZE:    ${TILE_SIZE}"
+echo "GRID_COLUMNS: ${GRID_COLUMNS}"
 echo "UPLOAD:       ${UPLOAD}"
 echo "RCLONE_DEST:  ${RCLONE_DEST}"
 echo "OVERWRITE:    ${OVERWRITE}"
@@ -113,6 +115,7 @@ OUT_ROOT="${OUT_ROOT}" \
 DEPTH_ROOT="${DEPTH_ROOT}" \
 MAX_IMAGES="${MAX_IMAGES}" \
 TILE_SIZE="${TILE_SIZE}" \
+GRID_COLUMNS="${GRID_COLUMNS}" \
 python - <<'PY'
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -127,6 +130,7 @@ out_root = Path(os.environ["OUT_ROOT"])
 depth_root = Path(os.environ["DEPTH_ROOT"])
 max_images = int(os.environ["MAX_IMAGES"])
 tile_size = int(os.environ["TILE_SIZE"])
+grid_columns = max(1, int(os.environ["GRID_COLUMNS"]))
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 panel_dir = out_root / "multi_panel"
@@ -355,9 +359,13 @@ for row in rows:
     ]
     for exp in experiments:
         tiles.append(tile_image(row["experiments"].get(exp, ""), exp, tile_size, label_h))
-    grid = Image.new("RGB", (tile_size * len(tiles), tile_size + label_h), (255, 255, 255))
+    ncols = min(grid_columns, len(tiles))
+    nrows = (len(tiles) + ncols - 1) // ncols
+    grid = Image.new("RGB", (tile_size * ncols, (tile_size + label_h) * nrows), (255, 255, 255))
     for i, tile in enumerate(tiles):
-        grid.paste(tile, (i * tile_size, 0))
+        x = (i % ncols) * tile_size
+        y = (i // ncols) * (tile_size + label_h)
+        grid.paste(tile, (x, y))
     out_path = panel_dir / f"{row['index']:03d}_{row['key'] or 'sample'}.jpg"
     grid.save(out_path, quality=92)
     row["panel"] = str(out_path)
@@ -377,6 +385,8 @@ summary = {
     ],
     "base_experiment": base["exp"],
     "max_images": max_images,
+    "tile_size": tile_size,
+    "grid_columns": grid_columns,
     "panel_count": len(rows),
     "rows": rows,
 }

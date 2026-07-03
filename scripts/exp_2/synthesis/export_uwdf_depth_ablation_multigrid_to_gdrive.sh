@@ -39,6 +39,7 @@ GRID_COLUMNS="${GRID_COLUMNS:-4}"
 TILE_MODE="${TILE_MODE:-cover}"
 PANEL_FORMAT="${PANEL_FORMAT:-png}"
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
+REF_PANEL_LABEL="${REF_PANEL_LABEL:-reference}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 OVERWRITE="${OVERWRITE:-1}"
@@ -60,6 +61,7 @@ echo "GRID_COLUMNS: ${GRID_COLUMNS}"
 echo "TILE_MODE:    ${TILE_MODE}"
 echo "PANEL_FORMAT: ${PANEL_FORMAT}"
 echo "PNG_LEVEL:    ${PNG_COMPRESS_LEVEL}"
+echo "REF_LABEL:    ${REF_PANEL_LABEL}"
 echo "UPLOAD:       ${UPLOAD}"
 echo "RCLONE_DEST:  ${RCLONE_DEST}"
 echo "OVERWRITE:    ${OVERWRITE}"
@@ -125,6 +127,7 @@ GRID_COLUMNS="${GRID_COLUMNS}" \
 TILE_MODE="${TILE_MODE}" \
 PANEL_FORMAT="${PANEL_FORMAT}" \
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL}" \
+REF_PANEL_LABEL="${REF_PANEL_LABEL}" \
 python - <<'PY'
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -143,6 +146,7 @@ grid_columns = max(1, int(os.environ["GRID_COLUMNS"]))
 tile_mode = os.environ["TILE_MODE"]
 panel_format = os.environ["PANEL_FORMAT"].lower().lstrip(".")
 png_compress_level = int(os.environ["PNG_COMPRESS_LEVEL"])
+ref_panel_label = os.environ["REF_PANEL_LABEL"]
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 if tile_mode not in {"contain", "cover"}:
     raise SystemExit(f"TILE_MODE must be contain or cover, got: {tile_mode}")
@@ -212,7 +216,20 @@ def normalize_record(record, exp_dir):
 
     source = first_existing(["source", "source_path", "source_image", "input", "image", "init_image"])
     depth = first_existing(["depth", "depth_path", "depth_image", "control_image"])
-    reference = first_existing(["reference", "reference_path", "reference_image", "ip_adapter_image"])
+    reference = first_existing([
+        "selected_reference_blur",
+        "reference_blur",
+        "blur_reference",
+        "blurred_reference",
+        "selected_blur_reference",
+        "ip_adapter_blur_image",
+        "reference",
+        "reference_path",
+        "reference_image",
+        "ip_adapter_image",
+        "selected_reference",
+        "selected_reference_raw",
+    ])
     generated = first_existing(["generated", "generated_path", "output", "output_path", "save_path"])
     rel = record.get("relative") or record.get("source_relative") or record.get("stem") or None
     key = None
@@ -369,12 +386,12 @@ for idx, base_rec in enumerate(base_records):
     rows.append(row)
 
 label_h = 34
-labels = ["source", "depth", "reference"] + experiments
+labels = ["source", "depth", ref_panel_label] + experiments
 for row in rows:
     tiles = [
         tile_image(row["source"], "source", tile_size, label_h, tile_mode),
         tile_image(row["depth"], "depth", tile_size, label_h, tile_mode),
-        tile_image(row["reference"], "reference", tile_size, label_h, tile_mode),
+        tile_image(row["reference"], ref_panel_label, tile_size, label_h, tile_mode),
     ]
     for exp in experiments:
         tiles.append(tile_image(row["experiments"].get(exp, ""), exp, tile_size, label_h, tile_mode))
@@ -413,6 +430,7 @@ summary = {
     "tile_mode": tile_mode,
     "panel_format": panel_format,
     "png_compress_level": png_compress_level,
+    "ref_panel_label": ref_panel_label,
     "panel_count": len(rows),
     "rows": rows,
 }

@@ -9,6 +9,9 @@ EXP_NAME="${EXP_NAME:-${DATA_NAME}}"
 SPLIT="${SPLIT:-train}"
 GPU_IDS="${GPU_IDS:-2}"
 NUM_TEST="${NUM_TEST:-100}"
+EPOCH="${EPOCH:-latest}"
+CHECKPOINTS_DIR="${CHECKPOINTS_DIR:-./checkpoints}"
+EVAL_MODE="${EVAL_MODE:-1}"
 
 LOAD_SIZE="${LOAD_SIZE:-256}"
 CROP_SIZE="${CROP_SIZE:-256}"
@@ -26,6 +29,9 @@ echo "EXP_NAME:     ${EXP_NAME}"
 echo "SPLIT:        ${SPLIT}"
 echo "GPU_IDS:      ${GPU_IDS}"
 echo "NUM_TEST:     ${NUM_TEST}"
+echo "EPOCH:        ${EPOCH}"
+echo "CHECKPOINTS:  ${CHECKPOINTS_DIR}"
+echo "EVAL_MODE:    ${EVAL_MODE}"
 echo "RESULTS_ROOT: ${RESULTS_ROOT}"
 echo "RESTORE_DIR:  ${RESTORE_DIR}"
 echo "MANIFEST:     ${MANIFEST}"
@@ -46,11 +52,18 @@ fi
 
 mkdir -p "${SYN_ROOT}/cut/logs" "${RESULTS_ROOT}" "${RESTORE_DIR}"
 
+EXTRA_ARGS=()
+if [[ "${EVAL_MODE}" == "1" ]]; then
+  EXTRA_ARGS+=(--eval)
+fi
+
 (
   cd "${CUT_DIR}"
   python test.py \
     --dataroot "${DATA_ROOT}" \
     --name "${EXP_NAME}" \
+    --checkpoints_dir "${CHECKPOINTS_DIR}" \
+    --epoch "${EPOCH}" \
     --CUT_mode CUT \
     --model cut \
     --dataset_mode unaligned \
@@ -61,7 +74,8 @@ mkdir -p "${SYN_ROOT}/cut/logs" "${RESULTS_ROOT}" "${RESTORE_DIR}"
     --load_size "${LOAD_SIZE}" \
     --crop_size "${CROP_SIZE}" \
     --preprocess "${PREPROCESS}" \
-    --results_dir "${RESULTS_ROOT}"
+    --results_dir "${RESULTS_ROOT}" \
+    "${EXTRA_ARGS[@]}"
 ) 2>&1 | tee "${SYN_ROOT}/cut/logs/${EXP_NAME}_${SPLIT}_generate.log"
 
 python tools/restore_cut_fake_b.py \

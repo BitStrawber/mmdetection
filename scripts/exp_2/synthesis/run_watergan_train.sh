@@ -25,6 +25,7 @@ GPU="${GPU:-2}"
 EPOCH="${EPOCH:-2}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
 TRAIN_SIZE="${TRAIN_SIZE:-1000}"
+AUTO_PATCH="${AUTO_PATCH:-1}"
 SAVE_EPOCH="${SAVE_EPOCH:-1}"
 AIR_WIDTH="${AIR_WIDTH:-640}"
 AIR_HEIGHT="${AIR_HEIGHT:-480}"
@@ -51,7 +52,7 @@ check_path() {
 
 count_files() {
   local path="$1"
-  find "${path}" -maxdepth 1 -type f 2>/dev/null | wc -l
+  find "${path}" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' '
 }
 
 echo "========================================="
@@ -63,7 +64,8 @@ echo "DATA_NAME:      ${DATA_NAME}"
 echo "GPU:            ${GPU}"
 echo "EPOCH:          ${EPOCH}"
 echo "BATCH_SIZE:     ${BATCH_SIZE}"
-echo "TRAIN_SIZE:     ${TRAIN_SIZE}"
+echo "TRAIN_SIZE:     ${TRAIN_SIZE} (0 means auto from prepared data)"
+echo "AUTO_PATCH:     ${AUTO_PATCH}"
 echo "AIR_SIZE:       ${AIR_WIDTH}x${AIR_HEIGHT}"
 echo "WATER_SIZE:     ${WATER_WIDTH}x${WATER_HEIGHT}"
 echo "OUTPUT_SIZE:    ${OUTPUT_WIDTH}x${OUTPUT_HEIGHT}"
@@ -78,10 +80,37 @@ check_path "${DATA_ROOT}/air_images" "prepared air_images"
 check_path "${DATA_ROOT}/air_depth" "prepared air_depth"
 check_path "${DATA_ROOT}/water_images" "prepared water_images"
 
+if [[ "${AUTO_PATCH}" == "1" ]]; then
+  WATERGAN_DIR="${WATERGAN_DIR}" bash scripts/exp_2/synthesis/patch_watergan_tf15_compat.sh
+  echo
+fi
+
+air_count="$(count_files "${DATA_ROOT}/air_images")"
+depth_count="$(count_files "${DATA_ROOT}/air_depth")"
+water_count="$(count_files "${DATA_ROOT}/water_images")"
+
+effective_train_size="${TRAIN_SIZE}"
+if [[ "${TRAIN_SIZE}" == "0" ]]; then
+  effective_train_size="${air_count}"
+  if (( depth_count < effective_train_size )); then
+    effective_train_size="${depth_count}"
+  fi
+  if (( water_count < effective_train_size )); then
+    effective_train_size="${water_count}"
+  fi
+fi
+
+if (( effective_train_size < BATCH_SIZE )); then
+  echo "Error: effective_train_size (${effective_train_size}) is smaller than BATCH_SIZE (${BATCH_SIZE})." >&2
+  echo "Check prepared data counts or lower BATCH_SIZE." >&2
+  exit 1
+fi
+
 echo "Prepared dataset counts:"
-echo "  air_images:   $(count_files "${DATA_ROOT}/air_images")"
-echo "  air_depth:    $(count_files "${DATA_ROOT}/air_depth")"
-echo "  water_images: $(count_files "${DATA_ROOT}/water_images")"
+echo "  air_images:   ${air_count}"
+echo "  air_depth:    ${depth_count}"
+echo "  water_images: ${water_count}"
+echo "  effective_train_size: ${effective_train_size}"
 echo
 
 mkdir -p "${WATERGAN_DIR}/data" "${LOG_DIR}"
@@ -104,7 +133,7 @@ echo
     --air_dataset "${DATA_NAME}_air_images" \
     --depth_dataset "${DATA_NAME}_air_depth" \
     --epoch "${EPOCH}" \
-    --train_size "${TRAIN_SIZE}" \
+    --train_size "${effective_train_size}" \
     --batch_size "${BATCH_SIZE}" \
     --learning_rate "${LEARNING_RATE}" \
     --beta1 "${BETA1}" \

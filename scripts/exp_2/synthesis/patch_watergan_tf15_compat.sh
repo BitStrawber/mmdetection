@@ -38,6 +38,8 @@ files = [
 ]
 
 replacements = [
+    ('flags.DEFINE_integer("train_size", np.inf,', 'flags.DEFINE_float("train_size", np.inf,'),
+    ("flags.DEFINE_integer('train_size', np.inf,", "flags.DEFINE_float('train_size', np.inf,"),
     ("tf.pack(", "tf.stack("),
     ("tf.unpack(", "tf.unstack("),
     ("tf.mul(", "tf.multiply("),

@@ -7,6 +7,7 @@ DATA_NAME="${DATA_NAME:-imagenet_ruod_cut_smoke}"
 DATA_ROOT="${DATA_ROOT:-${SYN_ROOT}/cut/datasets/${DATA_NAME}}"
 EXP_NAME="${EXP_NAME:-${DATA_NAME}}"
 GPU_IDS="${GPU_IDS:-2}"
+CHECKPOINTS_DIR="${CHECKPOINTS_DIR:-./checkpoints}"
 
 BATCH_SIZE="${BATCH_SIZE:-1}"
 LOAD_SIZE="${LOAD_SIZE:-286}"
@@ -16,6 +17,7 @@ N_EPOCHS_DECAY="${N_EPOCHS_DECAY:-0}"
 NUM_THREADS="${NUM_THREADS:-4}"
 PRINT_FREQ="${PRINT_FREQ:-50}"
 SAVE_EPOCH_FREQ="${SAVE_EPOCH_FREQ:-1}"
+NO_HTML="${NO_HTML:-1}"
 
 echo "========================================="
 echo "Train CUT ImageNet -> RUOD"
@@ -24,6 +26,7 @@ echo "CUT_DIR:        ${CUT_DIR}"
 echo "DATA_ROOT:      ${DATA_ROOT}"
 echo "EXP_NAME:       ${EXP_NAME}"
 echo "GPU_IDS:        ${GPU_IDS}"
+echo "CHECKPOINTS:    ${CHECKPOINTS_DIR}"
 echo "BATCH_SIZE:     ${BATCH_SIZE}"
 echo "LOAD/CROP:      ${LOAD_SIZE}/${CROP_SIZE}"
 echo "EPOCHS:         ${N_EPOCHS}+${N_EPOCHS_DECAY}"
@@ -48,11 +51,17 @@ echo "  testB:  $(find "${DATA_ROOT}/testB" -maxdepth 1 \( -type f -o -type l \)
 echo "Training log: ${SYN_ROOT}/cut/logs/${EXP_NAME}_train.log"
 echo
 
+EXTRA_ARGS=()
+if [[ "${NO_HTML}" == "1" ]]; then
+  EXTRA_ARGS+=(--no_html)
+fi
+
 (
   cd "${CUT_DIR}"
   python train.py \
     --dataroot "${DATA_ROOT}" \
     --name "${EXP_NAME}" \
+    --checkpoints_dir "${CHECKPOINTS_DIR}" \
     --CUT_mode CUT \
     --model cut \
     --dataset_mode unaligned \
@@ -66,8 +75,9 @@ echo
     --display_id -1 \
     --print_freq "${PRINT_FREQ}" \
     --save_epoch_freq "${SAVE_EPOCH_FREQ}" \
-    --num_threads "${NUM_THREADS}"
+    --num_threads "${NUM_THREADS}" \
+    "${EXTRA_ARGS[@]}"
 ) 2>&1 | tee "${SYN_ROOT}/cut/logs/${EXP_NAME}_train.log"
 
 echo
-echo "Checkpoint dir: ${CUT_DIR}/checkpoints/${EXP_NAME}"
+echo "Checkpoint dir: ${CUT_DIR}/${CHECKPOINTS_DIR}/${EXP_NAME}"

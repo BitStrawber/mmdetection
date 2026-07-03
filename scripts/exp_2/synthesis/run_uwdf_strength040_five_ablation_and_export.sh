@@ -52,8 +52,10 @@ CLEAN_NEGATIVE_PROMPT="${CLEAN_NEGATIVE_PROMPT:-cartoon, painting, illustration,
 
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 UPLOAD="${UPLOAD:-1}"
-TILE_SIZE="${TILE_SIZE:-640}"
-GRID_COLUMNS="${GRID_COLUMNS:-3}"
+TILE_SIZE="${TILE_SIZE:-768}"
+GRID_COLUMNS="${GRID_COLUMNS:-2}"
+RESIZE_MODE="${RESIZE_MODE:-pad}"
+RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE:-1}"
 OVERWRITE="${OVERWRITE:-1}"
 
 EXPERIMENTS="e1_text_oldneg_s040 e2_text_ref_oldneg_s040 e3_text_ref_depth_oldneg_s040 e4_text_ref_depth_cleanneg_s040 e5_text_ref_depth_cleanneg_s050"
@@ -84,6 +86,8 @@ echo "HIGH_STRENGTH:    ${HIGH_STRENGTH}"
 echo "GUIDANCE_SCALE:   ${GUIDANCE_SCALE}"
 echo "IP_ADAPTER_SCALE: ${IP_ADAPTER_SCALE}"
 echo "CONTROLNET_SCALE: ${CONTROLNET_SCALE}"
+echo "RESIZE_MODE:      ${RESIZE_MODE}"
+echo "RESTORE_SIZE:     ${RESTORE_SOURCE_SIZE}"
 echo "PROMPT:           ${PROMPT}"
 echo "OLD_NEG_PROMPT:   ${OLD_NEGATIVE_PROMPT}"
 echo "CLEAN_NEG_PROMPT: ${CLEAN_NEGATIVE_PROMPT}"
@@ -270,6 +274,8 @@ run_img2img_exp() {
     STRENGTH="${strength}" \
     GUIDANCE_SCALE="${GUIDANCE_SCALE}" \
     IP_ADAPTER_SCALE="${ip_scale}" \
+    RESIZE_MODE="${RESIZE_MODE}" \
+    RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE}" \
     STEPS="${STEPS}" \
     LIMIT="${NUM}" \
     SEED="${SEED}" \
@@ -305,6 +311,8 @@ run_controlnet_exp() {
     GUIDANCE_SCALE="${GUIDANCE_SCALE}" \
     IP_ADAPTER_SCALE="${ip_scale}" \
     CONTROLNET_SCALE="${control_scale}" \
+    RESIZE_MODE="${RESIZE_MODE}" \
+    RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE}" \
     STEPS="${STEPS}" \
     LIMIT="${NUM}" \
     SEED="${SEED}" \

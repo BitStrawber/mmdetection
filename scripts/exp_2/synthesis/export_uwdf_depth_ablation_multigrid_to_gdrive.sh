@@ -34,8 +34,8 @@ ARCHIVE_PATH="${ARCHIVE_PATH:-${OUT_ROOT}.tar.gz}"
 LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs}"
 DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/train}"
 MAX_IMAGES="${MAX_IMAGES:-20}"
-TILE_SIZE="${TILE_SIZE:-512}"
-GRID_COLUMNS="${GRID_COLUMNS:-3}"
+TILE_SIZE="${TILE_SIZE:-768}"
+GRID_COLUMNS="${GRID_COLUMNS:-2}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 OVERWRITE="${OVERWRITE:-1}"
@@ -367,7 +367,7 @@ for row in rows:
         y = (i // ncols) * (tile_size + label_h)
         grid.paste(tile, (x, y))
     out_path = panel_dir / f"{row['index']:03d}_{row['key'] or 'sample'}.jpg"
-    grid.save(out_path, quality=92)
+    grid.save(out_path, quality=95)
     row["panel"] = str(out_path)
 
 summary = {

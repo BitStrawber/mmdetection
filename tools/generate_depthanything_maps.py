@@ -15,7 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
-from PIL import Image
+from PIL import Image, ImageOps
 
 try:
     from tqdm import tqdm
@@ -130,12 +130,13 @@ def normalize_to_uint8(depth, invert=False):
 
 def load_pil_rgb(path):
     with Image.open(path) as image:
-        image = image.convert('RGB')
+        image = ImageOps.exif_transpose(image).convert('RGB')
         return image.copy()
 
 
 def image_size(path):
     with Image.open(path) as image:
+        image = ImageOps.exif_transpose(image)
         return image.size
 
 

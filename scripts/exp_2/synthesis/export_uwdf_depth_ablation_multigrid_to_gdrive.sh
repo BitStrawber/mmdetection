@@ -34,8 +34,11 @@ ARCHIVE_PATH="${ARCHIVE_PATH:-${OUT_ROOT}.tar.gz}"
 LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs}"
 DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/train}"
 MAX_IMAGES="${MAX_IMAGES:-20}"
-TILE_SIZE="${TILE_SIZE:-768}"
+TILE_SIZE="${TILE_SIZE:-1024}"
 GRID_COLUMNS="${GRID_COLUMNS:-2}"
+TILE_MODE="${TILE_MODE:-cover}"
+PANEL_FORMAT="${PANEL_FORMAT:-png}"
+PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 OVERWRITE="${OVERWRITE:-1}"
@@ -54,6 +57,9 @@ echo "DEPTH_ROOT:   ${DEPTH_ROOT}"
 echo "MAX_IMAGES:   ${MAX_IMAGES}"
 echo "TILE_SIZE:    ${TILE_SIZE}"
 echo "GRID_COLUMNS: ${GRID_COLUMNS}"
+echo "TILE_MODE:    ${TILE_MODE}"
+echo "PANEL_FORMAT: ${PANEL_FORMAT}"
+echo "PNG_LEVEL:    ${PNG_COMPRESS_LEVEL}"
 echo "UPLOAD:       ${UPLOAD}"
 echo "RCLONE_DEST:  ${RCLONE_DEST}"
 echo "OVERWRITE:    ${OVERWRITE}"
@@ -116,6 +122,9 @@ DEPTH_ROOT="${DEPTH_ROOT}" \
 MAX_IMAGES="${MAX_IMAGES}" \
 TILE_SIZE="${TILE_SIZE}" \
 GRID_COLUMNS="${GRID_COLUMNS}" \
+TILE_MODE="${TILE_MODE}" \
+PANEL_FORMAT="${PANEL_FORMAT}" \
+PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL}" \
 python - <<'PY'
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -131,7 +140,14 @@ depth_root = Path(os.environ["DEPTH_ROOT"])
 max_images = int(os.environ["MAX_IMAGES"])
 tile_size = int(os.environ["TILE_SIZE"])
 grid_columns = max(1, int(os.environ["GRID_COLUMNS"]))
+tile_mode = os.environ["TILE_MODE"]
+panel_format = os.environ["PANEL_FORMAT"].lower().lstrip(".")
+png_compress_level = int(os.environ["PNG_COMPRESS_LEVEL"])
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+if tile_mode not in {"contain", "cover"}:
+    raise SystemExit(f"TILE_MODE must be contain or cover, got: {tile_mode}")
+if panel_format not in {"png", "jpg", "jpeg"}:
+    raise SystemExit(f"PANEL_FORMAT must be png, jpg, or jpeg, got: {panel_format}")
 
 panel_dir = out_root / "multi_panel"
 panel_dir.mkdir(parents=True, exist_ok=True)
@@ -143,7 +159,7 @@ def safe_open(path):
     except Exception:
         return None
 
-def tile_image(path, label, tile=320, label_h=34):
+def tile_image(path, label, tile=320, label_h=34, mode="cover"):
     canvas = Image.new("RGB", (tile, tile + label_h), (245, 245, 245))
     draw = ImageDraw.Draw(canvas)
     draw.rectangle([0, 0, tile - 1, label_h - 1], fill=(32, 32, 32))
@@ -151,7 +167,10 @@ def tile_image(path, label, tile=320, label_h=34):
     if path and Path(path).exists():
         im = safe_open(path)
         if im is not None:
-            im.thumbnail((tile, tile), Image.Resampling.LANCZOS)
+            if mode == "cover":
+                im = ImageOps.fit(im, (tile, tile), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+            else:
+                im.thumbnail((tile, tile), Image.Resampling.LANCZOS)
             x = (tile - im.width) // 2
             y = label_h + (tile - im.height) // 2
             canvas.paste(im, (x, y))
@@ -353,12 +372,12 @@ label_h = 34
 labels = ["source", "depth", "reference"] + experiments
 for row in rows:
     tiles = [
-        tile_image(row["source"], "source", tile_size, label_h),
-        tile_image(row["depth"], "depth", tile_size, label_h),
-        tile_image(row["reference"], "reference", tile_size, label_h),
+        tile_image(row["source"], "source", tile_size, label_h, tile_mode),
+        tile_image(row["depth"], "depth", tile_size, label_h, tile_mode),
+        tile_image(row["reference"], "reference", tile_size, label_h, tile_mode),
     ]
     for exp in experiments:
-        tiles.append(tile_image(row["experiments"].get(exp, ""), exp, tile_size, label_h))
+        tiles.append(tile_image(row["experiments"].get(exp, ""), exp, tile_size, label_h, tile_mode))
     ncols = min(grid_columns, len(tiles))
     nrows = (len(tiles) + ncols - 1) // ncols
     grid = Image.new("RGB", (tile_size * ncols, (tile_size + label_h) * nrows), (255, 255, 255))
@@ -366,8 +385,12 @@ for row in rows:
         x = (i % ncols) * tile_size
         y = (i // ncols) * (tile_size + label_h)
         grid.paste(tile, (x, y))
-    out_path = panel_dir / f"{row['index']:03d}_{row['key'] or 'sample'}.jpg"
-    grid.save(out_path, quality=95)
+    suffix = "jpg" if panel_format == "jpeg" else panel_format
+    out_path = panel_dir / f"{row['index']:03d}_{row['key'] or 'sample'}.{suffix}"
+    if panel_format in {"jpg", "jpeg"}:
+        grid.save(out_path, quality=100, subsampling=0)
+    else:
+        grid.save(out_path, compress_level=png_compress_level)
     row["panel"] = str(out_path)
 
 summary = {
@@ -387,6 +410,9 @@ summary = {
     "max_images": max_images,
     "tile_size": tile_size,
     "grid_columns": grid_columns,
+    "tile_mode": tile_mode,
+    "panel_format": panel_format,
+    "png_compress_level": png_compress_level,
     "panel_count": len(rows),
     "rows": rows,
 }

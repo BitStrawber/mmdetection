@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 cd "${REPO_ROOT}"
 
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 WATERGAN_DIR="${WATERGAN_DIR:-/home/fcp/xcx/exp_2/syn/WaterGAN}"
 DATA_NAME="${DATA_NAME:-imagenet_ruod_watergan_train_smoke_ssd}"
@@ -46,6 +47,7 @@ echo "WaterGAN tiny usability check"
 echo "========================================="
 echo "WATERGAN_DIR:       ${WATERGAN_DIR}"
 echo "DATA_ROOT:          ${DATA_ROOT}"
+echo "SOURCE_ROOT:        ${SOURCE_ROOT}"
 echo "DATA_NAME:          ${DATA_NAME}"
 echo "GPU:                ${GPU}"
 echo "EPOCH:              ${EPOCH}"
@@ -90,6 +92,7 @@ if [[ ! -d "${DATA_ROOT}/air_images" || ! -d "${DATA_ROOT}/air_depth" || ! -d "$
   SMOKE_TRAIN_LIMIT="${PREPARE_AIR_LIMIT}" \
   SMOKE_VAL_LIMIT=30 \
   SYN_ROOT="${SYN_ROOT}" \
+  SOURCE_ROOT="${SOURCE_ROOT}" \
   WORK_ROOT="${WORK_ROOT}" \
   bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh \
     2>&1 | tee "${LOG_DIR}/prepare.log"

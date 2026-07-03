@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 cd "${REPO_ROOT}"
 
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 RUOD_REF_SRC="${RUOD_REF_SRC:-/media/HDD0/XCX/exp_2/RUOD/coco/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/cut}"
@@ -24,6 +25,7 @@ echo "========================================="
 echo "CUT full train + generate"
 echo "========================================="
 echo "SYN_ROOT:         ${SYN_ROOT}"
+echo "SOURCE_ROOT:      ${SOURCE_ROOT}"
 echo "WORK_ROOT:        ${WORK_ROOT}"
 echo "RUOD_REF_SRC:     ${RUOD_REF_SRC}"
 echo "GPU:              ${GPU}"
@@ -42,6 +44,7 @@ SPLITS="train val" \
 GPU="${GPU}" \
 FULL_LIMIT=0 \
 SYN_ROOT="${SYN_ROOT}" \
+SOURCE_ROOT="${SOURCE_ROOT}" \
 WORK_ROOT="${WORK_ROOT}" \
 RUOD_REF_SRC="${RUOD_REF_SRC}" \
 COPY_MODE="${COPY_MODE}" \

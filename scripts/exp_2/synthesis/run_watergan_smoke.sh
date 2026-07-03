@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 cd "${REPO_ROOT}"
 
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_smoke/watergan}"
 GPU="${GPU:-2}"
@@ -23,6 +24,7 @@ echo "========================================="
 echo "WaterGAN smoke prepare + train"
 echo "========================================="
 echo "SYN_ROOT:          ${SYN_ROOT}"
+echo "SOURCE_ROOT:       ${SOURCE_ROOT}"
 echo "WORK_ROOT:         ${WORK_ROOT}"
 echo "GPU:               ${GPU}"
 echo "SMOKE_TRAIN_LIMIT: ${SMOKE_TRAIN_LIMIT}"
@@ -40,6 +42,7 @@ GPU="${GPU}" \
 SMOKE_TRAIN_LIMIT="${SMOKE_TRAIN_LIMIT}" \
 SMOKE_VAL_LIMIT="${SMOKE_VAL_LIMIT}" \
 SYN_ROOT="${SYN_ROOT}" \
+SOURCE_ROOT="${SOURCE_ROOT}" \
 WORK_ROOT="${WORK_ROOT}" \
 bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh \
   2>&1 | tee "${LOG_DIR}/prepare.log"

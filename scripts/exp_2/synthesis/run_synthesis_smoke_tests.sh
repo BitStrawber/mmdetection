@@ -24,6 +24,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 cd "${REPO_ROOT}"
 
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_smoke}"
 MODELS="${MODELS:-uwnr syreanet_synthesis cut watergan stable_diffusion_img2img}"
@@ -57,6 +58,7 @@ run_prepare() {
   SMOKE_TRAIN_LIMIT="${SMOKE_TRAIN_LIMIT}" \
   SMOKE_VAL_LIMIT="${SMOKE_VAL_LIMIT}" \
   SYN_ROOT="${SYN_ROOT}" \
+  SOURCE_ROOT="${SOURCE_ROOT}" \
   WORK_ROOT="${WORK_ROOT}" \
   bash scripts/exp_2/synthesis/prepare_synthesis_ssd_inputs.sh
 }

@@ -155,29 +155,66 @@ def collect_images(root: Path) -> dict[str, Path]:
     return images
 
 
-def find_selected_source(root: Path) -> dict[str, Path]:
-    images = {}
-    for subdir in ["selected/source/train", "selected/source", "source/train", "source"]:
-        path = root / subdir
-        if path.exists():
-            images.update(collect_images(path))
-    return images
+def read_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
 
 
-def find_selected_ref(root: Path) -> dict[str, Path]:
-    images = {}
-    for subdir in [
-        "selected/reference_blur/qingxi",
-        "selected/reference_blur",
-        "selected/reference/qingxi",
-        "selected/reference",
-        "reference_blur/qingxi",
-        "reference/qingxi",
-    ]:
-        path = root / subdir
-        if path.exists():
-            images.update(collect_images(path))
-    return images
+def normalize_key(source_path: Path, source_root: Path | None) -> str:
+    if source_root is not None:
+        try:
+            return source_path.resolve().relative_to(source_root.resolve()).as_posix()
+        except Exception:
+            pass
+    if source_path.parent.name:
+        return f"{source_path.parent.name}/{source_path.name}"
+    return source_path.name
+
+
+def load_manifest_records(exp_root: Path) -> dict[str, dict]:
+    manifest_path = exp_root / "manifest.jsonl"
+    if not manifest_path.exists():
+        raise RuntimeError(f"manifest.jsonl not found under {exp_root}")
+
+    summary = read_json(exp_root / "summary.json")
+    source_root = Path(summary["source_root"]) if summary.get("source_root") else None
+    records: dict[str, dict] = {}
+
+    with manifest_path.open("r", encoding="utf-8") as handle:
+        for line_no, line in enumerate(handle, start=1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"Invalid JSON in {manifest_path}:{line_no}: {exc}") from exc
+
+            source = Path(record.get("source", ""))
+            output = Path(record.get("output", ""))
+            reference = Path(record.get("reference", ""))
+            if not source.exists():
+                raise RuntimeError(f"source from manifest does not exist: {source}")
+            if not output.exists():
+                raise RuntimeError(f"output from manifest does not exist: {output}")
+            if not reference.exists():
+                raise RuntimeError(f"reference from manifest does not exist: {reference}")
+
+            key = normalize_key(source, source_root)
+            records[key] = {
+                "source": source,
+                "reference": reference,
+                "output": output,
+                "raw": record,
+            }
+
+    if not records:
+        raise RuntimeError(f"No records loaded from {manifest_path}")
+    return records
 
 
 def resize_cover(image: Image.Image, size: int) -> Image.Image:
@@ -255,53 +292,43 @@ def export_group(
         new_exp_root = new_root / "experiments" / exp_name
         if not new_exp_root.exists():
             new_exp_root = new_root / exp_name
-        old_generated = find_generated_dir(old_exp_root)
-        new_generated = find_generated_dir(new_exp_root)
-        if old_generated is None:
-            raise RuntimeError(f"old generated dir not found for {exp_name} under {old_root}")
-        if new_generated is None:
-            raise RuntimeError(f"new generated dir not found for {exp_name} under {new_root}")
-        print(f"{tag}: old={old_generated}")
-        print(f"{tag}: new={new_generated}")
-        old_maps.append(collect_images(old_generated))
-        new_maps.append(collect_images(new_generated))
-
-    source_map = find_selected_source(new_root) or find_selected_source(old_root)
-    reference_map = find_selected_ref(new_root) or find_selected_ref(old_root)
+        old_records = load_manifest_records(old_exp_root)
+        new_records = load_manifest_records(new_exp_root)
+        print(f"{tag}: old={old_exp_root} records={len(old_records)}")
+        print(f"{tag}: new={new_exp_root} records={len(new_records)}")
+        old_maps.append(old_records)
+        new_maps.append(new_records)
 
     common = set(old_maps[0]) & set(new_maps[0])
     for mapping in old_maps[1:] + new_maps[1:]:
         common &= set(mapping)
     common = sorted(common)
     if not common:
-        raise RuntimeError(f"No common generated image stems found for {name}")
+        raise RuntimeError(f"No common manifest source keys found for {name}")
 
     rng = random.Random(seed)
     chosen = rng.sample(common, min(num_images, len(common)))
-    source_keys = sorted(source_map)
-    reference_keys = sorted(reference_map)
     labels = [tag for tag, _ in experiments]
     manifest = []
 
-    for index, stem in enumerate(chosen):
-        old_paths = [mapping.get(stem) for mapping in old_maps]
-        new_paths = [mapping.get(stem) for mapping in new_maps]
-        source = source_map.get(stem)
-        reference = reference_map.get(stem)
-        if source is None and source_keys:
-            source = source_map[source_keys[index % len(source_keys)]]
-        if reference is None and reference_keys:
-            reference = reference_map[reference_keys[index % len(reference_keys)]]
-        out_path = out_root / "grids" / f"{index:03d}_{stem}.png"
+    for index, key in enumerate(chosen):
+        old_records = [mapping[key] for mapping in old_maps]
+        new_records = [mapping[key] for mapping in new_maps]
+        old_paths = [record["output"] for record in old_records]
+        new_paths = [record["output"] for record in new_records]
+        source = new_records[0]["source"]
+        reference = new_records[0]["reference"]
+        safe_name = key.replace("/", "__").replace("\\", "__")
+        out_path = out_root / "grids" / f"{index:03d}_{safe_name}.png"
         build_grid(source, reference, old_paths, new_paths, labels, out_path)
         manifest.append({
             "index": index,
-            "stem": stem,
+            "key": key,
             "grid": str(out_path),
-            "source": str(source) if source else "",
-            "reference": str(reference) if reference else "",
-            "old_outputs": [str(path) if path else "" for path in old_paths],
-            "new_outputs": [str(path) if path else "" for path in new_paths],
+            "source": str(source),
+            "reference": str(reference),
+            "old_outputs": [str(path) for path in old_paths],
+            "new_outputs": [str(path) for path in new_paths],
             "strength_tags": labels,
         })
 

@@ -18,6 +18,7 @@ CUT_BATCH_SIZE="${CUT_BATCH_SIZE:-1}"
 CUT_NUM_THREADS="${CUT_NUM_THREADS:-12}"
 CUT_NUM_TEST="${CUT_NUM_TEST:-100000000}"
 COPY_MODE="${COPY_MODE:-copy}"
+RESET_OUTPUTS="${RESET_OUTPUTS:-0}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -36,8 +37,18 @@ echo "CUT_BATCH_SIZE:   ${CUT_BATCH_SIZE}"
 echo "CUT_NUM_THREADS:  ${CUT_NUM_THREADS}"
 echo "CUT_NUM_TEST:     ${CUT_NUM_TEST}"
 echo "LOG_DIR:          ${LOG_DIR}"
+echo "RESET_OUTPUTS:    ${RESET_OUTPUTS}"
 echo "========================================="
 
+if [[ "${RESET_OUTPUTS}" == "1" ]]; then
+  echo "Reset CUT outputs and intermediate results"
+  rm -rf \
+    "${SYN_ROOT}/cut/generated/train" \
+    "${SYN_ROOT}/cut/generated/val" \
+    "${WORK_ROOT}/cut/results/imagenet_ruod_cut_full_ssd_train" \
+    "${WORK_ROOT}/cut/results/imagenet_ruod_cut_full_ssd_val" \
+    "${WORK_ROOT}/cut/results/imagenet_ruod_cut_full_ssd_train_as_test_train"
+fi
 MODE=full \
 METHODS="cut" \
 SPLITS="train val" \
@@ -95,7 +106,7 @@ bash scripts/exp_2/synthesis/run_cut_prepare_dataset.sh \
 
 DATA_NAME="${TRAIN_GEN_NAME}" \
 DATA_ROOT="${TRAIN_GEN_ROOT}" \
-EXP_NAME="${DATA_NAME}" \
+EXP_NAME="imagenet_ruod_cut_full_ssd" \
 SPLIT=train \
 GPU_IDS="${GPU_IDS}" \
 NUM_TEST="${CUT_NUM_TEST}" \

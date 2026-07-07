@@ -18,6 +18,7 @@ N_CPU="${N_CPU:-8}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-4}"
 MKL_NUM_THREADS="${MKL_NUM_THREADS:-4}"
+RESET_OUTPUTS="${RESET_OUTPUTS:-0}"
 
 mkdir -p "${LOG_DIR}"
 
@@ -35,11 +36,22 @@ echo "SPLITS:        ${SPLITS}"
 echo "N_CPU:         ${N_CPU}"
 echo "OMP_THREADS:   ${OMP_NUM_THREADS}"
 echo "LOG_DIR:       ${LOG_DIR}"
+echo "RESET_OUTPUTS: ${RESET_OUTPUTS}"
 echo "========================================="
 
 echo "Skip prepare_synthesis_ssd_inputs.sh; using SOURCE_ROOT and precomputed DEPTH_ROOT." | tee "${LOG_DIR}/prepare.log"
 
 for split in ${SPLITS}; do
+  if [[ "${RESET_OUTPUTS}" == "1" ]]; then
+    echo "Reset UWNR outputs for ${split}" | tee -a "${LOG_DIR}/prepare.log"
+    rm -rf \
+      "${WORK_ROOT}/uwnr_ruod_ref/prepared/${split}"_shard* \
+      "${WORK_ROOT}/uwnr_ruod_ref/ruod_reference_${split}"_shard* \
+      "${WORK_ROOT}/uwnr_ruod_ref/ruod_reference_${split}"_shard*_fid_resized \
+      "${WORK_ROOT}/uwnr_ruod_ref/generated_flat/${split}"_shard* \
+      "${SYN_ROOT}/uwnr_ruod_ref/generated/${split}"
+  fi
+
   IFS=', ' read -r -a GPU_ARRAY <<< "${GPU_IDS}"
   EXPANDED_GPU_IDS=()
   for gpu_id in "${GPU_ARRAY[@]}"; do

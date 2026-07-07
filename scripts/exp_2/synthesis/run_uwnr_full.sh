@@ -14,6 +14,7 @@ GPU="${GPU:-2}"
 GPU_IDS="${GPU_IDS:-2,3,4,5,6,7}"
 PROCS_PER_GPU="${PROCS_PER_GPU:-1}"
 SPLITS="${SPLITS:-train val}"
+TEST_SIZE="${TEST_SIZE:-256}"
 N_CPU="${N_CPU:-8}"
 OMP_NUM_THREADS="${OMP_NUM_THREADS:-4}"
 OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-4}"
@@ -33,6 +34,7 @@ echo "GPU:           ${GPU}"
 echo "GPU_IDS:       ${GPU_IDS}"
 echo "PROCS_PER_GPU: ${PROCS_PER_GPU}"
 echo "SPLITS:        ${SPLITS}"
+echo "TEST_SIZE:     ${TEST_SIZE}"
 echo "N_CPU:         ${N_CPU}"
 echo "OMP_THREADS:   ${OMP_NUM_THREADS}"
 echo "LOG_DIR:       ${LOG_DIR}"
@@ -81,6 +83,7 @@ for split in ${SPLITS}; do
       GPU="${gpu_id}" \
       NUM_SHARDS="${NUM_SHARDS}" \
       SHARD_INDEX="${idx}" \
+      TEST_SIZE="${TEST_SIZE}" \
       N_CPU="${N_CPU}" \
       OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
       OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \

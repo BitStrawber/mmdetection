@@ -44,9 +44,11 @@ GUIDANCE_SCALE="${GUIDANCE_SCALE:-8.0}"
 CONTROLNET_SCALE="${CONTROLNET_SCALE:-0.85}"
 IP_ADAPTER_SCALE="${IP_ADAPTER_SCALE:-0.35}"
 IP_ADAPTER_SCALE_MODE="${IP_ADAPTER_SCALE_MODE:-global}"
-REF_INPUT_MODE="${REF_INPUT_MODE:-blur}"
+REF_INPUT_MODE="${REF_INPUT_MODE:-lightfield}"
 BLUR_RADIUS="${BLUR_RADIUS:-28}"
 BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE:-64}"
+LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS:-15 60 90}"
+LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO:-0.3}"
 
 PROMPT="${PROMPT:-a realistic photograph of the same object with underwater ambient lighting, blue-green water color cast, mild haze, reduced contrast, natural light attenuation, preserve the original object identity, preserve the original object shape}"
 NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-changed object identity, deformed object, duplicated object, extra object, cartoon, painting, illustration, text, watermark}"
@@ -60,7 +62,7 @@ GRID_COLUMNS="${GRID_COLUMNS:-4}"
 TILE_MODE="${TILE_MODE:-cover}"
 PANEL_FORMAT="${PANEL_FORMAT:-png}"
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
-REF_PANEL_LABEL="${REF_PANEL_LABEL:-blur reference}"
+REF_PANEL_LABEL="${REF_PANEL_LABEL:-lightfield reference}"
 OVERWRITE="${OVERWRITE:-1}"
 
 EXPERIMENTS="e1_blurref_s020 e2_blurref_s025 e3_blurref_s030 e4_blurref_s035 e5_blurref_s040"
@@ -69,6 +71,7 @@ SELECTED_SOURCE_DIR="${SELECT_ROOT}/source/${SPLIT}"
 SELECTED_DEPTH_DIR="${SELECT_ROOT}/depth/${SPLIT}"
 SELECTED_REFERENCE_RAW_DIR="${SELECT_ROOT}/reference_raw/qingxi"
 SELECTED_REFERENCE_BLUR_DIR="${SELECT_ROOT}/reference_blur/qingxi"
+SELECTED_REFERENCE_LIGHTFIELD_DIR="${SELECT_ROOT}/reference_lightfield/qingxi"
 case "${REF_INPUT_MODE}" in
   raw)
     SELECTED_REFERENCE_RUN_DIR="${SELECTED_REFERENCE_RAW_DIR}"
@@ -76,8 +79,11 @@ case "${REF_INPUT_MODE}" in
   blur)
     SELECTED_REFERENCE_RUN_DIR="${SELECTED_REFERENCE_BLUR_DIR}"
     ;;
+  lightfield)
+    SELECTED_REFERENCE_RUN_DIR="${SELECTED_REFERENCE_LIGHTFIELD_DIR}"
+    ;;
   *)
-    echo "Error: REF_INPUT_MODE must be raw or blur, got: ${REF_INPUT_MODE}" >&2
+    echo "Error: REF_INPUT_MODE must be raw, blur, or lightfield, got: ${REF_INPUT_MODE}" >&2
     exit 1
     ;;
 esac
@@ -105,6 +111,8 @@ echo "REF_INPUT_MODE:      ${REF_INPUT_MODE}"
 echo "REF_RUN_DIR:         ${SELECTED_REFERENCE_RUN_DIR}"
 echo "BLUR_RADIUS:         ${BLUR_RADIUS}"
 echo "BLUR_DOWNSAMPLE:     ${BLUR_DOWNSAMPLE}"
+echo "LIGHTFIELD_SIGMAS:   ${LIGHTFIELD_SIGMAS}"
+echo "LIGHTFIELD_RATIO:    ${LIGHTFIELD_RESIZE_RATIO}"
 echo "RESIZE_MODE:         ${RESIZE_MODE}"
 echo "RESTORE_SOURCE_SIZE: ${RESTORE_SOURCE_SIZE}"
 echo "PROMPT:              ${PROMPT}"
@@ -139,10 +147,10 @@ if [[ "${OVERWRITE}" == "1" ]]; then
   rm -rf "${WORK_ROOT}" "${OUT_ROOT}" "${ARCHIVE_PATH}"
 fi
 mkdir -p "${EXP_ROOT}" "${LOG_DIR}" "${SELECTED_SOURCE_DIR}" "${SELECTED_DEPTH_DIR}" \
-  "${SELECTED_REFERENCE_RAW_DIR}" "${SELECTED_REFERENCE_BLUR_DIR}"
+  "${SELECTED_REFERENCE_RAW_DIR}" "${SELECTED_REFERENCE_BLUR_DIR}" "${SELECTED_REFERENCE_LIGHTFIELD_DIR}"
 
 echo
-echo "Step 1/3: Select shared source/depth/reference samples and build blurred refs"
+echo "Step 1/3: Select shared source/depth/reference samples and build reference variants"
 SOURCE_ROOT="${SOURCE_ROOT}" \
 DEPTH_ROOT="${DEPTH_ROOT}" \
 REFERENCE_ROOT="${REFERENCE_ROOT}" \
@@ -150,15 +158,19 @@ SELECTED_SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
 SELECTED_DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
 SELECTED_REFERENCE_RAW_DIR="${SELECTED_REFERENCE_RAW_DIR}" \
 SELECTED_REFERENCE_BLUR_DIR="${SELECTED_REFERENCE_BLUR_DIR}" \
+SELECTED_REFERENCE_LIGHTFIELD_DIR="${SELECTED_REFERENCE_LIGHTFIELD_DIR}" \
 WORK_ROOT="${WORK_ROOT}" \
 NUM="${NUM}" \
 SEED="${SEED}" \
 BLUR_RADIUS="${BLUR_RADIUS}" \
 BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE}" \
+LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS}" \
+LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO}" \
 python - <<'PY'
 from pathlib import Path
 from PIL import Image, ImageFilter, ImageOps
 import json
+import numpy as np
 import os
 import random
 
@@ -169,11 +181,14 @@ source_out = Path(os.environ["SELECTED_SOURCE_DIR"])
 depth_out = Path(os.environ["SELECTED_DEPTH_DIR"])
 ref_raw_out = Path(os.environ["SELECTED_REFERENCE_RAW_DIR"])
 ref_blur_out = Path(os.environ["SELECTED_REFERENCE_BLUR_DIR"])
+ref_lightfield_out = Path(os.environ["SELECTED_REFERENCE_LIGHTFIELD_DIR"])
 work_root = Path(os.environ["WORK_ROOT"])
 num = int(os.environ["NUM"])
 seed = int(os.environ["SEED"])
 blur_radius = float(os.environ["BLUR_RADIUS"])
 blur_downsample = int(os.environ["BLUR_DOWNSAMPLE"])
+lightfield_sigmas = [float(x) for x in os.environ["LIGHTFIELD_SIGMAS"].split()]
+lightfield_resize_ratio = float(os.environ["LIGHTFIELD_RESIZE_RATIO"])
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 def clear(path: Path) -> None:
@@ -188,7 +203,28 @@ def clear(path: Path) -> None:
             except OSError:
                 pass
 
-for path in [source_out, depth_out, ref_raw_out, ref_blur_out]:
+
+def uwnr_luminance_field(rgb: Image.Image, sigmas, resize_ratio: float) -> Image.Image:
+    """Approximate UWNR MutiScaleLuminanceEstimation for reference light fields."""
+    width, height = rgb.size
+    small_size = (max(1, int(round(width * resize_ratio))), max(1, int(round(height * resize_ratio))))
+    small = rgb.resize(small_size, Image.Resampling.BICUBIC)
+    luminance = np.ones_like(np.asarray(small), dtype=np.float32)
+    for sigma in sigmas:
+        blurred = small.filter(ImageFilter.GaussianBlur(radius=sigma))
+        arr = np.asarray(blurred, dtype=np.float32)
+        with np.errstate(divide="ignore"):
+            arr = np.log10(arr)
+        arr = np.nan_to_num(arr, neginf=0.0, posinf=255.0)
+        arr = np.clip(arr, 0.0, 255.0)
+        luminance += arr
+    luminance = luminance / max(1, len(sigmas))
+    low = float(np.min(luminance))
+    high = float(np.max(luminance))
+    field = (luminance - low) / (high - low + 0.0001)
+    field = np.uint8(np.clip(field * 255.0, 0, 255))
+    return Image.fromarray(field).resize((width, height), Image.Resampling.BICUBIC)
+for path in [source_out, depth_out, ref_raw_out, ref_blur_out, ref_lightfield_out]:
     clear(path)
     path.mkdir(parents=True, exist_ok=True)
 
@@ -224,10 +260,11 @@ for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
     depth_dst = (depth_out / rel).with_suffix(".png")
     ref_raw_dst = ref_raw_out / f"{idx:08d}{ref.suffix.lower()}"
     ref_blur_dst = ref_blur_out / f"{idx:08d}.png"
+    ref_lightfield_dst = ref_lightfield_out / f"{idx:08d}.png"
     source_dst.parent.mkdir(parents=True, exist_ok=True)
     depth_dst.parent.mkdir(parents=True, exist_ok=True)
 
-    for dst in [source_dst, depth_dst, ref_raw_dst, ref_blur_dst]:
+    for dst in [source_dst, depth_dst, ref_raw_dst, ref_blur_dst, ref_lightfield_dst]:
         if dst.exists() or dst.is_symlink():
             dst.unlink()
 
@@ -240,6 +277,8 @@ for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
     small = rgb.resize((blur_downsample, blur_downsample), Image.Resampling.BICUBIC)
     blur = small.resize(rgb.size, Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(radius=blur_radius))
     blur.save(ref_blur_dst)
+    lightfield = uwnr_luminance_field(rgb, lightfield_sigmas, lightfield_resize_ratio)
+    lightfield.save(ref_lightfield_dst)
 
     records.append({
         "index": idx,
@@ -252,6 +291,7 @@ for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
         "selected_depth": str(depth_dst),
         "selected_reference_raw": str(ref_raw_dst),
         "selected_reference_blur": str(ref_blur_dst),
+        "selected_reference_lightfield": str(ref_lightfield_dst),
     })
 
 manifest = {
@@ -265,8 +305,11 @@ manifest = {
     "selected_depth_dir": str(depth_out),
     "selected_reference_raw_dir": str(ref_raw_out),
     "selected_reference_blur_dir": str(ref_blur_out),
+    "selected_reference_lightfield_dir": str(ref_lightfield_out),
     "blur_radius": blur_radius,
     "blur_downsample": blur_downsample,
+    "lightfield_sigmas": lightfield_sigmas,
+    "lightfield_resize_ratio": lightfield_resize_ratio,
     "records": records,
 }
 (work_root / "selection_manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")

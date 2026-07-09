@@ -12,16 +12,18 @@ to build those folders. It also keeps a manifest so generated samples can later
 be traced back to ImageNet synsets.
 """
 
-from __future__ import annotations
 
 import argparse
 import json
+import random
 from pathlib import Path
-from typing import Iterable
+from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 from PIL import Image, ImageOps
 from scipy.io import savemat
+
+BICUBIC = getattr(Image, 'Resampling', Image).BICUBIC
 
 try:
     from tqdm import tqdm
@@ -42,8 +44,16 @@ def parse_args():
     parser.add_argument('--water-source', required=True,
                         help='RUOD/real underwater image directory.')
     parser.add_argument('--out-dir', required=True)
-    parser.add_argument('--air-limit', type=int, default=1000)
-    parser.add_argument('--water-limit', type=int, default=1000)
+    parser.add_argument('--air-limit', type=int, default=1000,
+                        help='Maximum number of air/source images after optional per-class sampling; 0 keeps all selected images.')
+    parser.add_argument('--water-limit', type=int, default=1000,
+                        help='Maximum number of RUOD/water images before optional repeating; 0 keeps all water images.')
+    parser.add_argument('--air-per-class', type=int, default=0,
+                        help='Randomly select up to this many source images per synset/class before --air-limit. 0 disables class-balanced sampling.')
+    parser.add_argument('--water-repeat-to', type=int, default=0,
+                        help='Repeat RUOD/water images in deterministic order until this count. 0 disables repeating.')
+    parser.add_argument('--seed', type=int, default=2026,
+                        help='Random seed used for class-balanced source sampling and final source order shuffle.')
     parser.add_argument('--air-width', type=int, default=640)
     parser.add_argument('--air-height', type=int, default=480)
     parser.add_argument('--water-width', type=int, default=1360)
@@ -52,7 +62,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def list_images(root: Path) -> list[Path]:
+def list_images(root: Path) -> List[Path]:
     print(f'scanning images: {root}', flush=True)
     images = []
     for path in tqdm(root.rglob('*'), desc=f'scan {root.name}', unit='entry'):
@@ -63,17 +73,57 @@ def list_images(root: Path) -> list[Path]:
     return images
 
 
-def prepare_rgb(src: Path, dst: Path, size: tuple[int, int]) -> None:
+def select_air_images(images: List[Path], root: Path, per_class: int, seed: int) -> List[Path]:
+    if per_class <= 0:
+        return images
+
+    by_class = {}  # type: Dict[str, List[Path]]
+    for path in images:
+        rel = path.relative_to(root)
+        class_name = rel.parts[0] if len(rel.parts) > 1 else '__root__'
+        by_class.setdefault(class_name, []).append(path)
+
+    rng = random.Random(seed)
+    selected = []  # type: List[Path]
+    for class_name in sorted(by_class):
+        class_images = sorted(by_class[class_name])
+        if len(class_images) > per_class:
+            class_images = rng.sample(class_images, per_class)
+            class_images.sort()
+        selected.extend(class_images)
+
+    # Shuffle after balanced selection so WaterGAN's prefix-based train loop
+    # still sees all synsets if a smaller train_size is used.
+    rng.shuffle(selected)
+    print(
+        f'class-balanced air sampling: classes={len(by_class)}, '
+        f'per_class={per_class}, selected={len(selected)}',
+        flush=True,
+    )
+    return selected
+
+
+def repeat_images(images: List[Path], target_count: int) -> List[Path]:
+    if target_count <= 0 or not images or len(images) >= target_count:
+        return images
+    repeated = [images[index % len(images)] for index in range(target_count)]
+    print(
+        f'repeated water images: original={len(images)}, target={len(repeated)}',
+        flush=True,
+    )
+    return repeated
+
+def prepare_rgb(src: Path, dst: Path, size: Tuple[int, int]) -> None:
     with Image.open(src) as image:
         image = image.convert('RGB')
-        image = ImageOps.fit(image, size, method=Image.Resampling.BICUBIC, centering=(0.5, 0.5))
+        image = ImageOps.fit(image, size, method=BICUBIC, centering=(0.5, 0.5))
         image.save(dst)
 
 
-def prepare_depth(src: Path, dst: Path, size: tuple[int, int]) -> None:
+def prepare_depth(src: Path, dst: Path, size: Tuple[int, int]) -> None:
     with Image.open(src) as depth:
         depth = depth.convert('L')
-        depth = ImageOps.fit(depth, size, method=Image.Resampling.BICUBIC, centering=(0.5, 0.5))
+        depth = ImageOps.fit(depth, size, method=BICUBIC, centering=(0.5, 0.5))
     arr = np.asarray(depth).astype(np.float32) / 255.0
     # Keep several common keys so old code variants can load the file.
     savemat(dst, {
@@ -104,10 +154,14 @@ def main() -> None:
 
     air_images = list_images(air_source)
     water_images = list_images(water_source)
+    air_images = select_air_images(air_images, air_source, args.air_per_class, args.seed)
+    selected_air_before_limit = len(air_images)
     if args.air_limit > 0:
         air_images = air_images[:args.air_limit]
     if args.water_limit > 0:
         water_images = water_images[:args.water_limit]
+    selected_water_before_repeat = len(water_images)
+    water_images = repeat_images(water_images, args.water_repeat_to)
 
     records = []
     missing_depth = []
@@ -152,6 +206,11 @@ def main() -> None:
         'out_dir': str(out_dir),
         'air_limit': args.air_limit,
         'water_limit': args.water_limit,
+        'air_per_class': args.air_per_class,
+        'water_repeat_to': args.water_repeat_to,
+        'seed': args.seed,
+        'selected_air_before_limit': selected_air_before_limit,
+        'selected_water_before_repeat': selected_water_before_repeat,
         'prepared_air': len(records),
         'prepared_water': len(water_images),
         'missing_depth': len(missing_depth),

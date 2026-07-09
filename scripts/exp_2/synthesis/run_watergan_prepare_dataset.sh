@@ -32,6 +32,9 @@ MEGADEPTH_CKPT="${MEGADEPTH_CKPT:-${MEGADEPTH_DIR}/checkpoints/best_generalizati
 
 AIR_LIMIT="${AIR_LIMIT:-1000}"
 WATER_LIMIT="${WATER_LIMIT:-1000}"
+AIR_PER_CLASS="${AIR_PER_CLASS:-0}"
+WATER_REPEAT_TO="${WATER_REPEAT_TO:-0}"
+SAMPLE_SEED="${SAMPLE_SEED:-2026}"
 AIR_WIDTH="${AIR_WIDTH:-640}"
 AIR_HEIGHT="${AIR_HEIGHT:-480}"
 WATER_WIDTH="${WATER_WIDTH:-1360}"
@@ -65,6 +68,9 @@ echo "MEGADEPTH_CKPT: ${MEGADEPTH_CKPT}"
 echo "RUN_DEPTH:      ${RUN_DEPTH}"
 echo "AIR_LIMIT:      ${AIR_LIMIT}"
 echo "WATER_LIMIT:    ${WATER_LIMIT}"
+echo "AIR_PER_CLASS:  ${AIR_PER_CLASS}"
+echo "WATER_REPEAT_TO:${WATER_REPEAT_TO}"
+echo "SAMPLE_SEED:    ${SAMPLE_SEED}"
 echo "AIR_SIZE:       ${AIR_WIDTH}x${AIR_HEIGHT}"
 echo "WATER_SIZE:     ${WATER_WIDTH}x${WATER_HEIGHT}"
 echo "========================================="
@@ -98,6 +104,12 @@ EXTRA_ARGS=()
 if [[ "${OVERWRITE}" == "1" ]]; then
   EXTRA_ARGS+=(--overwrite)
 fi
+if (( AIR_PER_CLASS > 0 )); then
+  EXTRA_ARGS+=(--air-per-class "${AIR_PER_CLASS}")
+fi
+if (( WATER_REPEAT_TO > 0 )); then
+  EXTRA_ARGS+=(--water-repeat-to "${WATER_REPEAT_TO}")
+fi
 
 python tools/prepare_watergan_imagenet_ruod_dataset.py \
   --air-source "${SOURCE_DIR}" \
@@ -110,6 +122,7 @@ python tools/prepare_watergan_imagenet_ruod_dataset.py \
   --air-height "${AIR_HEIGHT}" \
   --water-width "${WATER_WIDTH}" \
   --water-height "${WATER_HEIGHT}" \
+  --seed "${SAMPLE_SEED}" \
   "${EXTRA_ARGS[@]}"
 
 echo

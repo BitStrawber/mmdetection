@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Export UWDF seven-condition ablation results as high-resolution per-sample grids.
-# First column: source, raw reference, UWNR-style lightfield reference, depth.
-# Next columns: seven generated outputs.
+# First two columns: source/ref raw and ref lightfield/depth as a 2x2 condition block.
+# Remaining columns: seven generated outputs.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -142,6 +142,54 @@ def read_jsonl(path):
                 pass
     return records
 
+def norm_path(value):
+    if not value:
+        return ""
+    return str(value).replace("\\", "/")
+
+def path_keys(value):
+    keys = []
+    s = norm_path(value)
+    if not s:
+        return keys
+    p = Path(s)
+    keys.append(s)
+    keys.append(p.name)
+    keys.append(p.stem)
+    parts = p.parts
+    if len(parts) >= 2:
+        keys.append("/".join(parts[-2:]))
+    if len(parts) >= 3:
+        keys.append("/".join(parts[-3:]))
+    if p.suffix:
+        no_suffix = str(p.with_suffix("")).replace("\\", "/")
+        keys.append(no_suffix)
+        no_parts = Path(no_suffix).parts
+        if len(no_parts) >= 2:
+            keys.append("/".join(no_parts[-2:]))
+    return [k for k in dict.fromkeys(keys) if k]
+
+def record_match_keys(record):
+    keys = []
+    for name in [
+        "relative", "source", "source_path", "source_image", "input", "image", "init_image",
+        "selected_source", "original_source", "clean", "clean_path",
+    ]:
+        v = record.get(name)
+        if isinstance(v, str):
+            keys.extend(path_keys(v))
+    out = record.get("output") or record.get("generated") or record.get("generated_path")
+    if isinstance(out, str):
+        keys.extend(path_keys(out))
+    return [k for k in dict.fromkeys(keys) if k]
+
+def selection_match_keys(selection_record):
+    keys = []
+    for name in ["relative", "selected_source", "source"]:
+        v = selection_record.get(name)
+        if isinstance(v, str):
+            keys.extend(path_keys(v))
+    return [k for k in dict.fromkeys(keys) if k]
 selection = json.loads(selection_manifest.read_text(encoding="utf-8"))
 selection_records = selection.get("records", [])[:max_images]
 exp_records = {}
@@ -152,7 +200,11 @@ for exp in experiments:
     for rec in records:
         if "index" in rec:
             by_index[int(rec["index"])] = rec
-    exp_records[exp] = {"manifest": str(manifest), "records": records, "by_index": by_index}
+    by_key = {}
+    for rec in records:
+        for key in record_match_keys(rec):
+            by_key.setdefault(key, rec)
+    exp_records[exp] = {"manifest": str(manifest), "records": records, "by_index": by_index, "by_key": by_key}
 
 exp_labels = {
     "e1_original_stable": "1 original stable",
@@ -176,25 +228,40 @@ for row_idx, sel in enumerate(selection_records):
         make_tile(path, label, condition_tile, label_h, tile_mode)
         for path, label in zip(condition_paths, condition_labels)
     ]
-    condition_col_h = sum(t.height for t in condition_tiles)
+    condition_cell_h = condition_tile + label_h
+    condition_block_w = condition_tile * 2
+    condition_block_h = condition_cell_h * 2
     result_h = tile_size + label_h
-    panel_h = max(condition_col_h, result_h)
-    panel_w = condition_tile + tile_size * len(experiments)
+    panel_h = max(condition_block_h, result_h)
+    panel_w = condition_block_w + tile_size * len(experiments)
     panel = Image.new("RGB", (panel_w, panel_h), (255, 255, 255))
-    y = 0
-    for tile in condition_tiles:
-        panel.paste(tile, (0, y))
-        y += tile.height
+    for idx, tile in enumerate(condition_tiles):
+        x = (idx % 2) * condition_tile
+        y = (idx // 2) * condition_cell_h
+        panel.paste(tile, (x, y))
 
+    sel_keys = selection_match_keys(sel)
     exp_outputs = {}
+    exp_match_keys = {}
     for col, exp in enumerate(experiments):
-        rec = exp_records[exp]["by_index"].get(row_idx)
+        rec = None
+        matched_key = ""
+        for key in sel_keys:
+            rec = exp_records[exp]["by_key"].get(key)
+            if rec:
+                matched_key = key
+                break
+        if rec is None:
+            rec = exp_records[exp]["by_index"].get(row_idx)
+            if rec:
+                matched_key = f"index:{row_idx}"
         out_path = ""
         if rec:
             out_path = rec.get("output") or rec.get("generated") or rec.get("generated_path") or ""
         exp_outputs[exp] = out_path
+        exp_match_keys[exp] = matched_key
         tile = make_tile(out_path, exp_labels.get(exp, exp), tile_size, label_h, tile_mode)
-        panel.paste(tile, (condition_tile + col * tile_size, 0))
+        panel.paste(tile, (condition_block_w + col * tile_size, 0))
 
     suffix = "jpg" if panel_format == "jpeg" else panel_format
     key = Path(condition_paths[0]).stem if condition_paths[0] else f"sample_{row_idx:03d}"
@@ -212,6 +279,7 @@ for row_idx, sel in enumerate(selection_records):
         "reference_lightfield": condition_paths[2],
         "depth": condition_paths[3],
         "experiments": exp_outputs,
+        "match_keys": exp_match_keys,
         "panel": str(panel_path),
     })
 

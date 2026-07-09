@@ -26,7 +26,7 @@ LOG_DIR="${WORK_ROOT}/logs"
 
 NUM="${NUM:-20}"
 SEED="${SEED:-2026}"
-GPU_IDS="${GPU_IDS:-2 4 5 6 7}"
+GPU_IDS="${GPU_IDS:-4 5 6 7}"
 HEIGHT="${HEIGHT:-1024}"
 WIDTH="${WIDTH:-1024}"
 STEPS="${STEPS:-20}"
@@ -46,10 +46,10 @@ BLUR_RADIUS="${BLUR_RADIUS:-28}"
 BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE:-64}"
 
 BASE_PROMPT="${BASE_PROMPT:-a realistic underwater photograph}"
-STYLE_LINK_PROMPT="${STYLE_LINK_PROMPT:-a realistic underwater photograph, preserve the original subject identity, preserve the original subject shape, preserve the original composition, apply the global environmental appearance, illumination characteristics, medium properties, and low-frequency scene style from the provided reference image to the whole scene}"
-DEPTH_LINK_PROMPT="${DEPTH_LINK_PROMPT:-a realistic underwater photograph, preserve the original subject identity, preserve the original subject shape, preserve the original composition, use the depth map to guide spatial structure, scene consistency, and depth-dependent environmental variation across the whole scene}"
-STYLE_DEPTH_LINK_PROMPT="${STYLE_DEPTH_LINK_PROMPT:-a realistic underwater photograph, preserve the original subject identity, preserve the original subject shape, preserve the original composition, use the provided reference image for global environmental appearance and scene style, and use the depth map for spatially coherent depth-dependent environmental variation across the whole scene}"
-NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-changed object identity, deformed object, duplicated object, extra object, cartoon, painting, illustration, fish, coral, diver, text, watermark, low quality, worst quality}"
+STYLE_LINK_PROMPT="${STYLE_LINK_PROMPT:-a realistic underwater photograph, use the reference image as the guidance for the global underwater appearance and scene-level environmental direction of the entire source scene}"
+DEPTH_LINK_PROMPT="${DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the depth map to guide spatial structure, scene geometry, object layout, and depth-aware underwater appearance across the source scene}"
+STYLE_DEPTH_LINK_PROMPT="${STYLE_DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the reference image as the guidance for the global underwater appearance and scene-level environmental direction of the entire source scene, and use the depth map to guide spatial structure, scene geometry, object layout, and depth-aware underwater appearance across the source scene}"
+NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-cartoon, painting, illustration, unrealistic image, artificial colors, object deformation, changed object identity, extra objects, text, watermark, low quality, worst quality}"
 
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 UPLOAD="${UPLOAD:-1}"
@@ -109,6 +109,7 @@ for required in "${SOURCE_ROOT}" "${DEPTH_ROOT}" "${REFERENCE_ROOT}"; do
   fi
 done
 
+GPU_IDS="${GPU_IDS//,/ }"
 read -r -a gpu_array <<< "${GPU_IDS}"
 if [[ "${#gpu_array[@]}" -lt 1 ]]; then
   echo "Error: GPU_IDS is empty" >&2

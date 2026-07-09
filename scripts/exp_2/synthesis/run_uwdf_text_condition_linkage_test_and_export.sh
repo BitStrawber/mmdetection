@@ -52,9 +52,9 @@ LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS:-15 60 90}"
 LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO:-0.3}"
 
 BASE_PROMPT="${BASE_PROMPT:-a realistic underwater photograph}"
-STYLE_LINK_PROMPT="${STYLE_LINK_PROMPT:-a realistic underwater photograph, use the reference image as a real underwater photograph and transfer its underwater environmental appearance to the entire source scene: global water medium appearance, ambient underwater illumination, water-column atmosphere, haze, turbidity, reduced contrast, soft scattering, and natural light attenuation}"
-DEPTH_LINK_PROMPT="${DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the depth map to guide spatial structure, scene geometry, object layout, and depth-dependent underwater appearance across the source scene}"
-STYLE_DEPTH_LINK_PROMPT="${STYLE_DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the reference image as a real underwater photograph and transfer its underwater environmental appearance to the entire source scene, while using the depth map to guide spatial structure, scene geometry, object layout, and depth-dependent underwater appearance}"
+STYLE_LINK_PROMPT="${STYLE_LINK_PROMPT:-a realistic underwater photograph, use the reference image as the guidance for the underwater visual direction of the entire source scene}"
+DEPTH_LINK_PROMPT="${DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the depth map as the guidance for the spatial organization of the source scene}"
+STYLE_DEPTH_LINK_PROMPT="${STYLE_DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the reference image as the guidance for the underwater visual direction of the entire source scene, and use the depth map as the guidance for the spatial organization of the source scene}"
 NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-cartoon, painting, illustration, unrealistic image, artificial colors, object deformation, changed object identity, extra objects, text, watermark, low quality, worst quality}"
 
 RESIZE_MODE="${RESIZE_MODE:-pad}"

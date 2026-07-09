@@ -4,7 +4,7 @@ set -euo pipefail
 # UWDF text-condition linkage test using the same data flow as the strength sweep.
 #
 # It selects one shared source/depth/reference set, builds raw/blur/lightfield
-# reference variants, then runs 8 ablations:
+# reference variants, then runs 9 ablations:
 #   e1_base_text_only           base text,   no style, no depth
 #   e2_linked_text_only         linked text, no style, no depth
 #   e3_base_text_style          base text,   style,    no depth
@@ -13,6 +13,7 @@ set -euo pipefail
 #   e6_linked_text_depth        linked text, no style, depth
 #   e7_base_text_style_depth    base text,   style,    depth
 #   e8_linked_text_style_depth  linked text, style,    depth
+#   e9_ref_only_no_text         no text,     style,    no depth
 #
 # Run after activating the UWDF environment:
 #   conda activate /media/SSD1/conda_envs/uwdf
@@ -69,7 +70,7 @@ PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
 REF_PANEL_LABEL="${REF_PANEL_LABEL:-blur reference}"
 OVERWRITE="${OVERWRITE:-1}"
 
-EXPERIMENTS="e1_base_text_only e2_linked_text_only e3_base_text_style e4_linked_text_style e5_base_text_depth e6_linked_text_depth e7_base_text_style_depth e8_linked_text_style_depth"
+EXPERIMENTS="e1_base_text_only e2_linked_text_only e3_base_text_style e4_linked_text_style e5_base_text_depth e6_linked_text_depth e7_base_text_style_depth e8_linked_text_style_depth e9_ref_only_no_text"
 LOG_DIR="${WORK_ROOT}/logs"
 SELECTED_SOURCE_DIR="${SELECT_ROOT}/source/${SPLIT}"
 SELECTED_DEPTH_DIR="${SELECT_ROOT}/depth/${SPLIT}"
@@ -329,6 +330,7 @@ run_exp() {
   local prompt="$3"
   local ip_scale="$4"
   local control_scale="$5"
+  local negative_prompt="${6:-${NEGATIVE_PROMPT}}"
   local out_dir="${EXP_ROOT}/${exp_name}"
   local log_file="${LOG_DIR}/${exp_name}.log"
 
@@ -353,7 +355,7 @@ run_exp() {
     LIMIT="${NUM}" \
     SEED="${SEED}" \
     PROMPT="${prompt}" \
-    NEGATIVE_PROMPT="${NEGATIVE_PROMPT}" \
+    NEGATIVE_PROMPT="${negative_prompt}" \
     SAVE_COMPARISON=0 \
     bash scripts/run_ipadapter_controlnet_depth_generate.sh
   ) > "${log_file}" 2>&1 &
@@ -368,6 +370,7 @@ exp_names=(
   e6_linked_text_depth
   e7_base_text_style_depth
   e8_linked_text_style_depth
+  e9_ref_only_no_text
 )
 exp_prompts=(
   "${BASE_PROMPT}"
@@ -378,21 +381,33 @@ exp_prompts=(
   "${DEPTH_LINK_PROMPT}"
   "${BASE_PROMPT}"
   "${STYLE_DEPTH_LINK_PROMPT}"
+  ""
 )
-exp_ip_scales=(0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}" 0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}")
-exp_control_scales=(0.0 0.0 0.0 0.0 "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}")
+exp_ip_scales=(0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}" 0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}")
+exp_control_scales=(0.0 0.0 0.0 0.0 "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" 0.0)
+exp_negative_prompts=(
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  "${NEGATIVE_PROMPT}"
+  ""
+)
 
 status_file="${LOG_DIR}/status.tsv"
 printf "experiment\tstatus\tgpu\tlog\n" > "${status_file}"
 
 echo
-echo "Step 2/3: Run eight text-condition linkage experiments"
+echo "Step 2/3: Run nine text-condition linkage experiments"
 pids=()
 pid_names=()
 pid_gpus=()
 for i in "${!exp_names[@]}"; do
   gpu="${gpu_array[$((i % ${#gpu_array[@]}))]}"
-  run_exp "${exp_names[$i]}" "${gpu}" "${exp_prompts[$i]}" "${exp_ip_scales[$i]}" "${exp_control_scales[$i]}"
+  run_exp "${exp_names[$i]}" "${gpu}" "${exp_prompts[$i]}" "${exp_ip_scales[$i]}" "${exp_control_scales[$i]}" "${exp_negative_prompts[$i]}"
   pids+=("$!")
   pid_names+=("${exp_names[$i]}")
   pid_gpus+=("${gpu}")

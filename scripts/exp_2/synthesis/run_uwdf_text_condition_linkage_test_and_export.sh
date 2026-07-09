@@ -1,204 +1,371 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
-# Run an 8-way UWDF text/condition linkage test and export comparison grids.
+# UWDF text-condition linkage test using the same data flow as the strength sweep.
 #
-# Experiments:
-#   e1_base_text_only           base prompt,   no style, no depth
-#   e2_linked_text_only         linked prompt, no style, no depth
-#   e3_base_text_style          base prompt,   style,    no depth
-#   e4_linked_text_style        linked prompt, style,    no depth
-#   e5_base_text_depth          base prompt,   no style, depth
-#   e6_linked_text_depth        linked prompt, no style, depth
-#   e7_base_text_style_depth    base prompt,   style,    depth
-#   e8_linked_text_style_depth  linked prompt, style,    depth
+# It selects one shared source/depth/reference set, builds raw/blur/lightfield
+# reference variants, then runs 8 ablations:
+#   e1_base_text_only           base text,   no style, no depth
+#   e2_linked_text_only         linked text, no style, no depth
+#   e3_base_text_style          base text,   style,    no depth
+#   e4_linked_text_style        linked text, style,    no depth
+#   e5_base_text_depth          base text,   no style, depth
+#   e6_linked_text_depth        linked text, no style, depth
+#   e7_base_text_style_depth    base text,   style,    depth
+#   e8_linked_text_style_depth  linked text, style,    depth
 #
-# The script intentionally keeps going when one experiment fails so that partial
-# results can still be inspected and exported.
+# Run after activating the UWDF environment:
+#   conda activate /media/SSD1/conda_envs/uwdf
+#   bash scripts/exp_2/synthesis/run_uwdf_text_condition_linkage_test_and_export.sh
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-cd "${ROOT_DIR}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+cd "${REPO_ROOT}"
 
 UWDF_DIR="${UWDF_DIR:-/home/fcp/xcx/exp_2/syn/uwdf}"
-SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/uwdf/source/train}"
-DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/train}"
+SPLIT="${SPLIT:-train}"
+SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/uwdf/source/${SPLIT}}"
+DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/${SPLIT}}"
 REFERENCE_ROOT="${REFERENCE_ROOT:-/media/SSD1/XCX/exp_2/UWNR_ref_underwater/lnrud_like_ref/qingxi}"
+
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/uwdf_text_condition_linkage_test}"
 EXP_ROOT="${EXP_ROOT:-${WORK_ROOT}/experiments}"
-SAMPLE_ROOT="${SAMPLE_ROOT:-${WORK_ROOT}/samples}"
-OUT_ROOT="${OUT_ROOT:-/media/HDD1/XCX/exp_2/uwdf_text_condition_linkage_test_grid_export}"
-ARCHIVE_PATH="${ARCHIVE_PATH:-/media/HDD1/XCX/exp_2/uwdf_text_condition_linkage_test_grid_export.tar.gz}"
-LOG_ROOT="${LOG_ROOT:-${ROOT_DIR}/logs/uwdf_text_condition_linkage_test}"
-RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
+SELECT_ROOT="${SELECT_ROOT:-${WORK_ROOT}/selected}"
+OUT_ROOT="${OUT_ROOT:-/media/HDD1/XCX/exp_2/uwdf_text_condition_linkage_test_multigrid_export}"
+ARCHIVE_PATH="${ARCHIVE_PATH:-${OUT_ROOT}.tar.gz}"
 
 NUM="${NUM:-20}"
 SEED="${SEED:-2026}"
-GPU_IDS="${GPU_IDS:-2,4,5,6,7}"
+GPU_IDS="${GPU_IDS:-2 4 5 6 7}"
 HEIGHT="${HEIGHT:-1024}"
 WIDTH="${WIDTH:-1024}"
 STEPS="${STEPS:-20}"
 STRENGTH="${STRENGTH:-0.75}"
 GUIDANCE_SCALE="${GUIDANCE_SCALE:-8.0}"
-IP_ADAPTER_SCALE="${IP_ADAPTER_SCALE:-0.35}"
 CONTROLNET_SCALE="${CONTROLNET_SCALE:-0.85}"
-TILE_SIZE="${TILE_SIZE:-512}"
-UPLOAD="${UPLOAD:-1}"
-OVERWRITE="${OVERWRITE:-1}"
-RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE:-1}"
-RESIZE_MODE="${RESIZE_MODE:-pad}"
+IP_ADAPTER_SCALE="${IP_ADAPTER_SCALE:-0.35}"
+IP_ADAPTER_SCALE_MODE="${IP_ADAPTER_SCALE_MODE:-style}"
+REF_INPUT_MODE="${REF_INPUT_MODE:-lightfield}"
+BLUR_RADIUS="${BLUR_RADIUS:-28}"
+BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE:-64}"
+LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS:-15 60 90}"
+LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO:-0.3}"
 
 BASE_PROMPT="${BASE_PROMPT:-a realistic underwater photograph}"
 LINKED_PROMPT="${LINKED_PROMPT:-a realistic underwater photograph, with underwater visual appearance guided by the reference image and spatial structure guided by the depth map}"
 NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-cartoon, painting, illustration, unrealistic image, artificial colors, object deformation, changed object identity, extra objects, text, watermark, low quality, worst quality}"
 
-GEN_SCRIPT="${GEN_SCRIPT:-${UWDF_DIR}/scripts/run_ipadapter_controlnet_depth_generate.sh}"
-LIGHTFIELD_SCRIPT="${LIGHTFIELD_SCRIPT:-${UWDF_DIR}/scripts/make_reference_lightfield.py}"
+RESIZE_MODE="${RESIZE_MODE:-pad}"
+RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE:-1}"
+RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
+UPLOAD="${UPLOAD:-1}"
+TILE_SIZE="${TILE_SIZE:-1024}"
+GRID_COLUMNS="${GRID_COLUMNS:-4}"
+TILE_MODE="${TILE_MODE:-cover}"
+PANEL_FORMAT="${PANEL_FORMAT:-png}"
+PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
+REF_PANEL_LABEL="${REF_PANEL_LABEL:-lightfield reference}"
+OVERWRITE="${OVERWRITE:-1}"
 
-mkdir -p "${EXP_ROOT}" "${SAMPLE_ROOT}" "${OUT_ROOT}" "${LOG_ROOT}"
-
-IFS=',' read -r -a GPU_LIST <<< "${GPU_IDS}"
-if [ "${#GPU_LIST[@]}" -eq 0 ]; then
-  echo "Error: GPU_IDS is empty" >&2
-  exit 1
-fi
+EXPERIMENTS="e1_base_text_only e2_linked_text_only e3_base_text_style e4_linked_text_style e5_base_text_depth e6_linked_text_depth e7_base_text_style_depth e8_linked_text_style_depth"
+LOG_DIR="${WORK_ROOT}/logs"
+SELECTED_SOURCE_DIR="${SELECT_ROOT}/source/${SPLIT}"
+SELECTED_DEPTH_DIR="${SELECT_ROOT}/depth/${SPLIT}"
+SELECTED_REFERENCE_RAW_DIR="${SELECT_ROOT}/reference_raw/qingxi"
+SELECTED_REFERENCE_BLUR_DIR="${SELECT_ROOT}/reference_blur/qingxi"
+SELECTED_REFERENCE_LIGHTFIELD_DIR="${SELECT_ROOT}/reference_lightfield/qingxi"
+case "${REF_INPUT_MODE}" in
+  raw)
+    SELECTED_REFERENCE_RUN_DIR="${SELECTED_REFERENCE_RAW_DIR}"
+    ;;
+  blur)
+    SELECTED_REFERENCE_RUN_DIR="${SELECTED_REFERENCE_BLUR_DIR}"
+    ;;
+  lightfield)
+    SELECTED_REFERENCE_RUN_DIR="${SELECTED_REFERENCE_LIGHTFIELD_DIR}"
+    ;;
+  *)
+    echo "Error: REF_INPUT_MODE must be raw, blur, or lightfield, got: ${REF_INPUT_MODE}" >&2
+    exit 1
+    ;;
+esac
 
 echo "========================================="
 echo "UWDF text-condition linkage test"
 echo "========================================="
-echo "UWDF_DIR:          ${UWDF_DIR}"
-echo "GEN_SCRIPT:        ${GEN_SCRIPT}"
-echo "SOURCE_ROOT:       ${SOURCE_ROOT}"
-echo "DEPTH_ROOT:        ${DEPTH_ROOT}"
-echo "REFERENCE_ROOT:    ${REFERENCE_ROOT}"
-echo "WORK_ROOT:         ${WORK_ROOT}"
-echo "EXP_ROOT:          ${EXP_ROOT}"
-echo "OUT_ROOT:          ${OUT_ROOT}"
-echo "ARCHIVE_PATH:      ${ARCHIVE_PATH}"
-echo "NUM:               ${NUM}"
-echo "SEED:              ${SEED}"
-echo "GPU_IDS:           ${GPU_IDS}"
-echo "SIZE:              ${WIDTH}x${HEIGHT}"
-echo "STEPS:             ${STEPS}"
-echo "STRENGTH:          ${STRENGTH}"
-echo "GUIDANCE_SCALE:    ${GUIDANCE_SCALE}"
-echo "IP_ADAPTER_SCALE:  ${IP_ADAPTER_SCALE}"
-echo "CONTROLNET_SCALE:  ${CONTROLNET_SCALE}"
-echo "BASE_PROMPT:       ${BASE_PROMPT}"
-echo "LINKED_PROMPT:     ${LINKED_PROMPT}"
-echo "UPLOAD:            ${UPLOAD}"
-echo "RCLONE_DEST:       ${RCLONE_DEST}"
+echo "UWDF_DIR:            ${UWDF_DIR}"
+echo "SOURCE_ROOT:         ${SOURCE_ROOT}"
+echo "DEPTH_ROOT:          ${DEPTH_ROOT}"
+echo "REFERENCE_ROOT:      ${REFERENCE_ROOT}"
+echo "WORK_ROOT:           ${WORK_ROOT}"
+echo "EXP_ROOT:            ${EXP_ROOT}"
+echo "OUT_ROOT:            ${OUT_ROOT}"
+echo "NUM:                 ${NUM}"
+echo "SEED:                ${SEED}"
+echo "GPU_IDS:             ${GPU_IDS}"
+echo "SIZE:                ${WIDTH}x${HEIGHT}"
+echo "STRENGTH:            ${STRENGTH}"
+echo "GUIDANCE_SCALE:      ${GUIDANCE_SCALE}"
+echo "CONTROLNET_SCALE:    ${CONTROLNET_SCALE}"
+echo "IP_ADAPTER_SCALE:    ${IP_ADAPTER_SCALE}"
+echo "IP_ADAPTER_MODE:     ${IP_ADAPTER_SCALE_MODE}"
+echo "REF_INPUT_MODE:      ${REF_INPUT_MODE}"
+echo "REF_RUN_DIR:         ${SELECTED_REFERENCE_RUN_DIR}"
+echo "BLUR_RADIUS:         ${BLUR_RADIUS}"
+echo "BLUR_DOWNSAMPLE:     ${BLUR_DOWNSAMPLE}"
+echo "LIGHTFIELD_SIGMAS:   ${LIGHTFIELD_SIGMAS}"
+echo "LIGHTFIELD_RATIO:    ${LIGHTFIELD_RESIZE_RATIO}"
+echo "RESIZE_MODE:         ${RESIZE_MODE}"
+echo "RESTORE_SOURCE_SIZE: ${RESTORE_SOURCE_SIZE}"
+echo "BASE_PROMPT:         ${BASE_PROMPT}"
+echo "LINKED_PROMPT:       ${LINKED_PROMPT}"
+echo "NEGATIVE_PROMPT:     ${NEGATIVE_PROMPT}"
 echo "========================================="
 
-for p in "${GEN_SCRIPT}" "${SOURCE_ROOT}" "${DEPTH_ROOT}" "${REFERENCE_ROOT}"; do
-  if [ ! -e "${p}" ]; then
-    echo "Error: required path not found: ${p}" >&2
-    exit 1
-  fi
-done
-
-if [ "${OVERWRITE}" = "1" ]; then
-  rm -rf "${EXP_ROOT}" "${SAMPLE_ROOT}" "${OUT_ROOT}"
-  mkdir -p "${EXP_ROOT}" "${SAMPLE_ROOT}" "${OUT_ROOT}" "${LOG_ROOT}"
+if [[ ! -d "${UWDF_DIR}" ]]; then
+  echo "Error: UWDF_DIR not found: ${UWDF_DIR}" >&2
+  exit 1
+fi
+if [[ ! -f "${UWDF_DIR}/scripts/run_ipadapter_controlnet_depth_generate.sh" ]]; then
+  echo "Error: missing UWDF controlnet script: ${UWDF_DIR}/scripts/run_ipadapter_controlnet_depth_generate.sh" >&2
+  exit 1
+fi
+if [[ ! -d "${SOURCE_ROOT}" || ! -d "${DEPTH_ROOT}" || ! -d "${REFERENCE_ROOT}" ]]; then
+  echo "Error: source/depth/reference root missing." >&2
+  exit 1
 fi
 
-echo "Step 1/4: select deterministic samples"
-python - "${SOURCE_ROOT}" "${DEPTH_ROOT}" "${REFERENCE_ROOT}" "${SAMPLE_ROOT}" "${NUM}" "${SEED}" <<'PY'
-import json
-import random
-import sys
+GPU_IDS="${GPU_IDS//,/ }"
+read -r -a gpu_array <<< "${GPU_IDS}"
+if [[ "${#gpu_array[@]}" -lt 1 ]]; then
+  echo "Error: GPU_IDS is empty" >&2
+  exit 1
+fi
+
+if [[ "${OVERWRITE}" == "1" ]]; then
+  rm -rf "${WORK_ROOT}" "${OUT_ROOT}" "${ARCHIVE_PATH}"
+fi
+mkdir -p "${EXP_ROOT}" "${LOG_DIR}" "${SELECTED_SOURCE_DIR}" "${SELECTED_DEPTH_DIR}" \
+  "${SELECTED_REFERENCE_RAW_DIR}" "${SELECTED_REFERENCE_BLUR_DIR}" "${SELECTED_REFERENCE_LIGHTFIELD_DIR}"
+
+echo
+echo "Step 1/3: Select shared source/depth/reference samples and build reference variants"
+SOURCE_ROOT="${SOURCE_ROOT}" \
+DEPTH_ROOT="${DEPTH_ROOT}" \
+REFERENCE_ROOT="${REFERENCE_ROOT}" \
+SELECTED_SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
+SELECTED_DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
+SELECTED_REFERENCE_RAW_DIR="${SELECTED_REFERENCE_RAW_DIR}" \
+SELECTED_REFERENCE_BLUR_DIR="${SELECTED_REFERENCE_BLUR_DIR}" \
+SELECTED_REFERENCE_LIGHTFIELD_DIR="${SELECTED_REFERENCE_LIGHTFIELD_DIR}" \
+WORK_ROOT="${WORK_ROOT}" \
+NUM="${NUM}" \
+SEED="${SEED}" \
+BLUR_RADIUS="${BLUR_RADIUS}" \
+BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE}" \
+LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS}" \
+LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO}" \
+python - <<'PY'
 from pathlib import Path
+from PIL import Image, ImageFilter, ImageOps
+import json
+import numpy as np
+import os
+import random
 
-source_root = Path(sys.argv[1])
-depth_root = Path(sys.argv[2])
-ref_root = Path(sys.argv[3])
-sample_root = Path(sys.argv[4])
-num = int(sys.argv[5])
-seed = int(sys.argv[6])
-
+source_root = Path(os.environ["SOURCE_ROOT"])
+depth_root = Path(os.environ["DEPTH_ROOT"])
+reference_root = Path(os.environ["REFERENCE_ROOT"])
+source_out = Path(os.environ["SELECTED_SOURCE_DIR"])
+depth_out = Path(os.environ["SELECTED_DEPTH_DIR"])
+ref_raw_out = Path(os.environ["SELECTED_REFERENCE_RAW_DIR"])
+ref_blur_out = Path(os.environ["SELECTED_REFERENCE_BLUR_DIR"])
+ref_lightfield_out = Path(os.environ["SELECTED_REFERENCE_LIGHTFIELD_DIR"])
+work_root = Path(os.environ["WORK_ROOT"])
+num = int(os.environ["NUM"])
+seed = int(os.environ["SEED"])
+blur_radius = float(os.environ["BLUR_RADIUS"])
+blur_downsample = int(os.environ["BLUR_DOWNSAMPLE"])
+lightfield_sigmas = [float(x) for x in os.environ["LIGHTFIELD_SIGMAS"].split()]
+lightfield_resize_ratio = float(os.environ["LIGHTFIELD_RESIZE_RATIO"])
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
-sources = sorted(p for p in source_root.rglob("*") if p.suffix.lower() in exts)
-refs = sorted(p for p in ref_root.rglob("*") if p.suffix.lower() in exts)
-if not sources:
-    raise SystemExit(f"no source images found under {source_root}")
-if not refs:
-    raise SystemExit(f"no reference images found under {ref_root}")
+
+def clear(path: Path) -> None:
+    if not path.exists():
+        return
+    for p in sorted(path.rglob("*"), reverse=True):
+        if p.is_file() or p.is_symlink():
+            p.unlink()
+        elif p.is_dir():
+            try:
+                p.rmdir()
+            except OSError:
+                pass
+
+
+def uwnr_luminance_field(rgb: Image.Image, sigmas, resize_ratio: float) -> Image.Image:
+    """Approximate UWNR MutiScaleLuminanceEstimation for reference light fields."""
+    width, height = rgb.size
+    small_size = (max(1, int(round(width * resize_ratio))), max(1, int(round(height * resize_ratio))))
+    small = rgb.resize(small_size, Image.Resampling.BICUBIC)
+    luminance = np.ones_like(np.asarray(small), dtype=np.float32)
+    for sigma in sigmas:
+        blurred = small.filter(ImageFilter.GaussianBlur(radius=sigma))
+        arr = np.asarray(blurred, dtype=np.float32)
+        with np.errstate(divide="ignore"):
+            arr = np.log10(arr)
+        arr = np.nan_to_num(arr, neginf=0.0, posinf=255.0)
+        arr = np.clip(arr, 0.0, 255.0)
+        luminance += arr
+    luminance = luminance / max(1, len(sigmas))
+    low = float(np.min(luminance))
+    high = float(np.max(luminance))
+    field = (luminance - low) / (high - low + 0.0001)
+    field = np.uint8(np.clip(field * 255.0, 0, 255))
+    return Image.fromarray(field).resize((width, height), Image.Resampling.BICUBIC)
+for path in [source_out, depth_out, ref_raw_out, ref_blur_out, ref_lightfield_out]:
+    clear(path)
+    path.mkdir(parents=True, exist_ok=True)
+
+by_cls = {}
+for p in source_root.rglob("*"):
+    if p.is_file() and p.suffix.lower() in exts:
+        rel = p.relative_to(source_root)
+        cls = rel.parts[0] if len(rel.parts) >= 2 else "_flat"
+        depth = (depth_root / rel).with_suffix(".png")
+        if depth.exists():
+            by_cls.setdefault(cls, []).append((p, depth, rel))
+
+classes = sorted(by_cls)
+if not classes:
+    raise RuntimeError(f"No source/depth pairs found under {source_root} and {depth_root}")
 
 rng = random.Random(seed)
-selected = rng.sample(sources, min(num, len(sources)))
-manifest = []
-for i, src in enumerate(selected):
-    rel = src.relative_to(source_root)
-    depth = depth_root / rel.with_suffix(".png")
-    ref = refs[i % len(refs)]
-    if not depth.exists():
-        raise SystemExit(f"missing depth for {rel}: {depth}")
-    stem = f"{i:04d}_{rel.parent.as_posix().replace('/', '_')}_{rel.stem}"
-    manifest.append({
-        "index": i,
-        "id": stem,
-        "relative": rel.as_posix(),
-        "source": str(src),
+if len(classes) >= num:
+    picked_classes = rng.sample(classes, num)
+    picked = [rng.choice(sorted(by_cls[cls], key=lambda x: str(x[0]))) for cls in picked_classes]
+else:
+    all_pairs = sorted((x for xs in by_cls.values() for x in xs), key=lambda x: str(x[0]))
+    picked = rng.sample(all_pairs, min(num, len(all_pairs)))
+
+refs_all = sorted(p for p in reference_root.rglob("*") if p.is_file() and p.suffix.lower() in exts)
+if not refs_all:
+    raise RuntimeError(f"No reference images found under {reference_root}")
+picked_refs = rng.sample(refs_all, len(picked)) if len(refs_all) >= len(picked) else [rng.choice(refs_all) for _ in picked]
+
+records = []
+for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
+    source_dst = source_out / rel
+    depth_dst = (depth_out / rel).with_suffix(".png")
+    ref_raw_dst = ref_raw_out / f"{idx:08d}{ref.suffix.lower()}"
+    ref_blur_dst = ref_blur_out / f"{idx:08d}.png"
+    ref_lightfield_dst = ref_lightfield_out / f"{idx:08d}.png"
+    source_dst.parent.mkdir(parents=True, exist_ok=True)
+    depth_dst.parent.mkdir(parents=True, exist_ok=True)
+
+    for dst in [source_dst, depth_dst, ref_raw_dst, ref_blur_dst, ref_lightfield_dst]:
+        if dst.exists() or dst.is_symlink():
+            dst.unlink()
+
+    os.symlink(source, source_dst)
+    os.symlink(depth, depth_dst)
+    os.symlink(ref, ref_raw_dst)
+
+    with Image.open(ref) as im:
+        rgb = ImageOps.exif_transpose(im).convert("RGB")
+    small = rgb.resize((blur_downsample, blur_downsample), Image.Resampling.BICUBIC)
+    blur = small.resize(rgb.size, Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(radius=blur_radius))
+    blur.save(ref_blur_dst)
+    lightfield = uwnr_luminance_field(rgb, lightfield_sigmas, lightfield_resize_ratio)
+    lightfield.save(ref_lightfield_dst)
+
+    records.append({
+        "index": idx,
+        "relative": str(rel).replace("\\", "/"),
+        "class": rel.parts[0] if len(rel.parts) >= 2 else "_flat",
+        "source": str(source),
         "depth": str(depth),
-        "raw_ref": str(ref),
+        "reference_raw": str(ref),
+        "selected_source": str(source_dst),
+        "selected_depth": str(depth_dst),
+        "selected_reference_raw": str(ref_raw_dst),
+        "selected_reference_blur": str(ref_blur_dst),
+        "selected_reference_lightfield": str(ref_lightfield_dst),
     })
 
-sample_root.mkdir(parents=True, exist_ok=True)
-(sample_root / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-with (sample_root / "manifest.tsv").open("w", encoding="utf-8") as f:
-    f.write("id\tsource\tdepth\traw_ref\n")
-    for item in manifest:
-        f.write(f"{item['id']}\t{item['source']}\t{item['depth']}\t{item['raw_ref']}\n")
-print(f"selected {len(manifest)} samples")
-print(f"manifest: {sample_root / 'manifest.json'}")
+manifest = {
+    "num": len(records),
+    "requested_num": num,
+    "seed": seed,
+    "source_root": str(source_root),
+    "depth_root": str(depth_root),
+    "reference_root": str(reference_root),
+    "selected_source_dir": str(source_out),
+    "selected_depth_dir": str(depth_out),
+    "selected_reference_raw_dir": str(ref_raw_out),
+    "selected_reference_blur_dir": str(ref_blur_out),
+    "selected_reference_lightfield_dir": str(ref_lightfield_out),
+    "blur_radius": blur_radius,
+    "blur_downsample": blur_downsample,
+    "lightfield_sigmas": lightfield_sigmas,
+    "lightfield_resize_ratio": lightfield_resize_ratio,
+    "records": records,
+}
+(work_root / "selection_manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+print(json.dumps({
+    "selected": len(records),
+    "classes": len(set(r["class"] for r in records)),
+    "manifest": str(work_root / "selection_manifest.json"),
+}, indent=2, ensure_ascii=False))
 PY
 
-echo "Step 2/4: prepare per-experiment condition folders"
-python - "${SAMPLE_ROOT}" <<'PY'
-import json
-import shutil
-import sys
-from pathlib import Path
+run_exp() {
+  local exp_name="$1"
+  local gpu="$2"
+  local prompt="$3"
+  local ip_scale="$4"
+  local control_scale="$5"
+  local out_dir="${EXP_ROOT}/${exp_name}"
+  local log_file="${LOG_DIR}/${exp_name}.log"
 
-sample_root = Path(sys.argv[1])
-manifest = json.loads((sample_root / "manifest.json").read_text(encoding="utf-8"))
-for sub in ["source", "depth", "raw_ref"]:
-    d = sample_root / sub
-    d.mkdir(parents=True, exist_ok=True)
-for item in manifest:
-    suffix = Path(item["source"]).suffix
-    shutil.copy2(item["source"], sample_root / "source" / f"{item['id']}{suffix}")
-    shutil.copy2(item["depth"], sample_root / "depth" / f"{item['id']}.png")
-    ref_suffix = Path(item["raw_ref"]).suffix
-    shutil.copy2(item["raw_ref"], sample_root / "raw_ref" / f"{item['id']}{ref_suffix}")
-PY
+  echo "Launch ${exp_name} on GPU ${gpu}; ip=${ip_scale}; depth=${control_scale}; log=${log_file}"
+  (
+    cd "${UWDF_DIR}"
+    GPU="${gpu}" \
+    SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
+    DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
+    REFERENCE_DIR="${SELECTED_REFERENCE_RUN_DIR}" \
+    OUT_DIR="${out_dir}" \
+    HEIGHT="${HEIGHT}" \
+    WIDTH="${WIDTH}" \
+    STRENGTH="${STRENGTH}" \
+    GUIDANCE_SCALE="${GUIDANCE_SCALE}" \
+    IP_ADAPTER_SCALE="${ip_scale}" \
+    IP_ADAPTER_SCALE_MODE="${IP_ADAPTER_SCALE_MODE}" \
+    CONTROLNET_SCALE="${control_scale}" \
+    RESIZE_MODE="${RESIZE_MODE}" \
+    RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE}" \
+    STEPS="${STEPS}" \
+    LIMIT="${NUM}" \
+    SEED="${SEED}" \
+    PROMPT="${prompt}" \
+    NEGATIVE_PROMPT="${NEGATIVE_PROMPT}" \
+    SAVE_COMPARISON=0 \
+    bash scripts/run_ipadapter_controlnet_depth_generate.sh
+  ) > "${log_file}" 2>&1 &
+}
 
-if [ -f "${LIGHTFIELD_SCRIPT}" ]; then
-  echo "Step 2b/4: build lightfield references"
-  python "${LIGHTFIELD_SCRIPT}" \
-    --input-dir "${SAMPLE_ROOT}/raw_ref" \
-    --output-dir "${SAMPLE_ROOT}/lightfield_ref" \
-    2>&1 | tee "${LOG_ROOT}/make_lightfield.log" || {
-      echo "Warning: lightfield conversion failed; falling back to raw references" >&2
-      rm -rf "${SAMPLE_ROOT}/lightfield_ref"
-      cp -a "${SAMPLE_ROOT}/raw_ref" "${SAMPLE_ROOT}/lightfield_ref"
-    }
-else
-  echo "Warning: LIGHTFIELD_SCRIPT not found; using raw references as lightfield_ref: ${LIGHTFIELD_SCRIPT}" >&2
-  rm -rf "${SAMPLE_ROOT}/lightfield_ref"
-  cp -a "${SAMPLE_ROOT}/raw_ref" "${SAMPLE_ROOT}/lightfield_ref"
-fi
-
-declare -a EXP_NAMES=(
-  "e1_base_text_only"
-  "e2_linked_text_only"
-  "e3_base_text_style"
-  "e4_linked_text_style"
-  "e5_base_text_depth"
-  "e6_linked_text_depth"
-  "e7_base_text_style_depth"
-  "e8_linked_text_style_depth"
+exp_names=(
+  e1_base_text_only
+  e2_linked_text_only
+  e3_base_text_style
+  e4_linked_text_style
+  e5_base_text_depth
+  e6_linked_text_depth
+  e7_base_text_style_depth
+  e8_linked_text_style_depth
 )
-declare -a EXP_PROMPTS=(
+exp_prompts=(
   "${BASE_PROMPT}"
   "${LINKED_PROMPT}"
   "${BASE_PROMPT}"
@@ -208,210 +375,74 @@ declare -a EXP_PROMPTS=(
   "${BASE_PROMPT}"
   "${LINKED_PROMPT}"
 )
-declare -a EXP_STYLE_SCALES=(
-  "0"
-  "0"
-  "${IP_ADAPTER_SCALE}"
-  "${IP_ADAPTER_SCALE}"
-  "0"
-  "0"
-  "${IP_ADAPTER_SCALE}"
-  "${IP_ADAPTER_SCALE}"
-)
-declare -a EXP_DEPTH_SCALES=(
-  "0"
-  "0"
-  "0"
-  "0"
-  "${CONTROLNET_SCALE}"
-  "${CONTROLNET_SCALE}"
-  "${CONTROLNET_SCALE}"
-  "${CONTROLNET_SCALE}"
-)
+exp_ip_scales=(0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}" 0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}")
+exp_control_scales=(0.0 0.0 0.0 0.0 "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}")
 
-echo "Step 3/4: run 8 experiments"
-STATUS_TSV="${LOG_ROOT}/status.tsv"
-printf "experiment\tstatus\tgpu\tlog\n" > "${STATUS_TSV}"
+status_file="${LOG_DIR}/status.tsv"
+printf "experiment\tstatus\tgpu\tlog\n" > "${status_file}"
 
-for i in "${!EXP_NAMES[@]}"; do
-  name="${EXP_NAMES[$i]}"
-  prompt="${EXP_PROMPTS[$i]}"
-  style_scale="${EXP_STYLE_SCALES[$i]}"
-  depth_scale="${EXP_DEPTH_SCALES[$i]}"
-  gpu="${GPU_LIST[$((i % ${#GPU_LIST[@]}))]}"
-  out_dir="${EXP_ROOT}/${name}"
-  log_path="${LOG_ROOT}/${name}.log"
-
-  echo "-----------------------------------------"
-  echo "experiment: ${name}"
-  echo "gpu:        ${gpu}"
-  echo "style:      ${style_scale}"
-  echo "depth:      ${depth_scale}"
-  echo "out_dir:    ${out_dir}"
-  echo "prompt:     ${prompt}"
-  echo "-----------------------------------------"
-
-  mkdir -p "${out_dir}"
-  set +e
-  CUDA_VISIBLE_DEVICES="${gpu}" \
-  SOURCE_ROOT="${SAMPLE_ROOT}/source" \
-  DEPTH_ROOT="${SAMPLE_ROOT}/depth" \
-  REFERENCE_ROOT="${SAMPLE_ROOT}/lightfield_ref" \
-  OUT_ROOT="${out_dir}" \
-  PROMPT="${prompt}" \
-  NEGATIVE_PROMPT="${NEGATIVE_PROMPT}" \
-  NUM="${NUM}" \
-  SEED="${SEED}" \
-  HEIGHT="${HEIGHT}" \
-  WIDTH="${WIDTH}" \
-  STEPS="${STEPS}" \
-  STRENGTH="${STRENGTH}" \
-  GUIDANCE_SCALE="${GUIDANCE_SCALE}" \
-  IP_ADAPTER_SCALE="${style_scale}" \
-  CONTROLNET_SCALE="${depth_scale}" \
-  RESIZE_MODE="${RESIZE_MODE}" \
-  RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE}" \
-  bash "${GEN_SCRIPT}" 2>&1 | tee "${log_path}"
-  rc="${PIPESTATUS[0]}"
-  set -e
-  if [ "${rc}" -eq 0 ]; then
-    printf "%s\tok\t%s\t%s\n" "${name}" "${gpu}" "${log_path}" >> "${STATUS_TSV}"
-  else
-    printf "%s\tfailed:%s\t%s\t%s\n" "${name}" "${rc}" "${gpu}" "${log_path}" >> "${STATUS_TSV}"
-    echo "Warning: ${name} failed with code ${rc}; continuing" >&2
+echo
+echo "Step 2/3: Run eight text-condition linkage experiments"
+pids=()
+pid_names=()
+pid_gpus=()
+for i in "${!exp_names[@]}"; do
+  gpu="${gpu_array[$((i % ${#gpu_array[@]}))]}"
+  run_exp "${exp_names[$i]}" "${gpu}" "${exp_prompts[$i]}" "${exp_ip_scales[$i]}" "${exp_control_scales[$i]}"
+  pids+=("$!")
+  pid_names+=("${exp_names[$i]}")
+  pid_gpus+=("${gpu}")
+  if [[ "${#pids[@]}" -ge "${#gpu_array[@]}" ]]; then
+    for j in "${!pids[@]}"; do
+      if wait "${pids[$j]}"; then
+        echo "OK: ${pid_names[$j]}"
+        printf "%s\tok\t%s\t%s\n" "${pid_names[$j]}" "${pid_gpus[$j]}" "${LOG_DIR}/${pid_names[$j]}.log" >> "${status_file}"
+      else
+        echo "FAILED: ${pid_names[$j]}. Check ${LOG_DIR}/${pid_names[$j]}.log" >&2
+        printf "%s\tfailed\t%s\t%s\n" "${pid_names[$j]}" "${pid_gpus[$j]}" "${LOG_DIR}/${pid_names[$j]}.log" >> "${status_file}"
+      fi
+    done
+    pids=()
+    pid_names=()
+    pid_gpus=()
   fi
 done
 
-echo "Step 4/4: export multi-grids"
-python - "${SAMPLE_ROOT}" "${EXP_ROOT}" "${OUT_ROOT}" "${TILE_SIZE}" <<'PY'
-import json
-import math
-import sys
-from pathlib import Path
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+for j in "${!pids[@]}"; do
+  if wait "${pids[$j]}"; then
+    echo "OK: ${pid_names[$j]}"
+    printf "%s\tok\t%s\t%s\n" "${pid_names[$j]}" "${pid_gpus[$j]}" "${LOG_DIR}/${pid_names[$j]}.log" >> "${status_file}"
+  else
+    echo "FAILED: ${pid_names[$j]}. Check ${LOG_DIR}/${pid_names[$j]}.log" >&2
+    printf "%s\tfailed\t%s\t%s\n" "${pid_names[$j]}" "${pid_gpus[$j]}" "${LOG_DIR}/${pid_names[$j]}.log" >> "${status_file}"
+  fi
+done
 
-sample_root = Path(sys.argv[1])
-exp_root = Path(sys.argv[2])
-out_root = Path(sys.argv[3])
-tile = int(sys.argv[4])
-manifest = json.loads((sample_root / "manifest.json").read_text(encoding="utf-8"))
-out_root.mkdir(parents=True, exist_ok=True)
+echo
+echo "Step 3/3: Build multi-panel comparison and upload"
+EXP_ROOT="${EXP_ROOT}" \
+EXPERIMENTS="${EXPERIMENTS}" \
+OUT_ROOT="${OUT_ROOT}" \
+ARCHIVE_PATH="${ARCHIVE_PATH}" \
+LOG_ROOT="${LOG_DIR}" \
+DEPTH_ROOT="${SELECTED_DEPTH_DIR}" \
+MAX_IMAGES="${NUM}" \
+TILE_SIZE="${TILE_SIZE}" \
+GRID_COLUMNS="${GRID_COLUMNS}" \
+TILE_MODE="${TILE_MODE}" \
+PANEL_FORMAT="${PANEL_FORMAT}" \
+PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL}" \
+REF_PANEL_LABEL="${REF_PANEL_LABEL}" \
+UPLOAD="${UPLOAD}" \
+RCLONE_DEST="${RCLONE_DEST}" \
+OVERWRITE=1 \
+bash scripts/exp_2/synthesis/export_uwdf_depth_ablation_multigrid_to_gdrive.sh \
+  2>&1 | tee "${LOG_DIR}/export_multigrid.log"
 
-experiments = [
-    ("e1_base_text_only", "base text"),
-    ("e2_linked_text_only", "linked text"),
-    ("e3_base_text_style", "base + style"),
-    ("e4_linked_text_style", "linked + style"),
-    ("e5_base_text_depth", "base + depth"),
-    ("e6_linked_text_depth", "linked + depth"),
-    ("e7_base_text_style_depth", "base + style + depth"),
-    ("e8_linked_text_style_depth", "linked + style + depth"),
-]
-
-def font(size):
-    for p in [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    ]:
-        if Path(p).exists():
-            return ImageFont.truetype(p, size)
-    return ImageFont.load_default()
-
-label_font = font(22)
-small_font = font(16)
-
-def open_fit(path, fill=(245, 245, 245)):
-    path = Path(path)
-    if not path.exists():
-        im = Image.new("RGB", (tile, tile), fill)
-        d = ImageDraw.Draw(im)
-        d.text((16, 16), "missing", fill=(180, 0, 0), font=label_font)
-        d.text((16, 48), path.name[:40], fill=(80, 80, 80), font=small_font)
-        return im
-    im = Image.open(path).convert("RGB")
-    im.thumbnail((tile, tile), Image.Resampling.LANCZOS)
-    canvas = Image.new("RGB", (tile, tile), fill)
-    canvas.paste(im, ((tile - im.width) // 2, (tile - im.height) // 2))
-    return canvas
-
-def find_one(directory, sample_id):
-    directory = Path(directory)
-    for ext in [".png", ".jpg", ".jpeg", ".webp", ".bmp"]:
-        matches = sorted(directory.rglob(f"{sample_id}*{ext}"))
-        if matches:
-            return matches[0]
-    matches = sorted(directory.rglob(f"*{sample_id}*"))
-    return matches[0] if matches else directory / f"{sample_id}.png"
-
-def labeled(im, title):
-    header = 34
-    canvas = Image.new("RGB", (tile, tile + header), (255, 255, 255))
-    canvas.paste(im, (0, header))
-    d = ImageDraw.Draw(canvas)
-    d.rectangle([0, 0, tile - 1, header - 1], fill=(32, 36, 40))
-    d.text((10, 7), title, fill=(255, 255, 255), font=small_font)
-    return canvas
-
-for item in manifest:
-    sid = item["id"]
-    source = find_one(sample_root / "source", sid)
-    depth = find_one(sample_root / "depth", sid)
-    raw_ref = find_one(sample_root / "raw_ref", sid)
-    light_ref = find_one(sample_root / "lightfield_ref", sid)
-
-    conds = [
-        labeled(open_fit(source), "source"),
-        labeled(open_fit(raw_ref), "raw ref"),
-        labeled(open_fit(light_ref), "lightfield ref"),
-        labeled(open_fit(depth), "depth"),
-    ]
-    exp_imgs = [(name, title, labeled(open_fit(find_one(exp_root / name, sid)), title)) for name, title in experiments]
-
-    cols = 4
-    rows = 1 + 4
-    gap = 12
-    margin = 18
-    cell_w, cell_h = tile, tile + 34
-    W = margin * 2 + cols * cell_w + (cols - 1) * gap
-    H = margin * 2 + rows * cell_h + (rows - 1) * gap + 44
-    grid = Image.new("RGB", (W, H), (250, 250, 248))
-    d = ImageDraw.Draw(grid)
-    d.text((margin, 12), f"{sid}  |  UWDF text-condition linkage", fill=(25, 25, 25), font=label_font)
-
-    y = margin + 44
-    for c, im in enumerate(conds):
-        x = margin + c * (cell_w + gap)
-        grid.paste(im, (x, y))
-
-    pairs = [(0, 1), (2, 3), (4, 5), (6, 7)]
-    for r, pair in enumerate(pairs, start=1):
-        y = margin + 44 + r * (cell_h + gap)
-        for j, idx in enumerate(pair):
-            x = margin + j * (cell_w + gap)
-            grid.paste(exp_imgs[idx][2], (x, y))
-
-    out_path = out_root / f"{sid}_linkage_grid.png"
-    grid.save(out_path)
-
-print(f"exported {len(manifest)} grids to {out_root}")
-PY
-
-echo "Create archive: ${ARCHIVE_PATH}"
-mkdir -p "$(dirname "${ARCHIVE_PATH}")"
-tar -C "$(dirname "${OUT_ROOT}")" -czf "${ARCHIVE_PATH}" "$(basename "${OUT_ROOT}")"
-ls -lh "${ARCHIVE_PATH}"
-
-if [ "${UPLOAD}" = "1" ]; then
-  echo "Upload archive and folder to: ${RCLONE_DEST}"
-  rclone copy "${ARCHIVE_PATH}" "${RCLONE_DEST}"
-  rclone copy "${OUT_ROOT}" "${RCLONE_DEST}/$(basename "${OUT_ROOT}")"
-fi
-
-echo "========================================="
-echo "UWDF text-condition linkage test done"
-echo "========================================="
-echo "status:  ${STATUS_TSV}"
-echo "samples: ${SAMPLE_ROOT}"
-echo "grids:   ${OUT_ROOT}"
-echo "archive: ${ARCHIVE_PATH}"
-echo "========================================="
+echo
+echo "Done."
+echo "Experiments: ${EXP_ROOT}"
+echo "Selection:   ${WORK_ROOT}/selection_manifest.json"
+echo "Panels:      ${OUT_ROOT}/multi_panel"
+echo "Archive:     ${ARCHIVE_PATH}"
+echo "Status:      ${LOG_DIR}/status.tsv"

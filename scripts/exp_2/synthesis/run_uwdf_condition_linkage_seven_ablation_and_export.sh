@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Run seven UWDF SDXL img2img condition-linkage ablations, then export grids.
 # Layout intent:
-#   conditions: source | raw underwater reference | UWNR-style lightfield reference | depth
+#   conditions: source | raw underwater reference | processed blur reference | depth
 #   results: original stable | style only | depth only | style+depth |
 #            text-style linked | text-depth linked | text-style-depth linked
 
@@ -65,6 +65,7 @@ EXPERIMENTS="e1_original_stable e2_style_only e3_depth_only e4_style_depth e5_te
 SELECTED_SOURCE_DIR="${SELECT_ROOT}/source/${SPLIT}"
 SELECTED_DEPTH_DIR="${SELECT_ROOT}/depth/${SPLIT}"
 SELECTED_REFERENCE_RAW_DIR="${SELECT_ROOT}/reference_raw/qingxi"
+SELECTED_REFERENCE_BLUR_DIR="${SELECT_ROOT}/reference_blur/qingxi"
 SELECTED_REFERENCE_LIGHTFIELD_DIR="${SELECT_ROOT}/reference_lightfield/qingxi"
 
 cat <<EOF
@@ -120,20 +121,23 @@ if [[ "${OVERWRITE}" == "1" ]]; then
   rm -rf "${WORK_ROOT}" "${OUT_ROOT}" "${ARCHIVE_PATH}"
 fi
 mkdir -p "${EXP_ROOT}" "${LOG_DIR}" "${SELECTED_SOURCE_DIR}" "${SELECTED_DEPTH_DIR}" \
-  "${SELECTED_REFERENCE_RAW_DIR}" "${SELECTED_REFERENCE_LIGHTFIELD_DIR}"
+  "${SELECTED_REFERENCE_RAW_DIR}" "${SELECTED_REFERENCE_BLUR_DIR}" "${SELECTED_REFERENCE_LIGHTFIELD_DIR}"
 
 echo
-echo "Step 1/3: Select shared source/depth/reference samples and build UWNR-style lightfield refs"
+echo "Step 1/3: Select shared source/depth/reference samples and build blur reference variants"
 SOURCE_ROOT="${SOURCE_ROOT}" \
 DEPTH_ROOT="${DEPTH_ROOT}" \
 REFERENCE_ROOT="${REFERENCE_ROOT}" \
 SELECTED_SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
 SELECTED_DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
 SELECTED_REFERENCE_RAW_DIR="${SELECTED_REFERENCE_RAW_DIR}" \
+SELECTED_REFERENCE_BLUR_DIR="${SELECTED_REFERENCE_BLUR_DIR}" \
 SELECTED_REFERENCE_LIGHTFIELD_DIR="${SELECTED_REFERENCE_LIGHTFIELD_DIR}" \
 WORK_ROOT="${WORK_ROOT}" \
 NUM="${NUM}" \
 SEED="${SEED}" \
+BLUR_RADIUS="${BLUR_RADIUS}" \
+BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE}" \
 LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS}" \
 LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO}" \
 python - <<'PY'
@@ -150,10 +154,13 @@ reference_root = Path(os.environ["REFERENCE_ROOT"])
 source_out = Path(os.environ["SELECTED_SOURCE_DIR"])
 depth_out = Path(os.environ["SELECTED_DEPTH_DIR"])
 ref_raw_out = Path(os.environ["SELECTED_REFERENCE_RAW_DIR"])
+ref_blur_out = Path(os.environ["SELECTED_REFERENCE_BLUR_DIR"])
 ref_lightfield_out = Path(os.environ["SELECTED_REFERENCE_LIGHTFIELD_DIR"])
 work_root = Path(os.environ["WORK_ROOT"])
 num = int(os.environ["NUM"])
 seed = int(os.environ["SEED"])
+blur_radius = float(os.environ["BLUR_RADIUS"])
+blur_downsample = int(os.environ["BLUR_DOWNSAMPLE"])
 lightfield_sigmas = [float(x) for x in os.environ["LIGHTFIELD_SIGMAS"].split()]
 lightfield_resize_ratio = float(os.environ["LIGHTFIELD_RESIZE_RATIO"])
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
@@ -190,7 +197,7 @@ def uwnr_luminance_field(rgb: Image.Image, sigmas, resize_ratio: float) -> Image
     field = np.uint8(np.clip(field * 255.0, 0, 255))
     return Image.fromarray(field).resize((width, height), Image.Resampling.BICUBIC)
 
-for path in [source_out, depth_out, ref_raw_out, ref_lightfield_out]:
+for path in [source_out, depth_out, ref_raw_out, ref_blur_out, ref_lightfield_out]:
     clear(path)
     path.mkdir(parents=True, exist_ok=True)
 
@@ -225,10 +232,11 @@ for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
     source_dst = source_out / rel
     depth_dst = (depth_out / rel).with_suffix(".png")
     ref_raw_dst = ref_raw_out / f"{idx:08d}{ref.suffix.lower()}"
+    ref_blur_dst = ref_blur_out / f"{idx:08d}.png"
     ref_lightfield_dst = ref_lightfield_out / f"{idx:08d}.png"
     source_dst.parent.mkdir(parents=True, exist_ok=True)
     depth_dst.parent.mkdir(parents=True, exist_ok=True)
-    for dst in [source_dst, depth_dst, ref_raw_dst, ref_lightfield_dst]:
+    for dst in [source_dst, depth_dst, ref_raw_dst, ref_blur_dst, ref_lightfield_dst]:
         if dst.exists() or dst.is_symlink():
             dst.unlink()
     os.symlink(source, source_dst)
@@ -236,6 +244,9 @@ for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
     os.symlink(ref, ref_raw_dst)
     with Image.open(ref) as im:
         rgb = ImageOps.exif_transpose(im).convert("RGB")
+    small = rgb.resize((blur_downsample, blur_downsample), Image.Resampling.BICUBIC)
+    blur = small.resize(rgb.size, Image.Resampling.BICUBIC).filter(ImageFilter.GaussianBlur(radius=blur_radius))
+    blur.save(ref_blur_dst)
     lightfield = uwnr_luminance_field(rgb, lightfield_sigmas, lightfield_resize_ratio)
     lightfield.save(ref_lightfield_dst)
     records.append({
@@ -248,6 +259,7 @@ for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
         "selected_source": str(source_dst),
         "selected_depth": str(depth_dst),
         "selected_reference_raw": str(ref_raw_dst),
+        "selected_reference_blur": str(ref_blur_dst),
         "selected_reference_lightfield": str(ref_lightfield_dst),
     })
 
@@ -261,7 +273,10 @@ manifest = {
     "selected_source_dir": str(source_out),
     "selected_depth_dir": str(depth_out),
     "selected_reference_raw_dir": str(ref_raw_out),
+    "selected_reference_blur_dir": str(ref_blur_out),
     "selected_reference_lightfield_dir": str(ref_lightfield_out),
+    "blur_radius": blur_radius,
+    "blur_downsample": blur_downsample,
     "lightfield_sigmas": lightfield_sigmas,
     "lightfield_resize_ratio": lightfield_resize_ratio,
     "records": records,
@@ -285,7 +300,7 @@ run_exp() {
     GPU="${gpu}" \
     SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
     DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
-    REFERENCE_DIR="${SELECTED_REFERENCE_LIGHTFIELD_DIR}" \
+    REFERENCE_DIR="${SELECTED_REFERENCE_BLUR_DIR}" \
     OUT_DIR="${out_dir}" \
     HEIGHT="${HEIGHT}" \
     WIDTH="${WIDTH}" \

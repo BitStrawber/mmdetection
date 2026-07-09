@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Export UWDF seven-condition ablation results as high-resolution per-sample grids.
-# First two columns: source/ref raw and ref lightfield/depth as a 2x2 condition block.
+# First two columns: source/ref raw and ref blur/depth as a 2x2 condition block.
 # Remaining columns: seven generated outputs.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -215,13 +215,13 @@ exp_labels = {
     "e6_text_depth_linked": "6 text-depth linked",
     "e7_text_style_depth_linked": "7 text-style-depth linked",
 }
-condition_labels = ["source", "ref raw", "ref lightfield", "depth"]
+condition_labels = ["source", "ref raw", "ref blur", "depth"]
 rows = []
 for row_idx, sel in enumerate(selection_records):
     condition_paths = [
         sel.get("selected_source") or sel.get("source") or "",
         sel.get("selected_reference_raw") or sel.get("reference_raw") or "",
-        sel.get("selected_reference_lightfield") or "",
+        sel.get("selected_reference_blur") or sel.get("selected_reference_lightfield") or "",
         sel.get("selected_depth") or sel.get("depth") or "",
     ]
     condition_tiles = [
@@ -276,7 +276,7 @@ for row_idx, sel in enumerate(selection_records):
         "relative": sel.get("relative", ""),
         "source": condition_paths[0],
         "reference_raw": condition_paths[1],
-        "reference_lightfield": condition_paths[2],
+        "reference_blur": condition_paths[2],
         "depth": condition_paths[3],
         "experiments": exp_outputs,
         "match_keys": exp_match_keys,
@@ -302,11 +302,11 @@ summary = {
 (out_root / "condition_linkage_grid_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 with (out_root / "condition_linkage_grid_rows.tsv").open("w", encoding="utf-8", newline="") as f:
     writer = csv.writer(f, delimiter="\t")
-    writer.writerow(["index", "key", "relative", "source", "reference_raw", "reference_lightfield", "depth", *experiments, "panel"])
+    writer.writerow(["index", "key", "relative", "source", "reference_raw", "reference_blur", "depth", *experiments, "panel"])
     for row in rows:
         writer.writerow([
             row["index"], row["key"], row["relative"], row["source"], row["reference_raw"],
-            row["reference_lightfield"], row["depth"],
+            row["reference_blur"], row["depth"],
             *[row["experiments"].get(exp, "") for exp in experiments], row["panel"],
         ])
 print(json.dumps({"panel_count": len(rows), "panel_dir": str(panel_dir), "summary": str(out_root / "condition_linkage_grid_summary.json")}, indent=2))

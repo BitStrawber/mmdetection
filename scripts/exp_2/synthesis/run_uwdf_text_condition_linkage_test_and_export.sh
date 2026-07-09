@@ -52,7 +52,9 @@ LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS:-15 60 90}"
 LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO:-0.3}"
 
 BASE_PROMPT="${BASE_PROMPT:-a realistic underwater photograph}"
-LINKED_PROMPT="${LINKED_PROMPT:-a realistic underwater photograph, with underwater visual appearance guided by the reference image and spatial structure guided by the depth map}"
+STYLE_LINK_PROMPT="${STYLE_LINK_PROMPT:-a realistic underwater photograph, use the reference image as a real underwater photograph and transfer its underwater environmental appearance to the entire source scene: global water medium appearance, ambient underwater illumination, water-column atmosphere, haze, turbidity, reduced contrast, soft scattering, and natural light attenuation}"
+DEPTH_LINK_PROMPT="${DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the depth map to guide spatial structure, scene geometry, object layout, and depth-dependent underwater appearance across the source scene}"
+STYLE_DEPTH_LINK_PROMPT="${STYLE_DEPTH_LINK_PROMPT:-a realistic underwater photograph, use the reference image as a real underwater photograph and transfer its underwater environmental appearance to the entire source scene, while using the depth map to guide spatial structure, scene geometry, object layout, and depth-dependent underwater appearance}"
 NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-cartoon, painting, illustration, unrealistic image, artificial colors, object deformation, changed object identity, extra objects, text, watermark, low quality, worst quality}"
 
 RESIZE_MODE="${RESIZE_MODE:-pad}"
@@ -117,9 +119,11 @@ echo "LIGHTFIELD_SIGMAS:   ${LIGHTFIELD_SIGMAS}"
 echo "LIGHTFIELD_RATIO:    ${LIGHTFIELD_RESIZE_RATIO}"
 echo "RESIZE_MODE:         ${RESIZE_MODE}"
 echo "RESTORE_SOURCE_SIZE: ${RESTORE_SOURCE_SIZE}"
-echo "BASE_PROMPT:         ${BASE_PROMPT}"
-echo "LINKED_PROMPT:       ${LINKED_PROMPT}"
-echo "NEGATIVE_PROMPT:     ${NEGATIVE_PROMPT}"
+echo "BASE_PROMPT:              ${BASE_PROMPT}"
+echo "STYLE_LINK_PROMPT:        ${STYLE_LINK_PROMPT}"
+echo "DEPTH_LINK_PROMPT:        ${DEPTH_LINK_PROMPT}"
+echo "STYLE_DEPTH_LINK_PROMPT:  ${STYLE_DEPTH_LINK_PROMPT}"
+echo "NEGATIVE_PROMPT:          ${NEGATIVE_PROMPT}"
 echo "========================================="
 
 if [[ ! -d "${UWDF_DIR}" ]]; then
@@ -367,13 +371,13 @@ exp_names=(
 )
 exp_prompts=(
   "${BASE_PROMPT}"
-  "${LINKED_PROMPT}"
+  "${STYLE_DEPTH_LINK_PROMPT}"
   "${BASE_PROMPT}"
-  "${LINKED_PROMPT}"
+  "${STYLE_LINK_PROMPT}"
   "${BASE_PROMPT}"
-  "${LINKED_PROMPT}"
+  "${DEPTH_LINK_PROMPT}"
   "${BASE_PROMPT}"
-  "${LINKED_PROMPT}"
+  "${STYLE_DEPTH_LINK_PROMPT}"
 )
 exp_ip_scales=(0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}" 0.0 0.0 "${IP_ADAPTER_SCALE}" "${IP_ADAPTER_SCALE}")
 exp_control_scales=(0.0 0.0 0.0 0.0 "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}" "${CONTROLNET_SCALE}")

@@ -15,6 +15,7 @@ be traced back to ImageNet synsets.
 
 import argparse
 import json
+import os
 import random
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
@@ -113,6 +114,26 @@ def repeat_images(images: List[Path], target_count: int) -> List[Path]:
     )
     return repeated
 
+def link_or_copy(src: Path, dst: Path) -> None:
+    try:
+        os.symlink(str(src), str(dst))
+        return
+    except OSError:
+        pass
+    try:
+        os.link(str(src), str(dst))
+        return
+    except OSError:
+        pass
+    # Last-resort fallback for filesystems that disallow links.
+    with src.open('rb') as fsrc, dst.open('wb') as fdst:
+        while True:
+            chunk = fsrc.read(1024 * 1024)
+            if not chunk:
+                break
+            fdst.write(chunk)
+
+
 def prepare_rgb(src: Path, dst: Path, size: Tuple[int, int]) -> None:
     with Image.open(src) as image:
         image = image.convert('RGB')
@@ -190,9 +211,15 @@ def main() -> None:
             'air_depth': str(depth_dst),
         })
 
+    linked_water = 0
     for index, image_path in enumerate(tqdm(water_images, desc='prepare WaterGAN water', unit='image')):
         water_dst = out_dir / 'water_images' / f'{index:08d}.png'
-        prepare_rgb(image_path, water_dst, water_size)
+        if args.water_repeat_to > 0 and selected_water_before_repeat > 0 and index >= selected_water_before_repeat:
+            base_dst = out_dir / 'water_images' / f'{index % selected_water_before_repeat:08d}.png'
+            link_or_copy(base_dst, water_dst)
+            linked_water += 1
+        else:
+            prepare_rgb(image_path, water_dst, water_size)
 
     manifest = out_dir / 'watergan_air_manifest.jsonl'
     with manifest.open('w', encoding='utf-8') as f:
@@ -213,6 +240,7 @@ def main() -> None:
         'selected_water_before_repeat': selected_water_before_repeat,
         'prepared_air': len(records),
         'prepared_water': len(water_images),
+        'linked_or_reused_water': linked_water,
         'missing_depth': len(missing_depth),
         'missing_depth_samples': missing_depth[:20],
         'air_size': list(air_size),

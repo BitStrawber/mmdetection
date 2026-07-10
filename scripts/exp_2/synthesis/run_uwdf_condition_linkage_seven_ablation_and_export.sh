@@ -16,6 +16,7 @@ SPLIT="${SPLIT:-train}"
 SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/uwdf/source/${SPLIT}}"
 DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/${SPLIT}}"
 REFERENCE_ROOT="${REFERENCE_ROOT:-/media/SSD1/XCX/exp_2/UWNR_ref_underwater/lnrud_like_ref/qingxi}"
+FIXED_REFERENCE_ROOT="${FIXED_REFERENCE_ROOT:-}"
 
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/uwdf_condition_linkage_seven_ablation}"
 EXP_ROOT="${EXP_ROOT:-${WORK_ROOT}/experiments}"
@@ -93,6 +94,7 @@ UWDF_DIR:              ${UWDF_DIR}
 SOURCE_ROOT:           ${SOURCE_ROOT}
 DEPTH_ROOT:            ${DEPTH_ROOT}
 REFERENCE_ROOT:        ${REFERENCE_ROOT}
+FIXED_REFERENCE_ROOT:  ${FIXED_REFERENCE_ROOT}
 WORK_ROOT:             ${WORK_ROOT}
 EXP_ROOT:              ${EXP_ROOT}
 OUT_ROOT:              ${OUT_ROOT}
@@ -148,6 +150,7 @@ echo "Step 1/3: Select shared source/depth/reference samples and build blur refe
 SOURCE_ROOT="${SOURCE_ROOT}" \
 DEPTH_ROOT="${DEPTH_ROOT}" \
 REFERENCE_ROOT="${REFERENCE_ROOT}" \
+FIXED_REFERENCE_ROOT="${FIXED_REFERENCE_ROOT}" \
 SELECTED_SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
 SELECTED_DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
 SELECTED_REFERENCE_RAW_DIR="${SELECTED_REFERENCE_RAW_DIR}" \
@@ -171,6 +174,8 @@ import random
 source_root = Path(os.environ["SOURCE_ROOT"])
 depth_root = Path(os.environ["DEPTH_ROOT"])
 reference_root = Path(os.environ["REFERENCE_ROOT"])
+fixed_reference_root_env = os.environ.get("FIXED_REFERENCE_ROOT", "").strip()
+fixed_reference_root = Path(fixed_reference_root_env) if fixed_reference_root_env else None
 source_out = Path(os.environ["SELECTED_SOURCE_DIR"])
 depth_out = Path(os.environ["SELECTED_DEPTH_DIR"])
 ref_raw_out = Path(os.environ["SELECTED_REFERENCE_RAW_DIR"])
@@ -242,10 +247,20 @@ else:
     all_pairs = sorted((x for xs in by_cls.values() for x in xs), key=lambda x: str(x[0]))
     picked = rng.sample(all_pairs, min(num, len(all_pairs)))
 
-refs_all = sorted(p for p in reference_root.rglob("*") if p.is_file() and p.suffix.lower() in exts)
+ref_search_root = fixed_reference_root if fixed_reference_root else reference_root
+refs_all = sorted(p for p in ref_search_root.rglob("*") if p.is_file() and p.suffix.lower() in exts)
 if not refs_all:
-    raise RuntimeError(f"No reference images found under {reference_root}")
-picked_refs = rng.sample(refs_all, len(picked)) if len(refs_all) >= len(picked) else [rng.choice(refs_all) for _ in picked]
+    raise RuntimeError(f"No reference images found under {ref_search_root}")
+if fixed_reference_root:
+    if len(refs_all) < len(picked):
+        raise RuntimeError(
+            f"FIXED_REFERENCE_ROOT has {len(refs_all)} images, but {len(picked)} source samples were selected: {fixed_reference_root}"
+        )
+    picked_refs = refs_all[:len(picked)]
+    reference_selection_mode = "fixed_root_ordered"
+else:
+    picked_refs = rng.sample(refs_all, len(picked)) if len(refs_all) >= len(picked) else [rng.choice(refs_all) for _ in picked]
+    reference_selection_mode = "seeded_random"
 
 records = []
 for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
@@ -290,6 +305,8 @@ manifest = {
     "source_root": str(source_root),
     "depth_root": str(depth_root),
     "reference_root": str(reference_root),
+    "fixed_reference_root": fixed_reference_root_env,
+    "reference_selection_mode": reference_selection_mode,
     "selected_source_dir": str(source_out),
     "selected_depth_dir": str(depth_out),
     "selected_reference_raw_dir": str(ref_raw_out),

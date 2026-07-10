@@ -24,6 +24,7 @@ PANEL_FORMAT="${PANEL_FORMAT:-png}"
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
+PACKAGE_EXPORT="${PACKAGE_EXPORT:-0}"
 OVERWRITE="${OVERWRITE:-1}"
 
 cat <<EOF
@@ -35,6 +36,7 @@ EXPERIMENTS:        ${EXPERIMENTS}
 SELECTION_MANIFEST: ${SELECTION_MANIFEST}
 OUT_ROOT:           ${OUT_ROOT}
 ARCHIVE_PATH:       ${ARCHIVE_PATH}
+PACKAGE_EXPORT:    ${PACKAGE_EXPORT}
 MAX_IMAGES:         ${MAX_IMAGES}
 TILE_SIZE:          ${TILE_SIZE}
 CONDITION_TILE:     ${CONDITION_TILE_SIZE}
@@ -191,6 +193,7 @@ def selection_match_keys(selection_record):
             keys.extend(path_keys(v))
     return [k for k in dict.fromkeys(keys) if k]
 selection = json.loads(selection_manifest.read_text(encoding="utf-8"))
+ref_input_mode = str(selection.get("ref_input_mode", "blur")).strip().lower()
 selection_records = selection.get("records", [])[:max_images]
 exp_records = {}
 for exp in experiments:
@@ -215,13 +218,30 @@ exp_labels = {
     "e6_text_depth_linked": "6 text-depth linked",
     "e7_text_style_depth_linked": "7 text-style-depth linked",
 }
-condition_labels = ["source", "ref raw", "ref blur", "depth"]
+if ref_input_mode == "lightfield":
+    processed_ref_key = "selected_reference_lightfield"
+    processed_ref_fallbacks = ["selected_reference_lightfield", "selected_reference_blur"]
+    processed_ref_label = "ref lightfield"
+elif ref_input_mode == "raw":
+    processed_ref_key = "selected_reference_raw"
+    processed_ref_fallbacks = ["selected_reference_raw", "selected_reference_blur", "selected_reference_lightfield"]
+    processed_ref_label = "ref raw used"
+else:
+    processed_ref_key = "selected_reference_blur"
+    processed_ref_fallbacks = ["selected_reference_blur", "selected_reference_lightfield"]
+    processed_ref_label = "ref blur"
+condition_labels = ["source", "ref raw", processed_ref_label, "depth"]
 rows = []
 for row_idx, sel in enumerate(selection_records):
+    processed_ref_path = ""
+    for key_name in processed_ref_fallbacks:
+        processed_ref_path = sel.get(key_name) or ""
+        if processed_ref_path:
+            break
     condition_paths = [
         sel.get("selected_source") or sel.get("source") or "",
         sel.get("selected_reference_raw") or sel.get("reference_raw") or "",
-        sel.get("selected_reference_blur") or sel.get("selected_reference_lightfield") or "",
+        processed_ref_path,
         sel.get("selected_depth") or sel.get("depth") or "",
     ]
     condition_tiles = [
@@ -276,7 +296,7 @@ for row_idx, sel in enumerate(selection_records):
         "relative": sel.get("relative", ""),
         "source": condition_paths[0],
         "reference_raw": condition_paths[1],
-        "reference_blur": condition_paths[2],
+        "reference_processed": condition_paths[2],
         "depth": condition_paths[3],
         "experiments": exp_outputs,
         "match_keys": exp_match_keys,
@@ -296,17 +316,19 @@ summary = {
     "panel_format": panel_format,
     "png_compress_level": png_compress_level,
     "panel_count": len(rows),
+    "ref_input_mode": ref_input_mode,
+    "processed_reference_key": processed_ref_key,
     "experiment_manifests": {k: v["manifest"] for k, v in exp_records.items()},
     "rows": rows,
 }
 (out_root / "condition_linkage_grid_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
 with (out_root / "condition_linkage_grid_rows.tsv").open("w", encoding="utf-8", newline="") as f:
     writer = csv.writer(f, delimiter="\t")
-    writer.writerow(["index", "key", "relative", "source", "reference_raw", "reference_blur", "depth", *experiments, "panel"])
+    writer.writerow(["index", "key", "relative", "source", "reference_raw", "reference_processed", "depth", *experiments, "panel"])
     for row in rows:
         writer.writerow([
             row["index"], row["key"], row["relative"], row["source"], row["reference_raw"],
-            row["reference_blur"], row["depth"],
+            row["reference_processed"], row["depth"],
             *[row["experiments"].get(exp, "") for exp in experiments], row["panel"],
         ])
 print(json.dumps({"panel_count": len(rows), "panel_dir": str(panel_dir), "summary": str(out_root / "condition_linkage_grid_summary.json")}, indent=2))
@@ -329,21 +351,33 @@ for exp in ${EXPERIMENTS}; do
   fi
 done
 
-rm -f "${ARCHIVE_PATH}"
-tar -czf "${ARCHIVE_PATH}" -C "$(dirname "${OUT_ROOT}")" "$(basename "${OUT_ROOT}")"
-ls -lh "${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  rm -f "${ARCHIVE_PATH}"
+  tar -czf "${ARCHIVE_PATH}" -C "$(dirname "${OUT_ROOT}")" "$(basename "${OUT_ROOT}")"
+  ls -lh "${ARCHIVE_PATH}"
+else
+  echo "Skip archive because PACKAGE_EXPORT=${PACKAGE_EXPORT}"
+fi
 
 if [[ "${UPLOAD}" == "1" ]]; then
   if ! command -v rclone >/dev/null 2>&1; then
     echo "Error: rclone not found. Set UPLOAD=0 to skip upload." >&2
     exit 1
   fi
-  rclone copy -P "${ARCHIVE_PATH}" "${RCLONE_DEST}"
+  if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+    rclone copy -P "${ARCHIVE_PATH}" "${RCLONE_DEST}"
+  else
+    rclone copy -P "${OUT_ROOT}" "${RCLONE_DEST%/}/$(basename "${OUT_ROOT}")/"
+  fi
 else
   echo "Skip upload because UPLOAD=${UPLOAD}"
 fi
 
 echo "Done."
 echo "Export dir: ${OUT_ROOT}"
-echo "Archive:    ${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  echo "Archive:    ${ARCHIVE_PATH}"
+else
+  echo "Archive:    skipped"
+fi
 echo "Remote:     ${RCLONE_DEST}"

@@ -42,6 +42,7 @@ PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-0}"
 REF_PANEL_LABEL="${REF_PANEL_LABEL:-reference}"
 UPLOAD="${UPLOAD:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
+PACKAGE_EXPORT="${PACKAGE_EXPORT:-0}"
 OVERWRITE="${OVERWRITE:-1}"
 AUTO_DETECT_EXP_ROOT="${AUTO_DETECT_EXP_ROOT:-1}"
 SYNTHESIS_WORK_ROOT="${SYNTHESIS_WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work}"
@@ -53,6 +54,7 @@ echo "EXP_ROOT:     ${EXP_ROOT}"
 echo "EXPERIMENTS:  ${EXPERIMENTS}"
 echo "OUT_ROOT:     ${OUT_ROOT}"
 echo "ARCHIVE_PATH: ${ARCHIVE_PATH}"
+echo "PACKAGE:     ${PACKAGE_EXPORT}"
 echo "LOG_ROOT:     ${LOG_ROOT}"
 echo "DEPTH_ROOT:   ${DEPTH_ROOT}"
 echo "MAX_IMAGES:   ${MAX_IMAGES}"
@@ -487,19 +489,31 @@ done
 shopt -u nullglob
 
 echo
-echo "Create archive"
-rm -f "${ARCHIVE_PATH}"
-tar -czf "${ARCHIVE_PATH}" -C "$(dirname "${OUT_ROOT}")" "$(basename "${OUT_ROOT}")"
-ls -lh "${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  echo "Create archive"
+  rm -f "${ARCHIVE_PATH}"
+  tar -czf "${ARCHIVE_PATH}" -C "$(dirname "${OUT_ROOT}")" "$(basename "${OUT_ROOT}")"
+  ls -lh "${ARCHIVE_PATH}"
+else
+  echo "Skip archive because PACKAGE_EXPORT=${PACKAGE_EXPORT}"
+fi
 
 if [[ "${UPLOAD}" == "1" ]]; then
   echo
-  echo "Upload archive"
+  if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+    echo "Upload archive"
+  else
+    echo "Upload export directory"
+  fi
   if ! command -v rclone >/dev/null 2>&1; then
     echo "Error: rclone not found. Set UPLOAD=0 to skip upload." >&2
     exit 1
   fi
-  rclone copy -P "${ARCHIVE_PATH}" "${RCLONE_DEST}"
+  if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+    rclone copy -P "${ARCHIVE_PATH}" "${RCLONE_DEST}"
+  else
+    rclone copy -P "${OUT_ROOT}" "${RCLONE_DEST%/}/$(basename "${OUT_ROOT}")/"
+  fi
 else
   echo "Skip upload because UPLOAD=${UPLOAD}"
 fi
@@ -507,5 +521,9 @@ fi
 echo
 echo "Done."
 echo "Export dir: ${OUT_ROOT}"
-echo "Archive:    ${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  echo "Archive:    ${ARCHIVE_PATH}"
+else
+  echo "Archive:    skipped"
+fi
 echo "Remote:     ${RCLONE_DEST}"

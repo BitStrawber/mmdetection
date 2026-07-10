@@ -17,6 +17,7 @@ SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/uwdf/source
 DEPTH_ROOT="${DEPTH_ROOT:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/uwdf/${SPLIT}}"
 REFERENCE_ROOT="${REFERENCE_ROOT:-/media/SSD1/XCX/exp_2/UWNR_ref_underwater/lnrud_like_ref/qingxi}"
 FIXED_REFERENCE_ROOT="${FIXED_REFERENCE_ROOT:-}"
+REUSE_SELECTION_MANIFEST="${REUSE_SELECTION_MANIFEST:-}"
 
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/uwdf_condition_linkage_seven_ablation}"
 EXP_ROOT="${EXP_ROOT:-${WORK_ROOT}/experiments}"
@@ -56,6 +57,7 @@ NEGATIVE_PROMPT="${NEGATIVE_PROMPT:-cartoon, painting, illustration, unrealistic
 
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 UPLOAD="${UPLOAD:-1}"
+PACKAGE_EXPORT="${PACKAGE_EXPORT:-0}"
 OVERWRITE="${OVERWRITE:-1}"
 TILE_SIZE="${TILE_SIZE:-1024}"
 CONDITION_TILE_SIZE="${CONDITION_TILE_SIZE:-248}"
@@ -95,6 +97,7 @@ SOURCE_ROOT:           ${SOURCE_ROOT}
 DEPTH_ROOT:            ${DEPTH_ROOT}
 REFERENCE_ROOT:        ${REFERENCE_ROOT}
 FIXED_REFERENCE_ROOT:  ${FIXED_REFERENCE_ROOT}
+REUSE_SELECTION:      ${REUSE_SELECTION_MANIFEST}
 WORK_ROOT:             ${WORK_ROOT}
 EXP_ROOT:              ${EXP_ROOT}
 OUT_ROOT:              ${OUT_ROOT}
@@ -151,6 +154,7 @@ SOURCE_ROOT="${SOURCE_ROOT}" \
 DEPTH_ROOT="${DEPTH_ROOT}" \
 REFERENCE_ROOT="${REFERENCE_ROOT}" \
 FIXED_REFERENCE_ROOT="${FIXED_REFERENCE_ROOT}" \
+REUSE_SELECTION_MANIFEST="${REUSE_SELECTION_MANIFEST}" \
 SELECTED_SOURCE_DIR="${SELECTED_SOURCE_DIR}" \
 SELECTED_DEPTH_DIR="${SELECTED_DEPTH_DIR}" \
 SELECTED_REFERENCE_RAW_DIR="${SELECTED_REFERENCE_RAW_DIR}" \
@@ -163,7 +167,8 @@ BLUR_RADIUS="${BLUR_RADIUS}" \
 BLUR_DOWNSAMPLE="${BLUR_DOWNSAMPLE}" \
 LIGHTFIELD_SIGMAS="${LIGHTFIELD_SIGMAS}" \
 LIGHTFIELD_RESIZE_RATIO="${LIGHTFIELD_RESIZE_RATIO}" \
-python - <<'PY'
+REF_INPUT_MODE="${REF_INPUT_MODE}" \
+python - <<''PY''
 from pathlib import Path
 from PIL import Image, ImageFilter, ImageOps
 import json
@@ -176,6 +181,8 @@ depth_root = Path(os.environ["DEPTH_ROOT"])
 reference_root = Path(os.environ["REFERENCE_ROOT"])
 fixed_reference_root_env = os.environ.get("FIXED_REFERENCE_ROOT", "").strip()
 fixed_reference_root = Path(fixed_reference_root_env) if fixed_reference_root_env else None
+reuse_selection_manifest_env = os.environ.get("REUSE_SELECTION_MANIFEST", "").strip()
+reuse_selection_manifest = Path(reuse_selection_manifest_env) if reuse_selection_manifest_env else None
 source_out = Path(os.environ["SELECTED_SOURCE_DIR"])
 depth_out = Path(os.environ["SELECTED_DEPTH_DIR"])
 ref_raw_out = Path(os.environ["SELECTED_REFERENCE_RAW_DIR"])
@@ -188,6 +195,7 @@ blur_radius = float(os.environ["BLUR_RADIUS"])
 blur_downsample = int(os.environ["BLUR_DOWNSAMPLE"])
 lightfield_sigmas = [float(x) for x in os.environ["LIGHTFIELD_SIGMAS"].split()]
 lightfield_resize_ratio = float(os.environ["LIGHTFIELD_RESIZE_RATIO"])
+ref_input_mode = os.environ.get("REF_INPUT_MODE", "blur").strip()
 exts = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 def clear(path: Path) -> None:
@@ -226,41 +234,77 @@ for path in [source_out, depth_out, ref_raw_out, ref_blur_out, ref_lightfield_ou
     clear(path)
     path.mkdir(parents=True, exist_ok=True)
 
-by_cls = {}
-for p in source_root.rglob("*"):
-    if p.is_file() and p.suffix.lower() in exts:
-        rel = p.relative_to(source_root)
-        cls = rel.parts[0] if len(rel.parts) >= 2 else "_flat"
-        depth = (depth_root / rel).with_suffix(".png")
-        if depth.exists():
-            by_cls.setdefault(cls, []).append((p, depth, rel))
-
-classes = sorted(by_cls)
-if not classes:
-    raise RuntimeError(f"No source/depth pairs found under {source_root} and {depth_root}")
-
-rng = random.Random(seed)
-if len(classes) >= num:
-    picked_classes = rng.sample(classes, num)
-    picked = [rng.choice(sorted(by_cls[cls], key=lambda x: str(x[0]))) for cls in picked_classes]
+if reuse_selection_manifest:
+    if not reuse_selection_manifest.is_file():
+        raise RuntimeError(f"REUSE_SELECTION_MANIFEST not found: {reuse_selection_manifest}")
+    reused = json.loads(reuse_selection_manifest.read_text(encoding="utf-8"))
+    reused_records = reused.get("records", [])[:num]
+    if not reused_records:
+        raise RuntimeError(f"No records found in REUSE_SELECTION_MANIFEST: {reuse_selection_manifest}")
+    picked = []
+    picked_refs = []
+    for idx, rec in enumerate(reused_records):
+        source_value = rec.get("source") or rec.get("selected_source")
+        depth_value = rec.get("depth") or rec.get("selected_depth")
+        ref_value = rec.get("reference_raw") or rec.get("selected_reference_raw")
+        if not source_value or not depth_value or not ref_value:
+            raise RuntimeError(f"Record {idx} in {reuse_selection_manifest} is missing source/depth/reference_raw")
+        source = Path(source_value)
+        depth = Path(depth_value)
+        ref = Path(ref_value)
+        if not source.exists():
+            raise RuntimeError(f"Reused source does not exist: {source}")
+        if not depth.exists():
+            raise RuntimeError(f"Reused depth does not exist: {depth}")
+        if not ref.exists():
+            raise RuntimeError(f"Reused reference does not exist: {ref}")
+        rel_value = rec.get("relative")
+        if rel_value:
+            rel = Path(rel_value)
+        elif source.parent.name.startswith("n"):
+            rel = Path(source.parent.name) / source.name
+        else:
+            rel = Path(f"sample_{idx:08d}{source.suffix.lower()}")
+        picked.append((source, depth, rel))
+        picked_refs.append(ref)
+    reference_selection_mode = "reuse_selection_manifest"
 else:
-    all_pairs = sorted((x for xs in by_cls.values() for x in xs), key=lambda x: str(x[0]))
-    picked = rng.sample(all_pairs, min(num, len(all_pairs)))
+    by_cls = {}
+    for p in source_root.rglob("*"):
+        if p.is_file() and p.suffix.lower() in exts:
+            rel = p.relative_to(source_root)
+            cls = rel.parts[0] if len(rel.parts) >= 2 else "_flat"
+            depth = (depth_root / rel).with_suffix(".png")
+            if depth.exists():
+                by_cls.setdefault(cls, []).append((p, depth, rel))
 
-ref_search_root = fixed_reference_root if fixed_reference_root else reference_root
-refs_all = sorted(p for p in ref_search_root.rglob("*") if p.is_file() and p.suffix.lower() in exts)
-if not refs_all:
-    raise RuntimeError(f"No reference images found under {ref_search_root}")
-if fixed_reference_root:
-    if len(refs_all) < len(picked):
-        raise RuntimeError(
-            f"FIXED_REFERENCE_ROOT has {len(refs_all)} images, but {len(picked)} source samples were selected: {fixed_reference_root}"
-        )
-    picked_refs = refs_all[:len(picked)]
-    reference_selection_mode = "fixed_root_ordered"
-else:
-    picked_refs = rng.sample(refs_all, len(picked)) if len(refs_all) >= len(picked) else [rng.choice(refs_all) for _ in picked]
-    reference_selection_mode = "seeded_random"
+    classes = sorted(by_cls)
+    if not classes:
+        raise RuntimeError(f"No source/depth pairs found under {source_root} and {depth_root}")
+
+    rng = random.Random(seed)
+    if len(classes) >= num:
+        picked_classes = rng.sample(classes, num)
+        picked = [rng.choice(sorted(by_cls[cls], key=lambda x: str(x[0]))) for cls in picked_classes]
+    else:
+        all_pairs = sorted((x for xs in by_cls.values() for x in xs), key=lambda x: str(x[0]))
+        picked = rng.sample(all_pairs, min(num, len(all_pairs)))
+
+    ref_search_root = fixed_reference_root if fixed_reference_root else reference_root
+    refs_all = sorted(p for p in ref_search_root.rglob("*") if p.is_file() and p.suffix.lower() in exts)
+    if not refs_all:
+        raise RuntimeError(f"No reference images found under {ref_search_root}")
+    if fixed_reference_root:
+        if len(refs_all) < len(picked):
+            raise RuntimeError(
+                f"FIXED_REFERENCE_ROOT has {len(refs_all)} images, but {len(picked)} source samples were selected: {fixed_reference_root}"
+            )
+        picked_refs = refs_all[:len(picked)]
+        reference_selection_mode = "fixed_root_ordered"
+    else:
+        picked_refs = rng.sample(refs_all, len(picked)) if len(refs_all) >= len(picked) else [rng.choice(refs_all) for _ in picked]
+        reference_selection_mode = "seeded_random"
+
 
 records = []
 for idx, ((source, depth, rel), ref) in enumerate(zip(picked, picked_refs)):
@@ -306,7 +350,9 @@ manifest = {
     "depth_root": str(depth_root),
     "reference_root": str(reference_root),
     "fixed_reference_root": fixed_reference_root_env,
+    "reuse_selection_manifest": reuse_selection_manifest_env,
     "reference_selection_mode": reference_selection_mode,
+    "ref_input_mode": ref_input_mode,
     "selected_source_dir": str(source_out),
     "selected_depth_dir": str(depth_out),
     "selected_reference_raw_dir": str(ref_raw_out),
@@ -438,6 +484,7 @@ TILE_MODE="${TILE_MODE}" \
 PANEL_FORMAT="${PANEL_FORMAT}" \
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL}" \
 UPLOAD="${UPLOAD}" \
+PACKAGE_EXPORT="${PACKAGE_EXPORT}" \
 RCLONE_DEST="${RCLONE_DEST}" \
 OVERWRITE=1 \
 bash scripts/exp_2/synthesis/export_uwdf_condition_linkage_grid_to_gdrive.sh \
@@ -448,4 +495,8 @@ echo "Done."
 echo "Experiments: ${EXP_ROOT}"
 echo "Selection:   ${WORK_ROOT}/selection_manifest.json"
 echo "Panels:      ${OUT_ROOT}/panels"
-echo "Archive:     ${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  echo "Archive:     ${ARCHIVE_PATH}"
+else
+  echo "Archive:     skipped"
+fi

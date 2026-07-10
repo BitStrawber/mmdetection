@@ -62,6 +62,7 @@ RESIZE_MODE="${RESIZE_MODE:-pad}"
 RESTORE_SOURCE_SIZE="${RESTORE_SOURCE_SIZE:-1}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 UPLOAD="${UPLOAD:-1}"
+PACKAGE_EXPORT="${PACKAGE_EXPORT:-0}"
 TILE_SIZE="${TILE_SIZE:-1024}"
 GRID_COLUMNS="${GRID_COLUMNS:-4}"
 TILE_MODE="${TILE_MODE:-cover}"
@@ -411,6 +412,7 @@ PANEL_FORMAT="${PANEL_FORMAT}" \
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL}" \
 REF_PANEL_LABEL="${REF_PANEL_LABEL}" \
 UPLOAD="${UPLOAD}" \
+PACKAGE_EXPORT="${PACKAGE_EXPORT}" \
 RCLONE_DEST="${RCLONE_DEST}" \
 OVERWRITE=1 \
 bash scripts/exp_2/synthesis/export_uwdf_depth_ablation_multigrid_to_gdrive.sh \
@@ -421,4 +423,8 @@ echo "Done."
 echo "Experiments: ${EXP_ROOT}"
 echo "Selection:   ${WORK_ROOT}/selection_manifest.json"
 echo "Panels:      ${OUT_ROOT}/multi_panel"
-echo "Archive:     ${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  echo "Archive:     ${ARCHIVE_PATH}"
+else
+  echo "Archive:     skipped"
+fi

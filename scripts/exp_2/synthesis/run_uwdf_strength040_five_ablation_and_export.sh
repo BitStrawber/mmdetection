@@ -52,6 +52,7 @@ CLEAN_NEGATIVE_PROMPT="${CLEAN_NEGATIVE_PROMPT:-cartoon, painting, illustration,
 
 RCLONE_DEST="${RCLONE_DEST:-fcp:datasets/exp2_synthesis_visual/}"
 UPLOAD="${UPLOAD:-1}"
+PACKAGE_EXPORT="${PACKAGE_EXPORT:-0}"
 TILE_SIZE="${TILE_SIZE:-1024}"
 GRID_COLUMNS="${GRID_COLUMNS:-4}"
 TILE_MODE="${TILE_MODE:-cover}"
@@ -99,6 +100,7 @@ echo "PROMPT:           ${PROMPT}"
 echo "OLD_NEG_PROMPT:   ${OLD_NEGATIVE_PROMPT}"
 echo "CLEAN_NEG_PROMPT: ${CLEAN_NEGATIVE_PROMPT}"
 echo "UPLOAD:           ${UPLOAD}"
+echo "PACKAGE_EXPORT:           ${PACKAGE_EXPORT}"
 echo "RCLONE_DEST:      ${RCLONE_DEST}"
 echo "========================================="
 
@@ -381,6 +383,7 @@ TILE_MODE="${TILE_MODE}" \
 PANEL_FORMAT="${PANEL_FORMAT}" \
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL}" \
 UPLOAD="${UPLOAD}" \
+PACKAGE_EXPORT="${PACKAGE_EXPORT}" \
 RCLONE_DEST="${RCLONE_DEST}" \
 OVERWRITE=1 \
 bash scripts/exp_2/synthesis/export_uwdf_depth_ablation_multigrid_to_gdrive.sh \
@@ -391,4 +394,8 @@ echo "Done."
 echo "Experiments: ${EXP_ROOT}"
 echo "Selection:   ${WORK_ROOT}/selection_manifest.json"
 echo "Panels:      ${OUT_ROOT}/multi_panel"
-echo "Archive:     ${ARCHIVE_PATH}"
+if [[ "${PACKAGE_EXPORT}" == "1" ]]; then
+  echo "Archive:     ${ARCHIVE_PATH}"
+else
+  echo "Archive:     skipped"
+fi

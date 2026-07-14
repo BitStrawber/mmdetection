@@ -195,31 +195,61 @@ PY
 
 copy_cut_results() {
   local model_name="$1"
-  local result_image_dir="$2"
+  local result_root="$2"
   local export_dir="$3"
 
   mkdir -p "${export_dir}"
 
-  if [ ! -d "${result_image_dir}" ]; then
-    exp_die "CUT result image dir not found: ${result_image_dir}" || return 1
+  if [ ! -d "${result_root}" ]; then
+    exp_die "CUT result root not found: ${result_root}" || return 1
   fi
 
-  find "${result_image_dir}" -maxdepth 1 -type f \( -name '*_fake_B.png' -o -name '*_fake.png' -o -name '*.png' -o -name '*.jpg' \) \
-    | sort \
-    | while read -r image_path; do
-        local base
-        base="$(basename "${image_path}")"
-        case "${base}" in
-          *_fake_B.png) base="${base%_fake_B.png}.png" ;;
-          *_fake.png) base="${base%_fake.png}.png" ;;
-        esac
-        cp -f "${image_path}" "${export_dir}/${base}"
-      done
+  local list_file
+  list_file="${export_dir}/.cut_result_files.txt"
+  : > "${list_file}"
+
+  find "${result_root}" -type f \( \
+      -path '*/fake_B/*.png' -o -path '*/fake_B/*.jpg' -o -path '*/fake_B/*.jpeg' \
+    \) | sort > "${list_file}"
+
+  if [ ! -s "${list_file}" ]; then
+    find "${result_root}" -type f \( \
+        -name '*_fake_B.png' -o -name '*_fake_B.jpg' -o -name '*_fake_B.jpeg' \
+    \) | sort > "${list_file}"
+  fi
+
+  if [ ! -s "${list_file}" ]; then
+    find "${result_root}" -type f \( \
+        -iname '*fake*.png' -o -iname '*fake*.jpg' -o -iname '*fake*.jpeg' \
+    \) | sort > "${list_file}"
+  fi
+
+  if [ ! -s "${list_file}" ]; then
+    exp_warn "${model_name}: no fake images found under ${result_root}; listing recent files"
+    find "${result_root}" -maxdepth 4 -type f | sort | tail -n 80 >&2
+  fi
+
+  while read -r image_path; do
+    [ -n "${image_path}" ] || continue
+    local base
+    base="$(basename "${image_path}")"
+    case "${base}" in
+      *_fake_B.png) base="${base%_fake_B.png}.png" ;;
+      *_fake_B.jpg) base="${base%_fake_B.jpg}.jpg" ;;
+      *_fake_B.jpeg) base="${base%_fake_B.jpeg}.jpeg" ;;
+      *_fake.png) base="${base%_fake.png}.png" ;;
+      *_fake.jpg) base="${base%_fake.jpg}.jpg" ;;
+      *_fake.jpeg) base="${base%_fake.jpeg}.jpeg" ;;
+    esac
+    cp -f "${image_path}" "${export_dir}/${base}"
+  done < "${list_file}"
+  rm -f "${list_file}"
 
   local count
-  count="$(find "${export_dir}" -maxdepth 1 -type f \( -name '*.png' -o -name '*.jpg' -o -name '*.jpeg' \) | wc -l)"
+  count="$(find "${export_dir}" -maxdepth 1 -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) | wc -l)"
   if [ "${count}" -lt "${NUM}" ]; then
     exp_warn "${model_name}: expected ${NUM} generated images, found ${count}"
+    return 1
   fi
 }
 
@@ -235,7 +265,7 @@ run_model() {
   checkpoint_parent="$(dirname "${checkpoint_dir}")"
   log_path="${LOG_DIR}/${model_name}.log"
   result_dir="${WORK_ROOT}/cut_results/${model_name}"
-  result_image_dir="${result_dir}/test_latest/images"
+  result_image_dir="${result_dir}/test_latest"
   export_dir="${OUT_ROOT}/generated/${model_name}"
 
   rm -rf "${result_dir}" "${export_dir}"

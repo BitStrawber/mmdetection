@@ -27,10 +27,10 @@ CUT_GEN_ROOT="${CUT_GEN_ROOT:-/media/HDD1/XCX/exp_2/cut_four_weights_random20_ex
 WATERGAN_RESULT_ROOT="${WATERGAN_RESULT_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet/watergan/results/imagenet_ruod_watergan_train_balanced50_ssd_gpu4}"
 
 SYREANET_SOURCE_ROOT="${SYREANET_SOURCE_ROOT:-$IMAGENET_ROOT}"
-SYREANET_GEN_ROOT="${SYREANET_GEN_ROOT:-}"
+SYREANET_GEN_ROOT="${SYREANET_GEN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet/syreanet_synthesis/generated/train}"
 
 UWDF_SOURCE_ROOT="${UWDF_SOURCE_ROOT:-$IMAGENET_ROOT}"
-UWDF_GEN_ROOT="${UWDF_GEN_ROOT:-}"
+UWDF_GEN_ROOT="${UWDF_GEN_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/uwdf_controlnet_ipadapter/train}"
 
 UPLOAD="${UPLOAD:-1}"
 PACKAGE_EXPORT="${PACKAGE_EXPORT:-1}"
@@ -372,7 +372,7 @@ for method, source_root, gen_root in optional_methods:
         export_pairs(method, pairs)
         synthetic_methods.append(method)
     else:
-        print("[INFO] {} skipped: set {}_GEN_ROOT to include it".format(method, method.upper()))
+        print("[INFO] {} skipped: empty generated root".format(method))
 
 summary = {
     "seed": seed,

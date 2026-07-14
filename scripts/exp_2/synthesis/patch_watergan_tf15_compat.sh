@@ -66,6 +66,31 @@ batch_idx_division = re.compile(
 ceil_int_division = re.compile(
     r"int\(math\.ceil\(([^()\n]+?)\)\s*/\s*config\.batch_size\)"
 )
+imsave_function = re.compile(
+    r"    def _watergan_imsave\(filename, arr\):\n"
+    r"(?:        .*\n)+?"
+    r"        image\.save\(filename\)\n",
+    flags=re.MULTILINE,
+)
+WATERGAN_IMSAVE_FUNCTION = '''    def _watergan_imsave(filename, arr):
+        arr = _watergan_np.asarray(arr)
+        arr = _watergan_np.squeeze(arr)
+        if arr.dtype.kind == 'f':
+            values = arr
+            if values.size:
+                values = _watergan_np.nan_to_num(values)
+                vmin = float(values.min())
+                vmax = float(values.max())
+                if vmin >= -1.0 and vmax <= 1.0:
+                    values = (values + 1.0) * 127.5 if vmin < 0.0 else values * 255.0
+            arr = _watergan_np.clip(values, 0, 255).astype(_watergan_np.uint8)
+        elif arr.dtype != _watergan_np.uint8:
+            arr = _watergan_np.clip(arr, 0, 255).astype(_watergan_np.uint8)
+        if arr.ndim == 3 and arr.shape[-1] == 1:
+            arr = arr[:, :, 0]
+        image = _PILImage.fromarray(arr)
+        image.save(filename)
+'''
 scipy_misc_compat_block = re.compile(
     r"\n# Compatibility for SciPy versions where scipy\.misc image I/O was removed\.\n"
     r"try:\n"
@@ -76,7 +101,7 @@ scipy_misc_compat_block = re.compile(
     flags=re.MULTILINE,
 )
 
-SCIPY_MISC_COMPAT = '''
+SCIPY_MISC_COMPAT = f'''
 
 # Compatibility for SciPy versions where scipy.misc image I/O was removed.
 try:
@@ -123,24 +148,7 @@ except AttributeError:
         resized = image.resize(new_size, resample)
         return _watergan_np.asarray(resized)
 
-    def _watergan_imsave(filename, arr):
-        arr = _watergan_np.asarray(arr)
-        arr = _watergan_np.squeeze(arr)
-        if arr.dtype.kind == 'f':
-            values = arr
-            if values.size:
-                values = _watergan_np.nan_to_num(values)
-                vmin = float(values.min())
-                vmax = float(values.max())
-                if vmin >= -1.0 and vmax <= 1.0:
-                    values = (values + 1.0) * 127.5 if vmin < 0.0 else values * 255.0
-            arr = _watergan_np.clip(values, 0, 255).astype(_watergan_np.uint8)
-        elif arr.dtype != _watergan_np.uint8:
-            arr = _watergan_np.clip(arr, 0, 255).astype(_watergan_np.uint8)
-        if arr.ndim == 3 and arr.shape[-1] == 1:
-            arr = arr[:, :, 0]
-        image = _PILImage.fromarray(arr)
-        image.save(filename)
+{WATERGAN_IMSAVE_FUNCTION}
 
     scipy.misc.imread = _watergan_imread
     scipy.misc.imresize = _watergan_imresize
@@ -170,6 +178,8 @@ for path in files:
         text = new_text
     text = batch_idx_division.sub(r"\1int((\2) // config.batch_size)", text)
     text = ceil_int_division.sub(r"int(math.ceil(\1 / float(config.batch_size)))", text)
+    if "def _watergan_imsave" in text:
+        text = imsave_function.sub(WATERGAN_IMSAVE_FUNCTION, text)
     if "scipy.misc." in text:
         if "Compatibility for SciPy versions where scipy.misc image I/O was removed" in text:
             text = scipy_misc_compat_block.sub(SCIPY_MISC_COMPAT, text, count=1)

@@ -62,6 +62,20 @@ else
   }
 fi
 
+CUT_DIR="${CUT_DIR:-}"
+if [ -z "${CUT_DIR}" ]; then
+  for candidate in \
+    /home/fcp/xcx/exp_2/syn/CUT \
+    /home/fcp/xcx/exp_2/syn/contrastive-unpaired-translation \
+    /home/fcp/xcx/exp_2/syn/Contrastive-Unpaired-Translation \
+    /home/fcp/xcx/exp_2/syn/cut
+  do
+    if [ -f "${candidate}/test.py" ]; then
+      CUT_DIR="${candidate}"
+      break
+    fi
+  done
+fi
 CUT_DIR="${CUT_DIR:-/home/fcp/xcx/exp_2/syn/CUT}"
 SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/cut/source/train}"
 WORK_ROOT="${WORK_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/cut_four_weights_random20}"

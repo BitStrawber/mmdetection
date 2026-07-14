@@ -3,7 +3,64 @@ set -u
 set -o pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-source "${ROOT_DIR}/scripts/exp_2/synthesis/lib/experiment_common.sh"
+COMMON_LIB="${ROOT_DIR}/scripts/exp_2/synthesis/lib/experiment_common.sh"
+if [ -f "${COMMON_LIB}" ]; then
+  source "${COMMON_LIB}"
+else
+  exp_die() { echo "Error: $*" >&2; return 1; }
+  exp_warn() { echo "Warning: $*" >&2; }
+  exp_section() {
+    echo "========================================="
+    echo "$1"
+    echo "========================================="
+  }
+  exp_require_paths() {
+    local path
+    for path in "$@"; do
+      if [ ! -e "${path}" ]; then
+        exp_die "required path not found: ${path}" || return 1
+      fi
+    done
+  }
+  exp_record_status() {
+    local status_file="$1"
+    local experiment="$2"
+    local status="$3"
+    local gpu="$4"
+    local log_path="$5"
+    printf "%s\t%s\t%s\t%s\n" "${experiment}" "${status}" "${gpu}" "${log_path}" >> "${status_file}"
+  }
+  exp_package_and_upload() {
+    local out_root="$1"
+    local archive_path="$2"
+    local upload="$3"
+    local package_export="$4"
+    local rclone_dest="$5"
+
+    if [ "${package_export}" = "1" ]; then
+      echo "Create archive: ${archive_path}"
+      mkdir -p "$(dirname "${archive_path}")"
+      tar -C "$(dirname "${out_root}")" -czf "${archive_path}" "$(basename "${out_root}")"
+      ls -lh "${archive_path}"
+    fi
+
+    if [ "${upload}" != "1" ]; then
+      return 0
+    fi
+
+    command -v rclone >/dev/null 2>&1 || {
+      exp_die "UPLOAD=1 but rclone was not found" || return 1
+    }
+
+    if [ "${package_export}" = "1" ]; then
+      echo "Upload archive: ${rclone_dest}"
+      rclone copy "${archive_path}" "${rclone_dest}"
+    fi
+
+    echo "Upload folder: ${rclone_dest%/}/$(basename "${out_root}")/"
+    rclone copy -P "${out_root}" "${rclone_dest%/}/$(basename "${out_root}")/"
+  }
+fi
 
 CUT_DIR="${CUT_DIR:-/home/fcp/xcx/exp_2/syn/CUT}"
 SOURCE_ROOT="${SOURCE_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet/cut/source/train}"

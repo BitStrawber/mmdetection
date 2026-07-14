@@ -99,6 +99,7 @@ MODEL_NAMES="${MODEL_NAMES:-imagenet_ruod_cut_full_bs2_1epoch_gpu2 imagenet_ruod
 LOG_DIR="${LOG_DIR:-${WORK_ROOT}/logs}"
 SELECT_DIR="${WORK_ROOT}/selected"
 TEST_ROOT="${WORK_ROOT}/cut_test_dataroot"
+TEST_B_DIR="${TEST_ROOT}/testB"
 STATUS_FILE="${WORK_ROOT}/status.tsv"
 
 find_checkpoint_dir() {
@@ -311,6 +312,7 @@ main() {
   rm -rf "${TEST_ROOT}"
   mkdir -p "${TEST_ROOT}"
   cp -a "${SELECT_DIR}/testA" "${TEST_ROOT}/testA"
+  cp -a "${SELECT_DIR}/testA" "${TEST_B_DIR}"
 
   exp_section "Run CUT inference"
   local model_name

@@ -100,6 +100,8 @@ LOG_DIR="${LOG_DIR:-${WORK_ROOT}/logs}"
 SELECT_DIR="${WORK_ROOT}/selected"
 TEST_ROOT="${WORK_ROOT}/cut_test_dataroot"
 TEST_B_DIR="${TEST_ROOT}/testB"
+TRAIN_A_DIR="${TEST_ROOT}/trainA"
+TRAIN_B_DIR="${TEST_ROOT}/trainB"
 STATUS_FILE="${WORK_ROOT}/status.tsv"
 
 find_checkpoint_dir() {
@@ -260,7 +262,8 @@ run_model() {
       --crop_size "${CROP_SIZE}" \
       --preprocess resize_and_crop \
       --model cut \
-      --no_dropout
+      --no_dropout \
+      --eval
   ) 2>&1 | tee "${log_path}"
 
   local rc="${PIPESTATUS[0]}"
@@ -313,6 +316,8 @@ main() {
   mkdir -p "${TEST_ROOT}"
   cp -a "${SELECT_DIR}/testA" "${TEST_ROOT}/testA"
   cp -a "${SELECT_DIR}/testA" "${TEST_B_DIR}"
+  cp -a "${SELECT_DIR}/testA" "${TRAIN_A_DIR}"
+  cp -a "${SELECT_DIR}/testA" "${TRAIN_B_DIR}"
 
   exp_section "Run CUT inference"
   local model_name

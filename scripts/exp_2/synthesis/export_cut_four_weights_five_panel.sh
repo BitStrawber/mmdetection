@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # Build five-panel comparison figures for the CUT random20 export:
@@ -82,7 +82,7 @@ panels_dir.mkdir(parents=True, exist_ok=True)
 image_suffixes = [".png", ".jpg", ".jpeg", ".JPEG", ".JPG"]
 
 
-def find_by_stem(root: Path, stem: str) -> Path | None:
+def find_by_stem(root, stem):
     for suffix in image_suffixes:
         p = root / f"{stem}{suffix}"
         if p.exists():
@@ -94,7 +94,7 @@ def find_by_stem(root: Path, stem: str) -> Path | None:
     return None
 
 
-def load_tile(path: Path | None, label: str) -> Image.Image:
+def load_tile(path, label):
     tile = Image.new("RGB", (tile_size, tile_size), (248, 248, 248))
     if path is None or not path.exists():
         draw = ImageDraw.Draw(tile)
@@ -113,7 +113,7 @@ def load_tile(path: Path | None, label: str) -> Image.Image:
     return out
 
 
-def hcat(tiles: list[Image.Image]) -> Image.Image:
+def hcat(tiles):
     w = sum(t.width for t in tiles)
     h = max(t.height for t in tiles)
     canvas = Image.new("RGB", (w, h), (255, 255, 255))
@@ -124,7 +124,7 @@ def hcat(tiles: list[Image.Image]) -> Image.Image:
     return canvas
 
 
-def vcat(rows: list[Image.Image]) -> Image.Image:
+def vcat(rows):
     if not rows:
         return Image.new("RGB", (1, 1), (255, 255, 255))
     w = max(r.width for r in rows)

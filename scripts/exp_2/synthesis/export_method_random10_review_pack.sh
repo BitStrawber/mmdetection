@@ -26,6 +26,12 @@ CUT_GEN_ROOT="${CUT_GEN_ROOT:-/media/HDD1/XCX/exp_2/cut_four_weights_random20_ex
 
 WATERGAN_RESULT_ROOT="${WATERGAN_RESULT_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet/watergan/results/imagenet_ruod_watergan_train_balanced50_ssd_gpu4}"
 
+SYREANET_SOURCE_ROOT="${SYREANET_SOURCE_ROOT:-$IMAGENET_ROOT}"
+SYREANET_GEN_ROOT="${SYREANET_GEN_ROOT:-}"
+
+UWDF_SOURCE_ROOT="${UWDF_SOURCE_ROOT:-$IMAGENET_ROOT}"
+UWDF_GEN_ROOT="${UWDF_GEN_ROOT:-}"
+
 UPLOAD="${UPLOAD:-1}"
 PACKAGE_EXPORT="${PACKAGE_EXPORT:-1}"
 CHECK_ONLY="${CHECK_ONLY:-0}"
@@ -67,7 +73,7 @@ show_path() {
     echo -n "images: "
     count_images_recursive "$path"
     echo "first 5:"
-    find -L "$path" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.bmp' -o -iname '*.webp' \) 2>/dev/null | sort | head -n 5
+    find -L "$path" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.bmp' -o -iname '*.webp' \) 2>/dev/null | sort | head -n 5 || true
   else
     echo "exists: no"
   fi
@@ -92,6 +98,14 @@ show_path "uwnr generated" "$UWNR_GEN_ROOT"
 show_path "cut 5epoch source" "$CUT_SOURCE_ROOT"
 show_path "cut 5epoch generated" "$CUT_GEN_ROOT"
 show_path "watergan result root" "$WATERGAN_RESULT_ROOT"
+if [ -n "$SYREANET_GEN_ROOT" ]; then
+  show_path "syreanet source" "$SYREANET_SOURCE_ROOT"
+  show_path "syreanet generated" "$SYREANET_GEN_ROOT"
+fi
+if [ -n "$UWDF_GEN_ROOT" ]; then
+  show_path "uwdf source" "$UWDF_SOURCE_ROOT"
+  show_path "uwdf generated" "$UWDF_GEN_ROOT"
+fi
 
 echo
 echo "[watergan paired files]"
@@ -129,6 +143,8 @@ export IMAGENET_ROOT RUOD_ROOT
 export UWNR_SOURCE_ROOT UWNR_GEN_ROOT
 export CUT_SOURCE_ROOT CUT_GEN_ROOT
 export WATERGAN_RESULT_ROOT
+export SYREANET_SOURCE_ROOT SYREANET_GEN_ROOT
+export UWDF_SOURCE_ROOT UWDF_GEN_ROOT
 
 section "Select, pair, and export"
 python - <<'PY'
@@ -300,6 +316,17 @@ def match_cut_random20(source_root, gen_root):
 
     return pairs
 
+def match_generic(source_root, gen_root):
+    pairs = match_by_relative(source_root, gen_root)
+    if pairs:
+        return pairs
+    pairs = match_cut_random20(source_root, gen_root)
+    if pairs:
+        return pairs
+    source_images = list_images(source_root)
+    gen_images = list_images(gen_root)
+    return list(zip(source_images[:len(gen_images)], gen_images))
+
 def match_watergan(result_root):
     result_root = Path(result_root)
 
@@ -332,12 +359,27 @@ watergan_pairs = match_watergan(os.environ["WATERGAN_RESULT_ROOT"])
 print("[INFO] watergan matched pairs: {}".format(len(watergan_pairs)))
 export_pairs("watergan", watergan_pairs)
 
+synthetic_methods = ["uwnr", "cut_5epoch", "watergan"]
+
+optional_methods = [
+    ("syreanet", os.environ.get("SYREANET_SOURCE_ROOT", os.environ["IMAGENET_ROOT"]), os.environ.get("SYREANET_GEN_ROOT", "")),
+    ("uwdf", os.environ.get("UWDF_SOURCE_ROOT", os.environ["IMAGENET_ROOT"]), os.environ.get("UWDF_GEN_ROOT", "")),
+]
+for method, source_root, gen_root in optional_methods:
+    if gen_root:
+        pairs = match_generic(source_root, gen_root)
+        print("[INFO] {} matched pairs: {}".format(method, len(pairs)))
+        export_pairs(method, pairs)
+        synthetic_methods.append(method)
+    else:
+        print("[INFO] {} skipped: set {}_GEN_ROOT to include it".format(method, method.upper()))
+
 summary = {
     "seed": seed,
     "num": num,
     "export_root": str(export_root),
     "standalone": ["imagenet", "real_underwater"],
-    "synthetic_methods": ["uwnr", "cut_5epoch", "watergan"],
+    "synthetic_methods": synthetic_methods,
 }
 (export_root / "summary.json").write_text(
     json.dumps(summary, indent=2, ensure_ascii=False),

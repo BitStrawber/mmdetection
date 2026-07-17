@@ -122,15 +122,24 @@ except AttributeError:
 
     def _watergan_imresize(arr, size, interp='bilinear', mode=None):
         arr = _watergan_np.asarray(arr)
+        arr = _watergan_np.squeeze(arr)
         if mode == 'F':
             image = _PILImage.fromarray(arr.astype(_watergan_np.float32), mode='F')
         elif arr.dtype.kind == 'f':
             values = arr
-            if values.size and values.min() >= -1.0 and values.max() <= 1.0:
-                values = (values + 1.0) * 127.5 if values.min() < 0.0 else values * 255.0
+            if values.size:
+                values = _watergan_np.nan_to_num(values)
+                vmin = float(values.min())
+                vmax = float(values.max())
+                if vmin >= -1.0 and vmax <= 1.0:
+                    values = (values + 1.0) * 127.5 if vmin < 0.0 else values * 255.0
             values = _watergan_np.clip(values, 0, 255).astype(_watergan_np.uint8)
+            if values.ndim == 3 and values.shape[-1] == 1:
+                values = values[:, :, 0]
             image = _PILImage.fromarray(values)
         else:
+            if arr.ndim == 3 and arr.shape[-1] == 1:
+                arr = arr[:, :, 0]
             image = _PILImage.fromarray(arr)
         if isinstance(size, (int, float)):
             if isinstance(size, int):

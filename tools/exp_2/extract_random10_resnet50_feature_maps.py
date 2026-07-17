@@ -107,7 +107,7 @@ def save_heatmap(feature: torch.Tensor, out_path: Path) -> None:
     heat = heat - heat.min()
     heat = heat / heat.max().clamp_min(1e-6)
     heat_img = (heat.numpy() * 255).astype('uint8')
-    Image.fromarray(heat_img, mode='L').save(out_path)
+    Image.fromarray(heat_img).save(out_path)
 
 
 def pooled_vector(feature: torch.Tensor) -> torch.Tensor:
@@ -191,16 +191,19 @@ def resize_keep_max_side(img: Image.Image, max_side: int) -> Image.Image:
     return img.resize(new_size, Image.BILINEAR)
 
 
-def mmdet_preprocess(img: Image.Image, device: torch.device) -> torch.Tensor:
-    # MMDetection ResNet backbones generally use BGR images normalized by ImageNet
-    # mean/std. This is enough for backbone feature extraction and avoids requiring
-    # a full detection dataloader pipeline for a small random10 comparison.
+def mmdet_preprocess(
+    img: Image.Image,
+    model: torch.nn.Module,
+    device: torch.device,
+) -> torch.Tensor:
+    """Apply the detector's configured channel conversion and normalization."""
     tensor = transforms.ToTensor()(img) * 255.0
-    tensor = tensor[[2, 1, 0], :, :]  # RGB -> BGR
-    mean = torch.tensor([103.53, 116.28, 123.675]).view(3, 1, 1)
-    std = torch.tensor([57.375, 57.12, 58.395]).view(3, 1, 1)
-    tensor = (tensor - mean) / std
-    return tensor.unsqueeze(0).to(device)
+    tensor = tensor[[2, 1, 0], :, :].to(device)  # RGB -> loader-style BGR
+    processed = model.data_preprocessor(
+        {'inputs': [tensor], 'data_samples': None},
+        training=False,
+    )
+    return processed['inputs']
 
 
 def extract_mmdet_backbone_features(
@@ -220,7 +223,7 @@ def extract_mmdet_backbone_features(
         for index, path in enumerate(samples, start=1):
             stem = f'{index:06d}_{path.stem}'
             img = resize_keep_max_side(load_rgb(path), max_side)
-            x = mmdet_preprocess(img, device)
+            x = mmdet_preprocess(img, model, device)
             feats = backbone(x)
             if isinstance(feats, torch.Tensor):
                 feats = (feats,)

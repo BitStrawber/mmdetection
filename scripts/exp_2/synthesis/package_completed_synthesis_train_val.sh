@@ -46,16 +46,23 @@ human_bytes() {
 partial_is_held() {
   local partial="$1"
 
-  if command -v fuser >/dev/null 2>&1 \
-    && fuser "${partial}" >/dev/null 2>&1; then
-    return 0
+  if command -v fuser >/dev/null 2>&1; then
+    if fuser "${partial}" >/dev/null 2>&1; then
+      return 0
+    fi
+    return 1
   fi
 
-  if pgrep -af '[t]ar' 2>/dev/null | grep -F -- "${partial}" >/dev/null 2>&1; then
-    return 0
+  if command -v lsof >/dev/null 2>&1; then
+    if lsof -t -- "${partial}" 2>/dev/null | grep -q .; then
+      return 0
+    fi
+    return 1
   fi
 
-  return 1
+  echo "Error: neither fuser nor lsof is available to check the partial archive." >&2
+  echo "Refusing to remove it without an open-file check: ${partial}" >&2
+  exit 1
 }
 
 prepare_partial_path() {

@@ -42,7 +42,15 @@ WATER_WIDTH="${WATER_WIDTH:-1360}"
 WATER_HEIGHT="${WATER_HEIGHT:-1024}"
 DEPTH_FORMAT="${DEPTH_FORMAT:-mat}"
 RUN_DEPTH="${RUN_DEPTH:-1}"
-OVERWRITE="${OVERWRITE:-1}"
+NUM_WORKERS="${NUM_WORKERS:-16}"
+RESUME="${RESUME:-1}"
+VERIFY_EXISTING="${VERIFY_EXISTING:-0}"
+OVERWRITE="${OVERWRITE:-0}"
+
+if [[ "${RESUME}" == "1" && "${OVERWRITE}" == "1" ]]; then
+  echo "Error: RESUME=1 and OVERWRITE=1 are mutually exclusive." >&2
+  exit 1
+fi
 
 check_path() {
   local path="$1"
@@ -76,6 +84,10 @@ echo "SAMPLE_SEED:    ${SAMPLE_SEED}"
 echo "AIR_SIZE:       ${AIR_WIDTH}x${AIR_HEIGHT}"
 echo "WATER_SIZE:     ${WATER_WIDTH}x${WATER_HEIGHT}"
 echo "DEPTH_FORMAT:   ${DEPTH_FORMAT}"
+echo "NUM_WORKERS:    ${NUM_WORKERS}"
+echo "RESUME:         ${RESUME}"
+echo "VERIFY_EXISTING:${VERIFY_EXISTING}"
+echo "OVERWRITE:      ${OVERWRITE}"
 echo "========================================="
 echo
 
@@ -106,6 +118,11 @@ echo "Step 2/2: Build WaterGAN flat training folders"
 EXTRA_ARGS=()
 if [[ "${OVERWRITE}" == "1" ]]; then
   EXTRA_ARGS+=(--overwrite)
+elif [[ "${RESUME}" == "1" ]]; then
+  EXTRA_ARGS+=(--resume)
+fi
+if [[ "${VERIFY_EXISTING}" == "1" ]]; then
+  EXTRA_ARGS+=(--verify-existing)
 fi
 if (( AIR_PER_CLASS > 0 )); then
   EXTRA_ARGS+=(--air-per-class "${AIR_PER_CLASS}")
@@ -126,6 +143,7 @@ python tools/prepare_watergan_imagenet_ruod_dataset.py \
   --water-width "${WATER_WIDTH}" \
   --water-height "${WATER_HEIGHT}" \
   --depth-format "${DEPTH_FORMAT}" \
+  --workers "${NUM_WORKERS}" \
   --seed "${SAMPLE_SEED}" \
   "${EXTRA_ARGS[@]}"
 

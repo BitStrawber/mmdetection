@@ -20,7 +20,8 @@ set -euo pipefail
 #
 # Example:
 #   conda activate /media/SSD1/conda_envs/watergan_tf1
-#   GPU="5,6,7" BATCH_SIZE=80 bash scripts/exp_2/synthesis/run_watergan_full_train_generate_train.sh
+#   GPU="2,3,4,5" BATCH_SIZE=80 PREPARE_WORKERS=16 \
+#     bash scripts/exp_2/synthesis/run_watergan_full_train_generate_train.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -38,7 +39,7 @@ DATA_ROOT="${DATA_ROOT:-${WORK_ROOT}/watergan/datasets/${DATA_NAME}}"
 SOURCE_DIR="${SOURCE_DIR:-${SOURCE_ROOT}/train}"
 DEPTH_DIR="${DEPTH_DIR:-${DEPTH_ROOT}/train}"
 
-GPU="${GPU:-5,6,7}"
+GPU="${GPU:-2,3,4,5}"
 EPOCH="${EPOCH:-26}"
 BATCH_SIZE="${BATCH_SIZE:-80}"
 TRAIN_SIZE="${TRAIN_SIZE:-250000}"
@@ -50,6 +51,10 @@ AIR_HEIGHT="${AIR_HEIGHT:-480}"
 WATER_WIDTH="${WATER_WIDTH:-1360}"
 WATER_HEIGHT="${WATER_HEIGHT:-1024}"
 DEPTH_FORMAT="${DEPTH_FORMAT:-png}"
+PREPARE_WORKERS="${PREPARE_WORKERS:-16}"
+PREPARE_RESUME="${PREPARE_RESUME:-1}"
+PREPARE_VERIFY_EXISTING="${PREPARE_VERIFY_EXISTING:-0}"
+PREPARE_OVERWRITE="${PREPARE_OVERWRITE:-0}"
 OUTPUT_WIDTH="${OUTPUT_WIDTH:-64}"
 OUTPUT_HEIGHT="${OUTPUT_HEIGHT:-48}"
 LEARNING_RATE="${LEARNING_RATE:-0.0002}"
@@ -57,7 +62,7 @@ BETA1="${BETA1:-0.5}"
 
 CHECKPOINT_DIR="${CHECKPOINT_DIR:-checkpoint_${DATA_NAME}}"
 SAMPLE_DIR="${SAMPLE_DIR:-samples_${DATA_NAME}}"
-RESULTS_DIR="${RESULTS_DIR:-${SYN_ROOT}/watergan/results/${DATA_NAME}_gpu567}"
+RESULTS_DIR="${RESULTS_DIR:-${SYN_ROOT}/watergan/results/${DATA_NAME}_gpu2345}"
 RESTORE_DIR="${RESTORE_DIR:-${SYN_ROOT}/watergan/generated/train}"
 LOG_DIR="${LOG_DIR:-${REPO_ROOT}/logs/synthesis_full/watergan_full250k}"
 
@@ -124,6 +129,10 @@ BATCH_SIZE:      ${BATCH_SIZE}
 TRAIN_SIZE:      ${TRAIN_SIZE}
 NUM_SAMPLES:     ${NUM_SAMPLES}
 DEPTH_FORMAT:    ${DEPTH_FORMAT}
+PREPARE_WORKERS: ${PREPARE_WORKERS}
+PREPARE_RESUME:  ${PREPARE_RESUME}
+PREPARE_VERIFY:  ${PREPARE_VERIFY_EXISTING}
+PREPARE_OVERWRITE:${PREPARE_OVERWRITE}
 RESULTS_DIR:     ${RESULTS_DIR}
 RESTORE_DIR:     ${RESTORE_DIR}
 CHECKPOINT_DIR:  ${CHECKPOINT_DIR}
@@ -165,7 +174,10 @@ if [[ "${RUN_PREPARE}" == "1" ]]; then
   WATER_WIDTH="${WATER_WIDTH}" \
   WATER_HEIGHT="${WATER_HEIGHT}" \
   DEPTH_FORMAT="${DEPTH_FORMAT}" \
-  OVERWRITE=1 \
+  NUM_WORKERS="${PREPARE_WORKERS}" \
+  RESUME="${PREPARE_RESUME}" \
+  VERIFY_EXISTING="${PREPARE_VERIFY_EXISTING}" \
+  OVERWRITE="${PREPARE_OVERWRITE}" \
   bash scripts/exp_2/synthesis/run_watergan_prepare_dataset.sh \
     2>&1 | tee "${LOG_DIR}/prepare_train_full250k.log"
 fi

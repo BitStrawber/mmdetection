@@ -5,9 +5,13 @@ set -euo pipefail
 #   1. torchvision ImageNet-supervised ResNet-50
 #   2. J2 RUOD-supervised Cascade R-CNN ResNet-50 backbone
 #
-# Each archive contains the 10 original images, 10 five-panel figures, and a
-# subset manifest. Set UPLOAD=1 to copy both archives and SHA256SUMS.txt to the
-# configured rclone destination.
+# Each archive contains 60 images:
+#   - 10 original images
+#   - 40 raw feature-map heatmaps, four per source image
+#   - 10 five-panel figures
+# A subset manifest/README are also included as metadata. Set UPLOAD=1 to copy
+# the two ZIP archives to the configured rclone destination. Set
+# UPLOAD_SHA256=1 if the local SHA256SUMS.txt should be uploaded too.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -18,6 +22,7 @@ EXPORT_ROOT="${EXPORT_ROOT:-${SOURCE_ROOT}_five_panel_export}"
 ARCHIVE_DIR="${ARCHIVE_DIR:-${EXPORT_ROOT}/archives}"
 RCLONE_DEST="${RCLONE_DEST:-fcp:exp_2/feature_maps/resnet50_random10_five_panels}"
 UPLOAD="${UPLOAD:-0}"
+UPLOAD_SHA256="${UPLOAD_SHA256:-0}"
 TILE_SIZE="${TILE_SIZE:-320}"
 LABEL_HEIGHT="${LABEL_HEIGHT:-36}"
 EXPECTED_SAMPLES="${EXPECTED_SAMPLES:-10}"
@@ -54,6 +59,7 @@ ARCHIVE_DIR:      ${ARCHIVE_DIR}
 EXPECTED_SAMPLES: ${EXPECTED_SAMPLES}
 TILE_SIZE:        ${TILE_SIZE}
 UPLOAD:           ${UPLOAD}
+UPLOAD_SHA256:    ${UPLOAD_SHA256}
 RCLONE_DEST:      ${RCLONE_DEST}
 ========================================================================
 EOF
@@ -168,8 +174,10 @@ for subset, spec in subsets.items():
     if subset_root.exists():
         shutil.rmtree(subset_root)
     originals_dir = subset_root / "originals"
+    feature_maps_dir = subset_root / "feature_maps"
     panels_dir = subset_root / "five_panels"
     originals_dir.mkdir(parents=True, exist_ok=True)
+    feature_maps_dir.mkdir(parents=True, exist_ok=True)
     panels_dir.mkdir(parents=True, exist_ok=True)
 
     output_rows = []
@@ -199,6 +207,16 @@ for subset, spec in subsets.items():
         panel_path = panels_dir / panel_name
         shutil.copy2(input_path, original_path)
 
+        feature_map_files = []
+        sample_feature_dir = feature_maps_dir / sample_name
+        sample_feature_dir.mkdir(parents=True, exist_ok=True)
+        for heatmap_path, (_, label) in zip(heatmap_paths, spec["heatmaps"]):
+            label_name = label.lower().replace(" ", "_")
+            feature_map_path = sample_feature_dir / f"{label_name}_{heatmap_path.name}"
+            shutil.copy2(heatmap_path, feature_map_path)
+            feature_map_files.append(
+                str(feature_map_path.relative_to(subset_root)))
+
         tiles = [load_tile(input_path, "Original")]
         tiles.extend(
             load_tile(path, label)
@@ -213,6 +231,7 @@ for subset, spec in subsets.items():
             "source_path": row["source_path"],
             "original_file": str(
                 original_path.relative_to(subset_root)),
+            "feature_map_files": ";".join(feature_map_files),
             "five_panel_file": str(
                 panel_path.relative_to(subset_root)),
             "layers": row["layers"],
@@ -224,6 +243,7 @@ for subset, spec in subsets.items():
         "index",
         "source_path",
         "original_file",
+        "feature_map_files",
         "five_panel_file",
         "layers",
     ]
@@ -237,8 +257,10 @@ for subset, spec in subsets.items():
     readme = "\n".join([
         f"subset: {subset}",
         f"samples: {len(output_rows)}",
+        "image files: 60 total = 10 originals + 40 raw feature maps + 10 five-panels",
         "five-panel order: Original | Stage 1 | Stage 2 | Stage 3 | Stage 4",
         "originals/: copied source images",
+        "feature_maps/: copied raw per-stage feature-map heatmaps",
         "five_panels/: one five-panel JPEG per source image",
         "manifest.tsv: source-to-export mapping",
         "",
@@ -248,7 +270,7 @@ for subset, spec in subsets.items():
 
 print("Generated export subsets:")
 for name, count in summary_rows:
-    print(f"  {name}: originals={count}, five_panels={count}")
+    print(f"  {name}: originals={count}, feature_maps={count * 4}, five_panels={count}")
 PY
 
 mkdir -p "${ARCHIVE_DIR}"
@@ -309,9 +331,11 @@ for subset in \
   ruod_supervised_cascade_resnet50_j2
 do
   originals="$(find "${EXPORT_ROOT}/${subset}/originals" -maxdepth 1 -type f | wc -l)"
+  feature_maps="$(find "${EXPORT_ROOT}/${subset}/feature_maps" -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.bmp' -o -iname '*.webp' \) | wc -l)"
   panels="$(find "${EXPORT_ROOT}/${subset}/five_panels" -maxdepth 1 -type f -name '*_five_panel.jpg' | wc -l)"
-  echo "  ${subset}: originals=${originals}, five_panels=${panels}"
-  if [[ "${originals}" -ne "${EXPECTED_SAMPLES}" || "${panels}" -ne "${EXPECTED_SAMPLES}" ]]; then
+  image_total=$((originals + feature_maps + panels))
+  echo "  ${subset}: originals=${originals}, feature_maps=${feature_maps}, five_panels=${panels}, image_total=${image_total}"
+  if [[ "${originals}" -ne "${EXPECTED_SAMPLES}" || "${feature_maps}" -ne "$((EXPECTED_SAMPLES * 4))" || "${panels}" -ne "${EXPECTED_SAMPLES}" || "${image_total}" -ne "$((EXPECTED_SAMPLES * 6))" ]]; then
     echo "Error: unexpected export counts for ${subset}" >&2
     exit 1
   fi
@@ -327,8 +351,14 @@ if [[ "${UPLOAD}" == "1" ]]; then
     exit 1
   fi
   echo
-  echo "Uploading archives to ${RCLONE_DEST}/"
-  rclone copy -P "${ARCHIVE_DIR}" "${RCLONE_DEST}/"
+  echo "Uploading ZIP archives to ${RCLONE_DEST}/"
+  find "${ARCHIVE_DIR}" -maxdepth 1 -type f -name '*.zip' -print0 \
+    | while IFS= read -r -d '' archive; do
+        rclone copy -P "${archive}" "${RCLONE_DEST}/"
+      done
+  if [[ "${UPLOAD_SHA256}" == "1" ]]; then
+    rclone copy -P "${ARCHIVE_DIR}/SHA256SUMS.txt" "${RCLONE_DEST}/"
+  fi
   echo
   echo "Remote files:"
   rclone lsl "${RCLONE_DEST}/"

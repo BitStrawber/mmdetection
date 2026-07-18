@@ -118,6 +118,165 @@ WATERGAN_READ_DEPTH = r'''def read_depth(path):
     return _watergan_np.nan_to_num(arr).astype(_watergan_np.float32)
 '''
 
+WATERGAN_RUNTIME_HELPERS = r'''
+
+# WaterGAN exp_2 runtime helpers: parallelize image decoding and avoid running
+# expensive summaries/debug fetches after every tiny 48x64 training step.
+def _watergan_env_positive_int(name, default):
+    import os as _watergan_os
+    try:
+        value = int(_watergan_os.environ.get(name, default))
+    except (TypeError, ValueError):
+        value = int(default)
+    return max(1, value)
+
+def _watergan_env_bool(name, default):
+    import os as _watergan_os
+    value = _watergan_os.environ.get(name, default)
+    return str(value).strip().lower() not in ("0", "false", "no", "off")
+
+_WATERGAN_IO_WORKERS = _watergan_env_positive_int(
+    "WATERGAN_IO_WORKERS", 16
+)
+_WATERGAN_LOG_EVERY = _watergan_env_positive_int(
+    "WATERGAN_LOG_EVERY", 10
+)
+_WATERGAN_THROTTLE_DIAGNOSTICS = _watergan_env_bool(
+    "WATERGAN_THROTTLE_DIAGNOSTICS", "1"
+)
+_WATERGAN_IO_EXECUTOR = None
+
+def _watergan_get_io_executor():
+    global _WATERGAN_IO_EXECUTOR
+    if _WATERGAN_IO_WORKERS <= 1:
+        return None
+    if _WATERGAN_IO_EXECUTOR is None:
+        from concurrent.futures import ThreadPoolExecutor
+        _WATERGAN_IO_EXECUTOR = ThreadPoolExecutor(
+            max_workers=_WATERGAN_IO_WORKERS
+        )
+    return _WATERGAN_IO_EXECUTOR
+
+def _watergan_call_loader(task):
+    loader, filename = task
+    return loader(filename)
+
+def _watergan_parallel_map(loader, filenames):
+    filenames = list(filenames)
+    executor = _watergan_get_io_executor()
+    if executor is None:
+        return [loader(filename) for filename in filenames]
+    return list(executor.map(loader, filenames))
+
+def _watergan_parallel_load_many(specs):
+    lengths = []
+    tasks = []
+    for loader, filenames in specs:
+        filenames = list(filenames)
+        lengths.append(len(filenames))
+        tasks.extend((loader, filename) for filename in filenames)
+    executor = _watergan_get_io_executor()
+    if executor is None:
+        loaded = [_watergan_call_loader(task) for task in tasks]
+    else:
+        loaded = list(executor.map(_watergan_call_loader, tasks))
+    result = []
+    offset = 0
+    for length in lengths:
+        result.append(loaded[offset:offset + length])
+        offset += length
+    return result
+
+def _watergan_should_log(counter):
+    if not _WATERGAN_THROTTLE_DIAGNOSTICS:
+        return True
+    return counter == 1 or counter % _WATERGAN_LOG_EVERY == 0
+'''
+
+WATERGAN_TRAIN_LOAD_OLD = '''          if self.is_crop:
+              air_batch = [self.read_img(air_batch_file) for air_batch_file in air_batch_files]
+              water_batch = [self.read_img(water_batch_file) for water_batch_file in water_batch_files]
+              depth_batch = [self.read_depth(depth_batch_file) for depth_batch_file in depth_batch_files]
+          else:
+              air_batch = [scipy.misc.imread(air_batch_file) for air_batch_file in air_batch_files]
+              water_batch = [scipy.misc.imread(water_batch_file) for water_batch_file in water_batch_files]
+              depth_batch = [self.read_depth(depth_batch_file) for depth_batch_file in depth_batch_files]
+'''
+
+WATERGAN_TRAIN_LOAD_NEW = '''          if self.is_crop:
+              air_batch, water_batch, depth_batch = _watergan_parallel_load_many((
+                  (self.read_img, air_batch_files),
+                  (self.read_img, water_batch_files),
+                  (self.read_depth, depth_batch_files),
+              ))
+          else:
+              air_batch, water_batch, depth_batch = _watergan_parallel_load_many((
+                  (scipy.misc.imread, air_batch_files),
+                  (scipy.misc.imread, water_batch_files),
+                  (self.read_depth, depth_batch_files),
+              ))
+'''
+
+WATERGAN_TRAIN_STEP_NEW = '''          should_log = _watergan_should_log(counter)
+          d_feed = {
+            self.z: batch_z,
+            self.water_inputs: water_batch_images,
+            self.air_inputs: air_batch_images,
+            self.depth_inputs: depth_batch_images,
+            self.R2: r2,
+            self.R4: r4,
+            self.R6: r6,
+          }
+          g_feed = {
+            self.z: batch_z,
+            self.air_inputs: air_batch_images,
+            self.depth_inputs: depth_batch_images,
+            self.R2: r2,
+            self.R4: r4,
+            self.R6: r6,
+          }
+
+          # Keep the original optimization schedule: one D update and two G
+          # updates. Summaries and diagnostic forward passes are throttled.
+          if should_log:
+            _, summary_str = self.sess.run(
+              [d_optim, self.d_sum], feed_dict=d_feed)
+            self.writer.add_summary(summary_str, counter)
+          else:
+            self.sess.run(d_optim, feed_dict=d_feed)
+
+          self.sess.run(g_optim, feed_dict=g_feed)
+          if should_log:
+            _, summary_str = self.sess.run(
+              [g_optim, self.g_sum], feed_dict=g_feed)
+            self.writer.add_summary(summary_str, counter)
+          else:
+            self.sess.run(g_optim, feed_dict=g_feed)
+
+          counter += 1
+          if should_log:
+            loss_feed = dict(d_feed)
+            errD_fake, errD_real, errG = self.sess.run(
+              [self.d_loss_fake, self.d_loss_real, self.g_loss],
+              feed_dict=loss_feed,
+            )
+            batch_number = idx // config.batch_size + 1
+            print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
+              % (epoch, batch_number, water_batch_idxs,
+                time.time() - start_time, errD_fake+errD_real, errG))
+            debug_values = self.sess.run([
+              'wc_generator/g_atten/g_eta_r:0',
+              'wc_generator/g_atten/g_eta_g:0',
+              'wc_generator/g_atten/g_eta_b:0',
+              'wc_generator/g_vig/g_amp:0',
+              'wc_generator/g_vig/g_c1:0',
+              'wc_generator/g_vig/g_c2:0',
+              'wc_generator/g_vig/g_c3:0',
+            ])
+            for debug_value in debug_values:
+              print(debug_value)
+'''
+
 replacements = [
     ('flags.DEFINE_integer("train_size", np.inf,', 'flags.DEFINE_float("train_size", np.inf,'),
     ("flags.DEFINE_integer('train_size', np.inf,", "flags.DEFINE_float('train_size', np.inf,"),
@@ -188,6 +347,12 @@ read_depth_function = re.compile(
 direct_sio_loadmat = re.compile(
     r"(?<![A-Za-z0-9_])sio\.loadmat\(([^)\n]+)\)"
 )
+train_step_block = re.compile(
+    r"^          # Update D network\n"
+    r".*?"
+    r"^            print\(self\.sess\.run\('wc_generator/g_vig/g_c3:0'\)\)\n",
+    flags=re.MULTILINE | re.DOTALL,
+)
 
 SCIPY_MISC_COMPAT = f'''
 
@@ -199,14 +364,14 @@ except AttributeError:
     import numpy as _watergan_np
 
     def _watergan_imread(filename, flatten=False, mode=None):
-        image = _PILImage.open(filename)
-        if flatten:
-            image = image.convert('L')
-        elif mode is not None:
-            image = image.convert(mode)
-        else:
-            image = image.convert('RGB')
-        return _watergan_np.asarray(image)
+        with _PILImage.open(filename) as image:
+            if flatten:
+                image = image.convert('L')
+            elif mode is not None:
+                image = image.convert(mode)
+            else:
+                image = image.convert('RGB')
+            return _watergan_np.asarray(image).copy()
 
     def _watergan_imresize(arr, size, interp='bilinear', mode=None):
         arr = _watergan_np.asarray(arr)
@@ -321,6 +486,78 @@ for path in files:
             raise RuntimeError(
                 "Found an unpatched sio.loadmat call in %s" % path
             )
+        if "_watergan_parallel_load_many" not in text:
+            class_marker = "class WGAN"
+            if class_marker not in text:
+                raise RuntimeError(
+                    "Could not find class WGAN while adding runtime helpers: %s"
+                    % path
+                )
+            text = text.replace(
+                class_marker,
+                WATERGAN_RUNTIME_HELPERS + "\n" + class_marker,
+                1,
+            )
+        if WATERGAN_TRAIN_LOAD_NEW not in text:
+            if WATERGAN_TRAIN_LOAD_OLD not in text:
+                raise RuntimeError(
+                    "Could not find WaterGAN training load block in %s" % path
+                )
+            text = text.replace(
+                WATERGAN_TRAIN_LOAD_OLD,
+                WATERGAN_TRAIN_LOAD_NEW,
+                1,
+            )
+        sample_loader_replacements = (
+            (
+                "[self.read_img_sample(sample_air_batch_file) "
+                "for sample_air_batch_file in sample_air_batch_files]",
+                "_watergan_parallel_map("
+                "self.read_img_sample, sample_air_batch_files)",
+            ),
+            (
+                "[self.read_img_sample(sample_water_batch_file) "
+                "for sample_water_batch_file in sample_water_batch_files]",
+                "_watergan_parallel_map("
+                "self.read_img_sample, sample_water_batch_files)",
+            ),
+            (
+                "[self.read_depth_small(sample_depth_batch_file) "
+                "for sample_depth_batch_file in sample_depth_batch_files]",
+                "_watergan_parallel_map("
+                "self.read_depth_small, sample_depth_batch_files)",
+            ),
+            (
+                "[self.read_depth_sample(sample_depth_batch_file) "
+                "for sample_depth_batch_file in sample_depth_batch_files]",
+                "_watergan_parallel_map("
+                "self.read_depth_sample, sample_depth_batch_files)",
+            ),
+            (
+                "[scipy.misc.imread(sample_air_batch_file) "
+                "for sample_air_batch_file in sample_air_batch_files]",
+                "_watergan_parallel_map("
+                "scipy.misc.imread, sample_air_batch_files)",
+            ),
+            (
+                "[scipy.misc.imread(sample_water_batch_file) "
+                "for sample_water_batch_file in sample_water_batch_files]",
+                "_watergan_parallel_map("
+                "scipy.misc.imread, sample_water_batch_files)",
+            ),
+        )
+        for sample_old, sample_new in sample_loader_replacements:
+            text = text.replace(sample_old, sample_new)
+        if "should_log = _watergan_should_log(counter)" not in text:
+            text, train_step_replacements = train_step_block.subn(
+                WATERGAN_TRAIN_STEP_NEW,
+                text,
+                count=1,
+            )
+            if train_step_replacements != 1:
+                raise RuntimeError(
+                    "Could not replace WaterGAN train step block in %s" % path
+                )
         text = re.sub(
             r"depth_data\s*=\s*sorted\(glob\(os\.path\.join\(\s*\"\.\/data\",\s*config\.depth_dataset,\s*\"\*\.mat\"\s*\)\)\)",
             "depth_data = _watergan_list_depth_files(config.depth_dataset)",
@@ -379,6 +616,11 @@ grep -RIn "_watergan_list_depth_files\\|_watergan_load_depth_file\\|def read_dep
 echo
 echo "Remaining direct model sio.loadmat calls:"
 grep -RInE "(^|[^[:alnum:]_])sio\\.loadmat" \
+  "${WATERGAN_DIR}"/modelmhl.py "${WATERGAN_DIR}"/modeljamaica.py || true
+
+echo
+echo "WaterGAN parallel I/O and logging status:"
+grep -RIn "_watergan_parallel_load_many\\|_watergan_should_log(counter)" \
   "${WATERGAN_DIR}"/modelmhl.py "${WATERGAN_DIR}"/modeljamaica.py || true
 
 echo

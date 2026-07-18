@@ -41,6 +41,7 @@ AIR_HEIGHT="${AIR_HEIGHT:-480}"
 WATER_WIDTH="${WATER_WIDTH:-1360}"
 WATER_HEIGHT="${WATER_HEIGHT:-1024}"
 DEPTH_FORMAT="${DEPTH_FORMAT:-mat}"
+MAT_LAYOUT="${MAT_LAYOUT:-official}"
 RUN_DEPTH="${RUN_DEPTH:-1}"
 NUM_WORKERS="${NUM_WORKERS:-16}"
 RESUME="${RESUME:-1}"
@@ -84,6 +85,7 @@ echo "SAMPLE_SEED:    ${SAMPLE_SEED}"
 echo "AIR_SIZE:       ${AIR_WIDTH}x${AIR_HEIGHT}"
 echo "WATER_SIZE:     ${WATER_WIDTH}x${WATER_HEIGHT}"
 echo "DEPTH_FORMAT:   ${DEPTH_FORMAT}"
+echo "MAT_LAYOUT:     ${MAT_LAYOUT}"
 echo "NUM_WORKERS:    ${NUM_WORKERS}"
 echo "RESUME:         ${RESUME}"
 echo "VERIFY_EXISTING:${VERIFY_EXISTING}"
@@ -143,6 +145,7 @@ python tools/prepare_watergan_imagenet_ruod_dataset.py \
   --water-width "${WATER_WIDTH}" \
   --water-height "${WATER_HEIGHT}" \
   --depth-format "${DEPTH_FORMAT}" \
+  --mat-layout "${MAT_LAYOUT}" \
   --workers "${NUM_WORKERS}" \
   --seed "${SAMPLE_SEED}" \
   "${EXTRA_ARGS[@]}"

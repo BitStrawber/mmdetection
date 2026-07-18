@@ -62,6 +62,15 @@ def parse_args():
     parser.add_argument('--water-height', type=int, default=1024)
     parser.add_argument('--depth-format', choices=('mat', 'png'), default='mat',
                         help='Output depth storage. mat matches the original WaterGAN code; png is much smaller and requires patch_watergan_tf15_compat.sh.')
+    parser.add_argument(
+        '--mat-layout',
+        choices=('official', 'compat'),
+        default='official',
+        help=(
+            'MAT variable layout. official stores only the original WaterGAN '
+            '"depth" key; compat duplicates the array under depth/dph/D/data.'
+        ),
+    )
     parser.add_argument('--workers', type=int, default=1,
                         help='Parallel image preparation workers. Use 1 for sequential preparation.')
     parser.add_argument('--verify-existing', action='store_true',
@@ -162,7 +171,13 @@ def prepare_rgb(src: Path, dst: Path, size: Tuple[int, int]) -> None:
     os.replace(str(tmp), str(dst))
 
 
-def prepare_depth(src: Path, dst: Path, size: Tuple[int, int], depth_format: str) -> None:
+def prepare_depth(
+    src: Path,
+    dst: Path,
+    size: Tuple[int, int],
+    depth_format: str,
+    mat_layout: str,
+) -> None:
     with Image.open(src) as depth:
         depth = depth.convert('L')
         depth = ImageOps.fit(depth, size, method=BICUBIC, centering=(0.5, 0.5))
@@ -176,13 +191,14 @@ def prepare_depth(src: Path, dst: Path, size: Tuple[int, int], depth_format: str
 
     tmp = dst.with_name(f'.{dst.name}.{os.getpid()}.tmp')
     arr = np.asarray(depth).astype(np.float32) / 255.0
-    # Keep several common keys so old code variants can load the file.
-    savemat(str(tmp), {
-        'depth': arr,
-        'dph': arr,
-        'D': arr,
-        'data': arr,
-    }, appendmat=False)
+    values = {'depth': arr}
+    if mat_layout == 'compat':
+        values.update({
+            'dph': arr,
+            'D': arr,
+            'data': arr,
+        })
+    savemat(str(tmp), values, appendmat=False)
     os.replace(str(tmp), str(dst))
 
 
@@ -210,6 +226,7 @@ def depth_output_ready(
     path: Path,
     size: Tuple[int, int],
     depth_format: str,
+    mat_layout: str,
     verify: bool,
 ) -> bool:
     if not path.is_file() or path.stat().st_size <= 0:
@@ -223,9 +240,16 @@ def depth_output_ready(
         from scipy.io import loadmat
 
         values = loadmat(str(path))
-        for key in ('depth', 'dph', 'D', 'data'):
-            if key in values and values[key].shape == (size[1], size[0]):
-                return True
+        expected_keys = {'depth'} if mat_layout == 'official' else {
+            'depth', 'dph', 'D', 'data'
+        }
+        data_keys = {key for key in values if not key.startswith('__')}
+        if data_keys != expected_keys:
+            return False
+        return all(
+            values[key].shape == (size[1], size[0])
+            for key in expected_keys
+        )
     except (OSError, TypeError, ValueError):
         return False
     return False
@@ -239,13 +263,20 @@ def prepare_air_task(task):
         depth_dst,
         air_size,
         depth_format,
+        mat_layout,
         prepare_air,
         prepare_air_depth,
     ) = task
     if prepare_air:
         prepare_rgb(Path(image_path), Path(air_dst), air_size)
     if prepare_air_depth:
-        prepare_depth(Path(depth_path), Path(depth_dst), air_size, depth_format)
+        prepare_depth(
+            Path(depth_path),
+            Path(depth_dst),
+            air_size,
+            depth_format,
+            mat_layout,
+        )
     return int(prepare_air), int(prepare_air_depth)
 
 
@@ -295,6 +326,7 @@ def prepare_config(args, air_source: Path, depth_source: Path, water_source: Pat
         'air_size': [args.air_width, args.air_height],
         'water_size': [args.water_width, args.water_height],
         'depth_format': args.depth_format,
+        'mat_layout': args.mat_layout,
     }
 
 
@@ -389,7 +421,11 @@ def main() -> None:
             air_dst, air_size, 'RGB', args.verify_existing
         )
         depth_ready = args.resume and depth_output_ready(
-            depth_dst, air_size, args.depth_format, args.verify_existing
+            depth_dst,
+            air_size,
+            args.depth_format,
+            args.mat_layout,
+            args.verify_existing,
         )
         reused_air += int(air_ready)
         reused_depth += int(depth_ready)
@@ -401,6 +437,7 @@ def main() -> None:
                 str(depth_dst),
                 air_size,
                 args.depth_format,
+                args.mat_layout,
                 not air_ready,
                 not depth_ready,
             ))
@@ -506,6 +543,7 @@ def main() -> None:
         'air_size': list(air_size),
         'water_size': list(water_size),
         'depth_format': args.depth_format,
+        'mat_layout': args.mat_layout,
         'manifest': str(manifest),
     }
     summary_path = out_dir / 'prepare_watergan_summary.json'

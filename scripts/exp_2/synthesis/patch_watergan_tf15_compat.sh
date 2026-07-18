@@ -58,6 +58,26 @@ def _watergan_list_depth_files(depth_dataset):
         files.extend(_watergan_glob(_watergan_os.path.join(root, pattern)))
     return sorted(files, key=_watergan_depth_sort_key)
 
+def _watergan_load_depth_file(filename):
+    import os as _watergan_os
+    import numpy as _watergan_np
+    suffix = _watergan_os.path.splitext(filename)[1].lower()
+    if suffix == ".mat":
+        import scipy.io as _watergan_sio
+        return _watergan_sio.loadmat(filename)
+    from PIL import Image as _WaterganDepthImage
+    with _WaterganDepthImage.open(filename) as image:
+        depth = _watergan_np.asarray(
+            image.convert("L"), dtype=_watergan_np.float32
+        ) / 255.0
+    # Preserve the dictionary contract used by old model variants.
+    return {
+        "depth": depth,
+        "dph": depth,
+        "D": depth,
+        "data": depth,
+    }
+
 def _watergan_effective_train_batches(air_data, depth_data, config):
     import numpy as _watergan_np
     train_limit = min(len(air_data), len(depth_data))
@@ -164,6 +184,9 @@ scipy_misc_compat_block = re.compile(
 read_depth_function = re.compile(
     r"^def read_depth\(.*?(?=^def\s|^class\s|\Z)",
     flags=re.MULTILINE | re.DOTALL,
+)
+direct_sio_loadmat = re.compile(
+    r"(?<![A-Za-z0-9_])sio\.loadmat\(([^)\n]+)\)"
 )
 
 SCIPY_MISC_COMPAT = f'''
@@ -275,6 +298,29 @@ for path in files:
                 text = text.replace(insert_after, insert_after + WATERGAN_DEPTH_HELPERS, 1)
             else:
                 text = WATERGAN_DEPTH_HELPERS + "\n" + text
+        elif "_watergan_load_depth_file" not in text:
+            class_marker = "class WGAN"
+            if class_marker not in text:
+                raise RuntimeError(
+                    "Could not find class WGAN while adding PNG depth loader: %s"
+                    % path
+                )
+            loader_start = WATERGAN_DEPTH_HELPERS.index(
+                "def _watergan_load_depth_file"
+            )
+            loader_end = WATERGAN_DEPTH_HELPERS.index(
+                "def _watergan_effective_train_batches"
+            )
+            loader = WATERGAN_DEPTH_HELPERS[loader_start:loader_end]
+            text = text.replace(class_marker, loader + "\n" + class_marker, 1)
+        text, _ = direct_sio_loadmat.subn(
+            r"_watergan_load_depth_file(\1)",
+            text,
+        )
+        if direct_sio_loadmat.search(text):
+            raise RuntimeError(
+                "Found an unpatched sio.loadmat call in %s" % path
+            )
         text = re.sub(
             r"depth_data\s*=\s*sorted\(glob\(os\.path\.join\(\s*\"\.\/data\",\s*config\.depth_dataset,\s*\"\*\.mat\"\s*\)\)\)",
             "depth_data = _watergan_list_depth_files(config.depth_dataset)",
@@ -327,7 +373,13 @@ grep -RInE "/[[:space:]]*\\)" "${WATERGAN_DIR}"/*.py || true
 
 echo
 echo "WaterGAN PNG depth helper status:"
-grep -RIn "_watergan_list_depth_files\\|def read_depth" "${WATERGAN_DIR}"/*.py || true
+grep -RIn "_watergan_list_depth_files\\|_watergan_load_depth_file\\|def read_depth" \
+  "${WATERGAN_DIR}"/*.py || true
+
+echo
+echo "Remaining direct model sio.loadmat calls:"
+grep -RInE "(^|[^[:alnum:]_])sio\\.loadmat" \
+  "${WATERGAN_DIR}"/modelmhl.py "${WATERGAN_DIR}"/modeljamaica.py || true
 
 echo
 echo "SciPy image I/O compatibility status:"

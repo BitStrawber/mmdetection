@@ -353,6 +353,37 @@ train_step_block = re.compile(
     r"^            print\(self\.sess\.run\('wc_generator/g_vig/g_c3:0'\)\)\n",
     flags=re.MULTILINE | re.DOTALL,
 )
+train_load_triplet = re.compile(
+    r"^(?P<indent>[ \t]*)air_batch\s*=\s*"
+    r"\[(?P<air_loader>self\.read_img|scipy\.misc\.imread)"
+    r"\(air_batch_file\)\s+for\s+air_batch_file\s+in\s+air_batch_files\]"
+    r"[ \t]*\r?\n"
+    r"(?P=indent)water_batch\s*=\s*"
+    r"\[(?P<water_loader>self\.read_img|scipy\.misc\.imread)"
+    r"\(water_batch_file\)\s+for\s+water_batch_file\s+in\s+water_batch_files\]"
+    r"[ \t]*\r?\n"
+    r"(?P=indent)depth_batch\s*=\s*"
+    r"\[self\.read_depth\(depth_batch_file\)\s+for\s+depth_batch_file"
+    r"\s+in\s+depth_batch_files\][ \t]*$",
+    flags=re.MULTILINE,
+)
+
+def replace_train_load_triplet(match):
+    indent = match.group("indent")
+    inner = indent + "    "
+    return (
+        indent
+        + "air_batch, water_batch, depth_batch = "
+        + "_watergan_parallel_load_many((\n"
+        + inner
+        + "({0}, air_batch_files),\n".format(match.group("air_loader"))
+        + inner
+        + "({0}, water_batch_files),\n".format(match.group("water_loader"))
+        + inner
+        + "(self.read_depth, depth_batch_files),\n"
+        + indent
+        + "))"
+    )
 
 SCIPY_MISC_COMPAT = f'''
 
@@ -498,15 +529,18 @@ for path in files:
                 WATERGAN_RUNTIME_HELPERS + "\n" + class_marker,
                 1,
             )
-        if WATERGAN_TRAIN_LOAD_NEW not in text:
-            if WATERGAN_TRAIN_LOAD_OLD not in text:
-                raise RuntimeError(
-                    "Could not find WaterGAN training load block in %s" % path
-                )
-            text = text.replace(
-                WATERGAN_TRAIN_LOAD_OLD,
-                WATERGAN_TRAIN_LOAD_NEW,
-                1,
+        text, train_load_replacements = train_load_triplet.subn(
+            replace_train_load_triplet,
+            text,
+        )
+        train_load_marker = (
+            "air_batch, water_batch, depth_batch = "
+            "_watergan_parallel_load_many(("
+        )
+        if train_load_marker not in text:
+            raise RuntimeError(
+                "Could not find or patch WaterGAN training load statements "
+                "in %s" % path
             )
         sample_loader_replacements = (
             (

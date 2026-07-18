@@ -13,11 +13,14 @@ set -euo pipefail
 #   GPU="5,6,7" exposes three GPUs to TensorFlow, but speedup mainly comes from
 #   increasing BATCH_SIZE. Generation is kept single-process to avoid output
 #   name collisions in the original code.
-# - BATCH_SIZE defaults to 16 because 250000 is divisible by 16.
+# - BATCH_SIZE defaults to 80 because 250000 is divisible by 80 on 24GB GPUs
+#   after switching depth storage from huge MAT files to compact PNG files.
+# - DEPTH_FORMAT=png avoids writing 250k uncompressed MAT depth files. The
+#   patch script updates WaterGAN so read_depth() can load PNG depth maps.
 #
 # Example:
 #   conda activate /media/SSD1/conda_envs/watergan_tf1
-#   GPU="5,6,7" BATCH_SIZE=16 bash scripts/exp_2/synthesis/run_watergan_full_train_generate_train.sh
+#   GPU="5,6,7" BATCH_SIZE=80 bash scripts/exp_2/synthesis/run_watergan_full_train_generate_train.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -37,7 +40,7 @@ DEPTH_DIR="${DEPTH_DIR:-${DEPTH_ROOT}/train}"
 
 GPU="${GPU:-5,6,7}"
 EPOCH="${EPOCH:-26}"
-BATCH_SIZE="${BATCH_SIZE:-16}"
+BATCH_SIZE="${BATCH_SIZE:-80}"
 TRAIN_SIZE="${TRAIN_SIZE:-250000}"
 NUM_SAMPLES="${NUM_SAMPLES:-250000}"
 SAVE_EPOCH="${SAVE_EPOCH:-1}"
@@ -46,6 +49,7 @@ AIR_WIDTH="${AIR_WIDTH:-640}"
 AIR_HEIGHT="${AIR_HEIGHT:-480}"
 WATER_WIDTH="${WATER_WIDTH:-1360}"
 WATER_HEIGHT="${WATER_HEIGHT:-1024}"
+DEPTH_FORMAT="${DEPTH_FORMAT:-png}"
 OUTPUT_WIDTH="${OUTPUT_WIDTH:-64}"
 OUTPUT_HEIGHT="${OUTPUT_HEIGHT:-48}"
 LEARNING_RATE="${LEARNING_RATE:-0.0002}"
@@ -119,6 +123,7 @@ EPOCH:           ${EPOCH}
 BATCH_SIZE:      ${BATCH_SIZE}
 TRAIN_SIZE:      ${TRAIN_SIZE}
 NUM_SAMPLES:     ${NUM_SAMPLES}
+DEPTH_FORMAT:    ${DEPTH_FORMAT}
 RESULTS_DIR:     ${RESULTS_DIR}
 RESTORE_DIR:     ${RESTORE_DIR}
 CHECKPOINT_DIR:  ${CHECKPOINT_DIR}
@@ -154,11 +159,12 @@ if [[ "${RUN_PREPARE}" == "1" ]]; then
   AIR_LIMIT=0 \
   WATER_LIMIT=0 \
   AIR_PER_CLASS=0 \
-  WATER_REPEAT_TO="${TRAIN_SIZE}" \
+  WATER_REPEAT_TO=0 \
   AIR_WIDTH="${AIR_WIDTH}" \
   AIR_HEIGHT="${AIR_HEIGHT}" \
   WATER_WIDTH="${WATER_WIDTH}" \
   WATER_HEIGHT="${WATER_HEIGHT}" \
+  DEPTH_FORMAT="${DEPTH_FORMAT}" \
   OVERWRITE=1 \
   bash scripts/exp_2/synthesis/run_watergan_prepare_dataset.sh \
     2>&1 | tee "${LOG_DIR}/prepare_train_full250k.log"
@@ -202,7 +208,7 @@ ln -sfn "${DATA_ROOT}/water_images" "${WATERGAN_DIR}/data/${DATA_NAME}_water_ima
 
 if [[ "${RESET_RESULTS}" == "1" ]]; then
   echo "Reset WaterGAN flat results: ${RESULTS_DIR}"
-  rm -f "${RESULTS_DIR}"/fake_*.png "${RESULTS_DIR}"/air_*.png "${RESULTS_DIR}"/depth_*.mat
+  rm -f "${RESULTS_DIR}"/fake_*.png "${RESULTS_DIR}"/air_*.png "${RESULTS_DIR}"/depth_*.mat "${RESULTS_DIR}"/depth_*.png
 fi
 
 if [[ "${RUN_GENERATE}" == "1" ]]; then

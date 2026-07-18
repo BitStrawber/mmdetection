@@ -37,6 +37,67 @@ files = [
     root / "utils.py",
 ]
 
+WATERGAN_DEPTH_HELPERS = r'''
+
+# WaterGAN exp_2 helpers: allow compact PNG depth maps and repeated water-domain
+# sampling without physically duplicating 25w RUOD images.
+def _watergan_depth_sort_key(path):
+    import os as _watergan_os
+    stem = _watergan_os.path.splitext(_watergan_os.path.basename(path))[0]
+    try:
+        return (0, int(stem))
+    except ValueError:
+        return (1, stem)
+
+def _watergan_list_depth_files(depth_dataset):
+    import os as _watergan_os
+    from glob import glob as _watergan_glob
+    root = _watergan_os.path.join("./data", depth_dataset)
+    files = []
+    for pattern in ("*.mat", "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp"):
+        files.extend(_watergan_glob(_watergan_os.path.join(root, pattern)))
+    return sorted(files, key=_watergan_depth_sort_key)
+
+def _watergan_effective_train_batches(air_data, depth_data, config):
+    import numpy as _watergan_np
+    train_limit = min(len(air_data), len(depth_data))
+    train_size = config.train_size
+    if train_size != _watergan_np.inf:
+        train_limit = min(train_limit, int(train_size))
+    return int(train_limit // config.batch_size)
+'''
+
+WATERGAN_READ_DEPTH = r'''def read_depth(path):
+    import os as _watergan_os
+    import numpy as _watergan_np
+    suffix = _watergan_os.path.splitext(path)[1].lower()
+    if suffix == ".mat":
+        import scipy.io as _watergan_sio
+        mat = _watergan_sio.loadmat(path)
+        for key in ("depth", "dph", "D", "data"):
+            if key in mat:
+                arr = mat[key]
+                break
+        else:
+            data_keys = [key for key in mat.keys() if not key.startswith("__")]
+            if not data_keys:
+                raise ValueError("No depth array found in MAT file: %s" % path)
+            arr = mat[data_keys[0]]
+        arr = _watergan_np.asarray(arr, dtype=_watergan_np.float32)
+    else:
+        from PIL import Image as _WaterganPILImage
+        with _WaterganPILImage.open(path) as image:
+            arr = _watergan_np.asarray(image.convert("L"), dtype=_watergan_np.float32)
+    arr = _watergan_np.squeeze(arr)
+    if arr.ndim == 3:
+        arr = arr[:, :, 0]
+    if arr.size:
+        max_value = float(_watergan_np.nanmax(arr))
+        if max_value > 1.0:
+            arr = arr / 255.0
+    return _watergan_np.nan_to_num(arr).astype(_watergan_np.float32)
+'''
+
 replacements = [
     ('flags.DEFINE_integer("train_size", np.inf,', 'flags.DEFINE_float("train_size", np.inf,'),
     ("flags.DEFINE_integer('train_size', np.inf,", "flags.DEFINE_float('train_size', np.inf,"),
@@ -99,6 +160,10 @@ scipy_misc_compat_block = re.compile(
     r"(?:    .*\n)+?"
     r"    scipy\.misc\.imsave = _watergan_imsave\n",
     flags=re.MULTILINE,
+)
+read_depth_function = re.compile(
+    r"^def read_depth\(.*?(?=^def\s|^class\s|\Z)",
+    flags=re.MULTILINE | re.DOTALL,
 )
 
 SCIPY_MISC_COMPAT = f'''
@@ -187,6 +252,11 @@ for path in files:
         text = new_text
     text = batch_idx_division.sub(r"\1int((\2) // config.batch_size)", text)
     text = ceil_int_division.sub(r"int(math.ceil(\1 / float(config.batch_size)))", text)
+    text = re.sub(
+        r"sample_batch_idxs\s*=\s*int\(\(self\.num_samples\s*/\)\s*//\s*config\.batch_size\)",
+        r"sample_batch_idxs = int(self.num_samples // config.batch_size)",
+        text,
+    )
     if "def _watergan_imsave" in text:
         text = imsave_function.sub(WATERGAN_IMSAVE_FUNCTION, text)
     if "scipy.misc." in text:
@@ -198,6 +268,32 @@ for path in files:
             text = text.replace("import scipy", "import scipy" + SCIPY_MISC_COMPAT, 1)
         else:
             text = "import scipy.misc" + SCIPY_MISC_COMPAT + "\n" + text
+    if path.name in ("modelmhl.py", "modeljamaica.py"):
+        if "_watergan_list_depth_files" not in text:
+            insert_after = "from utils import *"
+            if insert_after in text:
+                text = text.replace(insert_after, insert_after + WATERGAN_DEPTH_HELPERS, 1)
+            else:
+                text = WATERGAN_DEPTH_HELPERS + "\n" + text
+        text = re.sub(
+            r"depth_data\s*=\s*sorted\(glob\(os\.path\.join\(\s*\"\.\/data\",\s*config\.depth_dataset,\s*\"\*\.mat\"\s*\)\)\)",
+            "depth_data = _watergan_list_depth_files(config.depth_dataset)",
+            text,
+            flags=re.DOTALL,
+        )
+        text = re.sub(
+            r"^(\s*)water_batch_idxs\s*=.*min\(.*len\(air_data\).*len\(water_data\).*config\.train_size.*$",
+            r"\1water_batch_idxs = _watergan_effective_train_batches(air_data, depth_data, config)",
+            text,
+            flags=re.MULTILINE,
+        )
+        text = re.sub(
+            r"water_data\[(randombatch\[[^\]]+\])\]",
+            r"water_data[(\1) % len(water_data)]",
+            text,
+        )
+    if path.name == "utils.py" and "def read_depth" in text:
+        text = read_depth_function.sub(WATERGAN_READ_DEPTH + "\n\n", text, count=1)
     if text != old:
         backup = path.with_suffix(path.suffix + ".tf15bak")
         if not backup.exists():
@@ -224,6 +320,14 @@ grep -RIn "sigmoid_cross_entropy_with_logits.*targets=" "${WATERGAN_DIR}"/*.py |
 echo
 echo "Remaining Python 2 style batch index divisions:"
 grep -RInE "batch_idxs\\s*=.* / config\\.batch_size" "${WATERGAN_DIR}"/*.py || true
+
+echo
+echo "Remaining malformed division before ')' patterns:"
+grep -RInE "/[[:space:]]*\\)" "${WATERGAN_DIR}"/*.py || true
+
+echo
+echo "WaterGAN PNG depth helper status:"
+grep -RIn "_watergan_list_depth_files\\|def read_depth" "${WATERGAN_DIR}"/*.py || true
 
 echo
 echo "SciPy image I/O compatibility status:"

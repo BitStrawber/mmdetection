@@ -4,7 +4,8 @@ set -euo pipefail
 # Prepare the flat data layout expected by the original TensorFlow WaterGAN
 # code:
 #   air_images/*.png   ImageNet RGB images resized to 640x480
-#   air_depth/*.mat    matching pseudo-depth maps
+#   air_depth/*.mat    matching pseudo-depth maps, or air_depth/*.png when
+#                      DEPTH_FORMAT=png and WaterGAN has been patched
 #   water_images/*.png RUOD real underwater reference images resized to 1360x1024
 #
 # Smoke:
@@ -39,6 +40,7 @@ AIR_WIDTH="${AIR_WIDTH:-640}"
 AIR_HEIGHT="${AIR_HEIGHT:-480}"
 WATER_WIDTH="${WATER_WIDTH:-1360}"
 WATER_HEIGHT="${WATER_HEIGHT:-1024}"
+DEPTH_FORMAT="${DEPTH_FORMAT:-mat}"
 RUN_DEPTH="${RUN_DEPTH:-1}"
 OVERWRITE="${OVERWRITE:-1}"
 
@@ -73,6 +75,7 @@ echo "WATER_REPEAT_TO:${WATER_REPEAT_TO}"
 echo "SAMPLE_SEED:    ${SAMPLE_SEED}"
 echo "AIR_SIZE:       ${AIR_WIDTH}x${AIR_HEIGHT}"
 echo "WATER_SIZE:     ${WATER_WIDTH}x${WATER_HEIGHT}"
+echo "DEPTH_FORMAT:   ${DEPTH_FORMAT}"
 echo "========================================="
 echo
 
@@ -122,6 +125,7 @@ python tools/prepare_watergan_imagenet_ruod_dataset.py \
   --air-height "${AIR_HEIGHT}" \
   --water-width "${WATER_WIDTH}" \
   --water-height "${WATER_HEIGHT}" \
+  --depth-format "${DEPTH_FORMAT}" \
   --seed "${SAMPLE_SEED}" \
   "${EXTRA_ARGS[@]}"
 

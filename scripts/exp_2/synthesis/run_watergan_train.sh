@@ -52,7 +52,7 @@ check_path() {
 
 count_files() {
   local path="$1"
-  find "${path}" -maxdepth 1 -type f 2>/dev/null | wc -l | tr -d ' '
+  find "${path}" -maxdepth 1 \( -type f -o -type l \) 2>/dev/null | wc -l | tr -d ' '
 }
 
 echo "========================================="

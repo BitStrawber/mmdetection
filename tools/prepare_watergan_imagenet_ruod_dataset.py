@@ -4,7 +4,8 @@
 WaterGAN expects three flat datasets:
 
     air_images/*.png   clean in-air RGB images, usually 640x480
-    air_depth/*.mat    matching depth maps
+    air_depth/*.mat    matching depth maps in the original code path, or
+    air_depth/*.png    matching depth maps after patch_watergan_tf15_compat.sh
     water_images/*.png real underwater RGB images
 
 This tool uses the per-method sampled ImageNet source tree and MegaDepth PNGs
@@ -22,7 +23,6 @@ from typing import Dict, Iterable, List, Tuple
 
 import numpy as np
 from PIL import Image, ImageOps
-from scipy.io import savemat
 
 BICUBIC = getattr(Image, 'Resampling', Image).BICUBIC
 
@@ -59,6 +59,8 @@ def parse_args():
     parser.add_argument('--air-height', type=int, default=480)
     parser.add_argument('--water-width', type=int, default=1360)
     parser.add_argument('--water-height', type=int, default=1024)
+    parser.add_argument('--depth-format', choices=('mat', 'png'), default='mat',
+                        help='Output depth storage. mat matches the original WaterGAN code; png is much smaller and requires patch_watergan_tf15_compat.sh.')
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -141,10 +143,16 @@ def prepare_rgb(src: Path, dst: Path, size: Tuple[int, int]) -> None:
         image.save(dst)
 
 
-def prepare_depth(src: Path, dst: Path, size: Tuple[int, int]) -> None:
+def prepare_depth(src: Path, dst: Path, size: Tuple[int, int], depth_format: str) -> None:
     with Image.open(src) as depth:
         depth = depth.convert('L')
         depth = ImageOps.fit(depth, size, method=BICUBIC, centering=(0.5, 0.5))
+    if depth_format == 'png':
+        depth.save(dst)
+        return
+
+    from scipy.io import savemat
+
     arr = np.asarray(depth).astype(np.float32) / 255.0
     # Keep several common keys so old code variants can load the file.
     savemat(dst, {
@@ -197,9 +205,9 @@ def main() -> None:
             continue
         stem = f'{index:08d}'
         air_dst = out_dir / 'air_images' / f'{stem}.png'
-        depth_dst = out_dir / 'air_depth' / f'{stem}.mat'
+        depth_dst = out_dir / 'air_depth' / f'{stem}.{args.depth_format}'
         prepare_rgb(image_path, air_dst, air_size)
-        prepare_depth(depth_path, depth_dst, air_size)
+        prepare_depth(depth_path, depth_dst, air_size, args.depth_format)
         records.append({
             'index': index,
             'source': str(image_path),
@@ -245,6 +253,7 @@ def main() -> None:
         'missing_depth_samples': missing_depth[:20],
         'air_size': list(air_size),
         'water_size': list(water_size),
+        'depth_format': args.depth_format,
         'manifest': str(manifest),
     }
     summary_path = out_dir / 'prepare_watergan_summary.json'

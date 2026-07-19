@@ -258,8 +258,12 @@ for method in ${METHODS}; do
     echo "Error: checksum missing: ${checksum}" >&2
     exit 1
   fi
-  cat "${checksum}" >> "${ARCHIVE_ROOT}/SHA256SUMS.txt"
 done
+find "${ARCHIVE_ROOT}" -maxdepth 1 -type f \
+  -name '*_train_val.tar.sha256' -print0 \
+  | sort -z \
+  | xargs -0 -r cat \
+  >> "${ARCHIVE_ROOT}/SHA256SUMS.txt"
 
 echo
 echo "============================================================"

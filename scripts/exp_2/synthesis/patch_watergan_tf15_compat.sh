@@ -613,6 +613,21 @@ for path in files:
             text,
             flags=re.MULTILINE,
         )
+        # Full-dataset inference only needs fake_*.png. Keep the legacy air
+        # previews and depth MAT outputs opt-in so they cannot silently consume
+        # hundreds of gigabytes during a sharded generation run.
+        text = re.sub(
+            r"^(\s*)scipy\.misc\.imsave\(out_name2\s*,\s*sample_im2\)\s*$",
+            r"\1if os.environ.get('WATERGAN_SAVE_AUX_OUTPUTS', '0') == '1': scipy.misc.imsave(out_name2, sample_im2)",
+            text,
+            flags=re.MULTILINE,
+        )
+        text = re.sub(
+            r"^(\s*)sio\.savemat\(out_name3\s*,\s*\{'depth'\s*:\s*sample_im3\}\)\s*$",
+            r"\1if os.environ.get('WATERGAN_SAVE_AUX_OUTPUTS', '0') == '1': sio.savemat(out_name3, {'depth': sample_im3})",
+            text,
+            flags=re.MULTILINE,
+        )
         text = re.sub(
             r"water_data\[(randombatch\[[^\]]+\])\]",
             r"water_data[(\1) % len(water_data)]",

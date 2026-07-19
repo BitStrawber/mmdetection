@@ -538,7 +538,15 @@ for path in files:
             "air_batch, water_batch, depth_batch = "
             "_watergan_parallel_load_many(("
         )
-        if train_load_marker not in text:
+        legacy_parallel_load_markers = (
+            "air_batch = parallel_map(",
+            "water_batch = parallel_map(",
+            "depth_batch = parallel_map(",
+        )
+        has_legacy_parallel_load = all(
+            marker in text for marker in legacy_parallel_load_markers
+        )
+        if train_load_marker not in text and not has_legacy_parallel_load:
             raise RuntimeError(
                 "Could not find or patch WaterGAN training load statements "
                 "in %s" % path

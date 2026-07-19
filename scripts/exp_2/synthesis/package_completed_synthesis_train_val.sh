@@ -233,6 +233,15 @@ for method in ${METHODS}; do
         uwdf/generated/train \
         uwdf/generated/val
       ;;
+    cut)
+      package_method \
+        cut \
+        "${SYN_ROOT}" \
+        cut/generated/train \
+        cut/generated/val \
+        cut/generated/train \
+        cut/generated/val
+      ;;
     *)
       echo "Error: unsupported method in METHODS: ${method}" >&2
       exit 1

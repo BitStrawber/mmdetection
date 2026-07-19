@@ -242,6 +242,15 @@ for method in ${METHODS}; do
         cut/generated/train \
         cut/generated/val
       ;;
+    watergan)
+      package_method \
+        watergan \
+        "${SYN_ROOT}" \
+        watergan/generated/train \
+        watergan/generated/val \
+        watergan/generated/train \
+        watergan/generated/val
+      ;;
     *)
       echo "Error: unsupported method in METHODS: ${method}" >&2
       exit 1

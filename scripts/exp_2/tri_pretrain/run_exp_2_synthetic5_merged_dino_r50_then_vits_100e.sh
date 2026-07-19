@@ -33,6 +33,7 @@ EXPECTED_VAL_IMAGES="${EXPECTED_VAL_IMAGES:-50000}"
 EXPECTED_CLASSES="${EXPECTED_CLASSES:-1000}"
 CHECK_DATA="${CHECK_DATA:-1}"
 CHECK_VAL="${CHECK_VAL:-1}"
+VALIDATE_ONLY="${VALIDATE_ONLY:-0}"
 
 DINO_EPOCHS="${DINO_EPOCHS:-100}"
 DINO_BATCH_SIZE_PER_GPU="${DINO_BATCH_SIZE_PER_GPU:-64}"
@@ -243,6 +244,15 @@ if [ "$CHECK_DATA" = "1" ]; then
     fi
 else
     echo "CHECK_DATA=$CHECK_DATA, skip dataset validation."
+fi
+
+if [ "$VALIDATE_ONLY" = "1" ]; then
+    CURRENT_STAGE="validation complete"
+    trap - ERR
+    echo "VALIDATE_ONLY=1, dataset and required-file checks passed."
+    echo "DINO would train on: $TRAIN_ROOT"
+    echo "DINO would not train on: $VAL_ROOT"
+    exit 0
 fi
 
 run_dino j7 "$R50_CONFIG" "$R50_NAME" "$R50_PORT" resnet50

@@ -41,6 +41,8 @@ DINO_NUM_WORKERS="${DINO_NUM_WORKERS:-10}"
 DINO_SAVECKP_FREQ="${DINO_SAVECKP_FREQ:-50}"
 
 WAIT_FOR_GPUS="${WAIT_FOR_GPUS:-1}"
+R50_WAIT_FOR_GPUS="${R50_WAIT_FOR_GPUS:-$WAIT_FOR_GPUS}"
+VITS_WAIT_FOR_GPUS="${VITS_WAIT_FOR_GPUS:-0}"
 GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-3000}"
 GPU_MAX_UTIL="${GPU_MAX_UTIL:-10}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-2}"
@@ -188,6 +190,7 @@ run_dino() {
     local name="$3"
     local port="$4"
     local expected_arch="$5"
+    local wait_for_gpus="$6"
 
     CURRENT_STAGE="$name training"
     echo "================================================================"
@@ -195,6 +198,7 @@ run_dino() {
     echo "data_path: $TRAIN_ROOT"
     echo "validation_split_used_by_dino: no"
     echo "gpu_ids: $GPU_IDS"
+    echo "wait_for_gpus: $wait_for_gpus"
     echo "epochs: $DINO_EPOCHS"
     echo "batch_size_per_gpu: $DINO_BATCH_SIZE_PER_GPU"
     echo "work_dir: $WORK_ROOT/$name"
@@ -215,7 +219,7 @@ run_dino() {
         PORT="$port" \
         WORK_ROOT="$WORK_ROOT" \
         LOG_DIR="$LOG_DIR" \
-        WAIT_FOR_GPUS="$WAIT_FOR_GPUS" \
+        WAIT_FOR_GPUS="$wait_for_gpus" \
         GPU_MAX_MEM_MB="$GPU_MAX_MEM_MB" \
         GPU_MAX_UTIL="$GPU_MAX_UTIL" \
         GPU_IDLE_CHECKS="$GPU_IDLE_CHECKS" \
@@ -255,8 +259,8 @@ if [ "$VALIDATE_ONLY" = "1" ]; then
     exit 0
 fi
 
-run_dino j7 "$R50_CONFIG" "$R50_NAME" "$R50_PORT" resnet50
-run_dino j14 "$VITS_CONFIG" "$VITS_NAME" "$VITS_PORT" vit_small
+run_dino j7 "$R50_CONFIG" "$R50_NAME" "$R50_PORT" resnet50 "$R50_WAIT_FOR_GPUS"
+run_dino j14 "$VITS_CONFIG" "$VITS_NAME" "$VITS_PORT" vit_small "$VITS_WAIT_FOR_GPUS"
 
 CURRENT_STAGE="complete"
 trap - ERR

@@ -37,8 +37,8 @@ def shard_sizes(total, num_shards, batch_size):
     ]
 
 
-def valid_existing(path, expected, data_root, shard_index, num_shards,
-                   batch_size, start):
+def valid_existing(path, expected, water_count, data_root, shard_index,
+                   num_shards, batch_size, start):
     summary = path / 'shard_summary.json'
     if not summary.is_file():
         return False
@@ -54,12 +54,18 @@ def valid_existing(path, expected, data_root, shard_index, num_shards,
         'start': start,
         'end': start + expected,
         'count': expected,
+        'water_count': water_count,
     }
     if any(payload.get(key) != value
            for key, value in expected_summary.items()):
         return False
-    for name in ('air_images', 'air_depth', 'water_images'):
-        if len(list_files(path / name)) != expected:
+    expected_counts = {
+        'air_images': expected,
+        'air_depth': expected,
+        'water_images': water_count,
+    }
+    for name, count in expected_counts.items():
+        if len(list_files(path / name)) != count:
             return False
     manifest = path / 'watergan_air_manifest.jsonl'
     if not manifest.is_file():
@@ -82,16 +88,19 @@ def main():
         for line in manifest_path.read_text(encoding='utf-8').splitlines()
         if line.strip()
     ]
-    inputs = {
+    paired_inputs = {
         name: list_files(data_root / name)
-        for name in ('air_images', 'air_depth', 'water_images')
+        for name in ('air_images', 'air_depth')
     }
+    water_files = list_files(data_root / 'water_images')
     total = len(records)
-    for name, files in inputs.items():
+    for name, files in paired_inputs.items():
         if len(files) < total:
             raise RuntimeError(
                 '{} has {} files, but manifest has {}'.format(name, len(files), total)
             )
+    if not water_files:
+        raise RuntimeError('water_images is empty: {}'.format(data_root))
 
     sizes = shard_sizes(total, args.num_shards, args.batch_size)
     out_root.mkdir(parents=True, exist_ok=True)
@@ -101,8 +110,8 @@ def main():
         if args.reset and shard.exists():
             shutil.rmtree(str(shard))
         if valid_existing(
-            shard, count, data_root, shard_index, args.num_shards,
-            args.batch_size, offset
+            shard, count, len(water_files), data_root, shard_index,
+            args.num_shards, args.batch_size, offset
         ):
             print('reuse {}: start={}, count={}'.format(shard, offset, count))
             offset += count
@@ -114,15 +123,24 @@ def main():
         if temporary.exists():
             shutil.rmtree(str(temporary))
         temporary.mkdir(parents=True)
-        for name in inputs:
+        for name in ('air_images', 'air_depth', 'water_images'):
             (temporary / name).mkdir()
+
+        # WaterGAN uses unpaired water references and wraps their indices at
+        # inference time. Every shard therefore shares the complete, much
+        # smaller RUOD water set instead of requiring 250k duplicate entries.
+        for water_index, source in enumerate(water_files):
+            destination = temporary / 'water_images' / (
+                '{:08d}'.format(water_index) + source.suffix.lower()
+            )
+            link_file(source, destination)
 
         shard_records = []
         for local_index in range(count):
             global_index = offset + local_index
             stem = '{:08d}'.format(local_index)
             destinations = {}
-            for name, files in inputs.items():
+            for name, files in paired_inputs.items():
                 source = files[global_index]
                 destination = temporary / name / (stem + source.suffix.lower())
                 link_file(source, destination)
@@ -151,6 +169,7 @@ def main():
             'start': offset,
             'end': offset + count,
             'count': count,
+            'water_count': len(water_files),
         }
         (temporary / 'shard_summary.json').write_text(
             json.dumps(summary, indent=2), encoding='utf-8'

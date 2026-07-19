@@ -287,6 +287,7 @@ replacements = [
     ("tf.neg(", "tf.negative("),
     ("tf.initialize_all_variables()", "tf.global_variables_initializer()"),
     ("tf.train.SummaryWriter", "tf.summary.FileWriter"),
+    ("self.resuts_dir", "self.results_dir"),
 ]
 
 # Very old DCGAN-style code sometimes used positional sigmoid CE:

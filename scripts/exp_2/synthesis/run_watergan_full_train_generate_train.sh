@@ -45,6 +45,7 @@ BATCH_SIZE="${BATCH_SIZE:-80}"
 TRAIN_SIZE="${TRAIN_SIZE:-250000}"
 NUM_SAMPLES="${NUM_SAMPLES:-250000}"
 SAVE_EPOCH="${SAVE_EPOCH:-1}"
+GENERATE_EPOCHS="${GENERATE_EPOCHS:-1}"
 
 AIR_WIDTH="${AIR_WIDTH:-640}"
 AIR_HEIGHT="${AIR_HEIGHT:-480}"
@@ -132,6 +133,7 @@ EPOCH:           ${EPOCH}
 BATCH_SIZE:      ${BATCH_SIZE}
 TRAIN_SIZE:      ${TRAIN_SIZE}
 NUM_SAMPLES:     ${NUM_SAMPLES}
+GENERATE_EPOCHS: ${GENERATE_EPOCHS}
 DEPTH_FORMAT:    ${DEPTH_FORMAT}
 IO_WORKERS:      ${WATERGAN_IO_WORKERS}
 LOG_EVERY:       ${WATERGAN_LOG_EVERY}
@@ -244,6 +246,7 @@ if [[ "${RUN_GENERATE}" == "1" ]]; then
       --checkpoint_dir "${CHECKPOINT_DIR}" \
       --sample_dir "${SAMPLE_DIR}" \
       --results_dir "${RESULTS_DIR}" \
+      --epoch "${GENERATE_EPOCHS}" \
       --num_samples "${NUM_SAMPLES}" \
       --train_size "${TRAIN_SIZE}" \
       --batch_size "${BATCH_SIZE}" \

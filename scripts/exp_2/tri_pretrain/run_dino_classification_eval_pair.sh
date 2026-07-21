@@ -45,8 +45,17 @@ STRICT_COUNTS="${STRICT_COUNTS:-1}"
 resolve_preset_checkpoint() {
     local experiment_name="$1"
     local local_fallback="$2"
+    local output_relative_path="${3:-}"
     local candidate
     local -a matches=()
+
+    if [ -n "$output_relative_path" ]; then
+        candidate="$OUTPUT_ROOT/$output_relative_path"
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return
+        fi
+    fi
 
     for candidate in \
         "$OUTPUT_ROOT/$experiment_name/checkpoint.pth" \
@@ -85,12 +94,12 @@ resolve_preset_checkpoint() {
 
 case "$PRESET" in
     imagenet)
-        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint imagenet_dino_resnet50_100e "$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_resnet50_100e/checkpoint.pth")}"
-        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint imagenet_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_vits_100e/checkpoint.pth")}"
+        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint imagenet_dino_resnet50_100e "$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_resnet50_100e/checkpoint.pth" PRETRAIN/ImageNet/DINO_ResNet50_100e/checkpoint.pth)}"
+        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint imagenet_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_vits_100e/checkpoint.pth" PRETRAIN/ImageNet/DINO_ViTS_100e/checkpoint.pth)}"
         ;;
     realuw)
-        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint j7_realuw_dino_resnet50_ssd100e "$REPO_ROOT/work_dirs/tri_pretrain/j7_realuw_dino_resnet50_ssd100e/checkpoint.pth")}"
-        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint j14_realuw_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/j14_realuw_dino_vits_100e/checkpoint.pth")}"
+        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint j7_realuw_dino_resnet50_ssd100e "$REPO_ROOT/work_dirs/tri_pretrain/j7_realuw_dino_resnet50_ssd100e/checkpoint.pth" PRETRAIN/RealUW/DINO_ResNet50_100e/checkpoint.pth)}"
+        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint j14_realuw_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/j14_realuw_dino_vits_100e/checkpoint.pth" PRETRAIN/RealUW/DINO_ViTS_100e/checkpoint.pth)}"
         ;;
     synthetic5)
         R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint synthetic5_merged_dino_resnet50_100e "$REPO_ROOT/work_dirs/tri_pretrain/synthetic5_merged_dino_resnet50_100e/checkpoint.pth")}"

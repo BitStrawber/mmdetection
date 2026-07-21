@@ -3,7 +3,7 @@ set -euo pipefail
 
 # End-to-end WaterGAN replacement pipeline:
 #   1. Resume the legacy batch-64 trajectory from cumulative epoch 2.
-#   2. Preserve global steps, train through epoch 10, and freeze epoch 3.
+#   2. Preserve global steps, train through epoch 10, and freeze epoch 5.
 #   3. Generate train/val with 48 shards on 8 GPUs (16 concurrent workers).
 #   4. Restore the ImageNet class layout, atomically replace old outputs.
 #   5. Package train+val and upload the replacement archive to Hugging Face.
@@ -20,7 +20,7 @@ SOURCE_CHECKPOINT_STEP="${SOURCE_CHECKPOINT_STEP:-1564}"
 
 RESUME_CHECKPOINT_NAME="${RESUME_CHECKPOINT_NAME:-checkpoint_legacy_bs64_cumulative_epoch10_pipeline}"
 RESUME_CHECKPOINT_ROOT="${WATERGAN_DIR}/${RESUME_CHECKPOINT_NAME}"
-FINAL_CHECKPOINT_NAME="${FINAL_CHECKPOINT_NAME:-checkpoint_watergan_final_legacy_bs64_cumulative_epoch3}"
+FINAL_CHECKPOINT_NAME="${FINAL_CHECKPOINT_NAME:-checkpoint_watergan_final_legacy_bs64_cumulative_epoch5}"
 FINAL_CHECKPOINT_ROOT="${WATERGAN_DIR}/${FINAL_CHECKPOINT_NAME}"
 
 TRAIN_GPU="${TRAIN_GPU:-0}"
@@ -36,19 +36,19 @@ OUTPUT_WIDTH="${OUTPUT_WIDTH:-64}"
 
 TRAIN_DATA_ROOT="${TRAIN_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/watergan/datasets/imagenet_ruod_watergan_train_full250k_ssd}"
 VAL_DATA_ROOT="${VAL_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/watergan/datasets/imagenet_ruod_watergan_val_full10k_infer_ssd}"
-SHARD_DATA_ROOT="${SHARD_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/watergan/inference_epoch3_48shards}"
-FLAT_ROOT="${FLAT_ROOT:-/media/SSD2/XCX/exp_2/watergan_epoch3_flat_results_48shards}"
+SHARD_DATA_ROOT="${SHARD_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/watergan/inference_epoch5_48shards}"
+FLAT_ROOT="${FLAT_ROOT:-/media/SSD2/XCX/exp_2/watergan_epoch5_flat_results_48shards}"
 
 SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 FINAL_GENERATED_ROOT="${FINAL_GENERATED_ROOT:-${SYN_ROOT}/watergan/generated}"
-STAGING_GENERATED_ROOT="${STAGING_GENERATED_ROOT:-${SYN_ROOT}/watergan/generated_epoch3_staging}"
+STAGING_GENERATED_ROOT="${STAGING_GENERATED_ROOT:-${SYN_ROOT}/watergan/generated_epoch5_staging}"
 ARCHIVE_ROOT="${ARCHIVE_ROOT:-/media/HDD2/XCX/exp_2/transfer_archives}"
-UPLOAD_STAGE="${UPLOAD_STAGE:-/media/HDD2/XCX/exp_2/hf_watergan_epoch3_upload_stage}"
+UPLOAD_STAGE="${UPLOAD_STAGE:-/media/HDD2/XCX/exp_2/hf_watergan_epoch5_upload_stage}"
 HF_REPO_ID="${HF_REPO_ID:-BitStrawber/transfer}"
 HF_BIN="${HF_BIN:-/media/SSD1/conda_envs/hf_transfer/bin/hf}"
 
-LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/synthesis_full/watergan_epoch3_full_replace}"
-TRAIN_RESULT_ROOT="${TRAIN_RESULT_ROOT:-/media/HDD2/XCX/exp_2/watergan_epoch3_resume_training}"
+LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/synthesis_full/watergan_epoch5_full_replace}"
+TRAIN_RESULT_ROOT="${TRAIN_RESULT_ROOT:-/media/HDD2/XCX/exp_2/watergan_epoch5_resume_training}"
 
 RUN_TRAIN="${RUN_TRAIN:-1}"
 RUN_GENERATE="${RUN_GENERATE:-1}"
@@ -70,7 +70,7 @@ FINAL_MODEL_DIR="${FINAL_CHECKPOINT_ROOT}/${DATA_NAME}_water_images_${BATCH_SIZE
 TRAIN_LOG="${LOG_ROOT}/training/resume_to_epoch10.log"
 TRAIN_PID_FILE="${LOG_ROOT}/training/resume_to_epoch10.pid"
 TRAIN_COMPLETE_MARKER="${RESUME_CHECKPOINT_ROOT}/.cumulative_epoch10_complete"
-FINAL_CHECKPOINT_MARKER="${FINAL_CHECKPOINT_ROOT}/.cumulative_epoch3_frozen"
+FINAL_CHECKPOINT_MARKER="${FINAL_CHECKPOINT_ROOT}/.cumulative_epoch5_frozen"
 
 mkdir -p "${LOG_ROOT}" "${LOG_ROOT}/training"
 
@@ -112,7 +112,7 @@ safe_remove_tree() {
 
 cat <<EOF
 ============================================================
-WaterGAN cumulative epoch-3 full replacement pipeline (train through epoch 10)
+WaterGAN cumulative epoch-5 full replacement pipeline (train through epoch 10)
 ============================================================
 WATERGAN_DIR:             ${WATERGAN_DIR}
 SOURCE_CHECKPOINT:        ${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}
@@ -172,8 +172,8 @@ if [[ "${RUN_TRAIN}" == 1 ]]; then
 
   if [[ -f "${TRAIN_COMPLETE_MARKER}" && -f "${FINAL_CHECKPOINT_MARKER}" ]] && \
      checkpoint_complete "${RESUME_MODEL_DIR}" 7812 && \
-     checkpoint_complete "${FINAL_MODEL_DIR}" 2345; then
-    echo "Reuse complete cumulative epoch-3..10 trajectory and frozen epoch-3 checkpoint."
+     checkpoint_complete "${FINAL_MODEL_DIR}" 3907; then
+    echo "Reuse complete cumulative epoch-3..10 trajectory and frozen epoch-5 checkpoint."
   else
     if [[ "${RESET_TRAIN}" == 1 ]]; then
       safe_remove_tree "${RESUME_CHECKPOINT_ROOT}" "${WATERGAN_DIR}/checkpoint_legacy_bs64_"
@@ -292,16 +292,16 @@ EOF
     mkdir -p "${FINAL_MODEL_DIR}"
     for suffix in index meta data-00000-of-00001; do
       cp -a \
-        "${RESUME_MODEL_DIR}/DCGAN.model-2345.${suffix}" \
-        "${FINAL_MODEL_DIR}/DCGAN.model-2345.${suffix}"
+        "${RESUME_MODEL_DIR}/DCGAN.model-3907.${suffix}" \
+        "${FINAL_MODEL_DIR}/DCGAN.model-3907.${suffix}"
     done
     cat > "${FINAL_MODEL_DIR}/checkpoint" <<'EOF'
-model_checkpoint_path: "DCGAN.model-2345"
-all_model_checkpoint_paths: "DCGAN.model-2345"
+model_checkpoint_path: "DCGAN.model-3907"
+all_model_checkpoint_paths: "DCGAN.model-3907"
 EOF
     cat > "${FINAL_CHECKPOINT_MARKER}" <<EOF
 source=${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}
-trajectory=cumulative_epoch3
+trajectory=cumulative_epoch5
 resume_saved_epoch3=DCGAN.model-2345
 resume_saved_epoch4=DCGAN.model-3126
 resume_saved_epoch5=DCGAN.model-3907
@@ -312,12 +312,12 @@ resume_saved_epoch9=DCGAN.model-7031
 resume_saved_epoch10=DCGAN.model-7812
 created=$(date --iso-8601=seconds)
 EOF
-    echo "Frozen cumulative epoch-3 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-2345"
+    echo "Frozen cumulative epoch-5 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-3907"
   fi
 fi
 
-checkpoint_complete "${FINAL_MODEL_DIR}" 2345 || {
-  echo "Error: final cumulative epoch-3 checkpoint is unavailable: ${FINAL_MODEL_DIR}" >&2
+checkpoint_complete "${FINAL_MODEL_DIR}" 3907 || {
+  echo "Error: final cumulative epoch-5 checkpoint is unavailable: ${FINAL_MODEL_DIR}" >&2
   exit 1
 }
 
@@ -330,7 +330,7 @@ if [[ "${RUN_GENERATE}" == 1 ]]; then
     echo "Reuse complete staged generation: ${STAGING_GENERATED_ROOT}"
   else
     CHECKPOINT_DIR="${FINAL_CHECKPOINT_NAME}" \
-    CHECKPOINT_STEP=2345 \
+    CHECKPOINT_STEP=3907 \
     TRAIN_DATA_NAME="${DATA_NAME}" \
     WATERGAN_DIR="${WATERGAN_DIR}" \
     TRAIN_DATA_ROOT="${TRAIN_DATA_ROOT}" \
@@ -439,9 +439,9 @@ fi
 
 echo
 echo "============================================================"
-echo "WaterGAN epoch-3 replacement pipeline complete"
+echo "WaterGAN epoch-5 replacement pipeline complete"
 echo "============================================================"
-echo "Checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-2345"
+echo "Checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-3907"
 echo "Train:      ${FINAL_GENERATED_ROOT}/train ($(count_images "${FINAL_GENERATED_ROOT}/train"))"
 echo "Val:        ${FINAL_GENERATED_ROOT}/val ($(count_images "${FINAL_GENERATED_ROOT}/val"))"
 echo "Archive:    ${archive}"

@@ -192,6 +192,8 @@ def generated_stems(path):
     stems = [path.stem]
     if "_underwater_" in path.stem:
         stems.append(path.stem.split("_underwater_", 1)[0])
+    if path.stem.endswith("_controlnet_ipadapter"):
+        stems.append(path.stem[:-len("_controlnet_ipadapter")])
     return stems
 
 

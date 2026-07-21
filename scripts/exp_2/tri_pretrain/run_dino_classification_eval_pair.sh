@@ -8,12 +8,13 @@ cd "$REPO_ROOT"
 PRESET="${PRESET:-imagenet}"
 EXP_PREFIX="${EXP_PREFIX:-$PRESET}"
 DATA_ROOT="${DATA_ROOT:-/media/SSD1/XCX/exp_2/IMAGENET1K/imagefolder}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-/media/SSD1/XCX/exp_2/BitStrawber_Output}"
 DINO_DIR="${DINO_DIR:-$REPO_ROOT/third_party/dino}"
 WORK_ROOT="${WORK_ROOT:-$REPO_ROOT/work_dirs/tri_pretrain/classification}"
 LOG_ROOT="${LOG_ROOT:-$REPO_ROOT/logs/tri_pretrain/classification}"
 
-R50_GPU_IDS="${R50_GPU_IDS:-4,5}"
-VITS_GPU_IDS="${VITS_GPU_IDS:-6,7}"
+R50_GPU_IDS="${R50_GPU_IDS:-${R50_GPUS:-4,5}}"
+VITS_GPU_IDS="${VITS_GPU_IDS:-${VITS_GPUS:-6,7}}"
 R50_PORT_BASE="${R50_PORT_BASE:-29951}"
 VITS_PORT_BASE="${VITS_PORT_BASE:-29952}"
 
@@ -41,18 +42,59 @@ EXPECTED_VAL="${EXPECTED_VAL:-50000}"
 EXPECTED_CLASSES="${EXPECTED_CLASSES:-1000}"
 STRICT_COUNTS="${STRICT_COUNTS:-1}"
 
+resolve_preset_checkpoint() {
+    local experiment_name="$1"
+    local local_fallback="$2"
+    local candidate
+    local -a matches=()
+
+    for candidate in \
+        "$OUTPUT_ROOT/$experiment_name/checkpoint.pth" \
+        "$OUTPUT_ROOT/work_dirs/tri_pretrain/$experiment_name/checkpoint.pth" \
+        "$OUTPUT_ROOT/tri_pretrain/$experiment_name/checkpoint.pth"
+    do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return
+        fi
+    done
+
+    if [ -d "$OUTPUT_ROOT" ]; then
+        while IFS= read -r candidate; do
+            matches+=("$candidate")
+        done < <(
+            find "$OUTPUT_ROOT" -type f \
+                -path "*/$experiment_name/checkpoint.pth" \
+                -print 2>/dev/null | sort
+        )
+    fi
+
+    if [ "${#matches[@]}" -eq 1 ]; then
+        printf '%s\n' "${matches[0]}"
+        return
+    fi
+    if [ "${#matches[@]}" -gt 1 ]; then
+        echo "Error: multiple checkpoints found for $experiment_name:" >&2
+        printf '  %s\n' "${matches[@]}" >&2
+        echo "Set R50_CKPT or VITS_CKPT explicitly." >&2
+        exit 2
+    fi
+
+    printf '%s\n' "$local_fallback"
+}
+
 case "$PRESET" in
     imagenet)
-        R50_CKPT="${R50_CKPT:-$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_resnet50_100e/checkpoint.pth}"
-        VITS_CKPT="${VITS_CKPT:-$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_vits_100e/checkpoint.pth}"
+        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint imagenet_dino_resnet50_100e "$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_resnet50_100e/checkpoint.pth")}"
+        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint imagenet_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/imagenet_dino_vits_100e/checkpoint.pth")}"
         ;;
     realuw)
-        R50_CKPT="${R50_CKPT:-$REPO_ROOT/work_dirs/tri_pretrain/j7_realuw_dino_resnet50_ssd100e/checkpoint.pth}"
-        VITS_CKPT="${VITS_CKPT:-$REPO_ROOT/work_dirs/tri_pretrain/j14_realuw_dino_vits_100e/checkpoint.pth}"
+        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint j7_realuw_dino_resnet50_ssd100e "$REPO_ROOT/work_dirs/tri_pretrain/j7_realuw_dino_resnet50_ssd100e/checkpoint.pth")}"
+        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint j14_realuw_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/j14_realuw_dino_vits_100e/checkpoint.pth")}"
         ;;
     synthetic5)
-        R50_CKPT="${R50_CKPT:-$REPO_ROOT/work_dirs/tri_pretrain/synthetic5_merged_dino_resnet50_100e/checkpoint.pth}"
-        VITS_CKPT="${VITS_CKPT:-$REPO_ROOT/work_dirs/tri_pretrain/synthetic5_merged_dino_vits_100e/checkpoint.pth}"
+        R50_CKPT="${R50_CKPT:-$(resolve_preset_checkpoint synthetic5_merged_dino_resnet50_100e "$REPO_ROOT/work_dirs/tri_pretrain/synthetic5_merged_dino_resnet50_100e/checkpoint.pth")}"
+        VITS_CKPT="${VITS_CKPT:-$(resolve_preset_checkpoint synthetic5_merged_dino_vits_100e "$REPO_ROOT/work_dirs/tri_pretrain/synthetic5_merged_dino_vits_100e/checkpoint.pth")}"
         ;;
     custom)
         R50_CKPT="${R50_CKPT:?R50_CKPT is required for PRESET=custom}"
@@ -142,6 +184,7 @@ echo "============================================================"
 echo "PRESET:                    $PRESET"
 echo "EXP_PREFIX:                $EXP_PREFIX"
 echo "DATA_ROOT:                 $DATA_ROOT"
+echo "OUTPUT_ROOT:               $OUTPUT_ROOT"
 echo "R50_CKPT:                  $R50_CKPT"
 echo "VITS_CKPT:                 $VITS_CKPT"
 echo "R50_GPU_IDS:               $R50_GPU_IDS ($R50_NUM_GPUS GPUs)"

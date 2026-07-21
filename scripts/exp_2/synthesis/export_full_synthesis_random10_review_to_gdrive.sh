@@ -188,6 +188,13 @@ def generated_keys(path, root):
     return keys
 
 
+def generated_stems(path):
+    stems = [path.stem]
+    if "_underwater_" in path.stem:
+        stems.append(path.stem.split("_underwater_", 1)[0])
+    return stems
+
+
 def match_pairs(source_root, generated_root):
     by_relative, by_stem = build_source_indexes(source_root)
     pairs = []
@@ -199,7 +206,10 @@ def match_pairs(source_root, generated_root):
             if source is not None:
                 break
         if source is None:
-            source = by_stem.get(generated.stem)
+            for stem in generated_stems(generated):
+                source = by_stem.get(stem)
+                if source is not None:
+                    break
         if source is not None:
             pairs.append((source, generated))
     return pairs

@@ -62,6 +62,9 @@ for name in air_images air_depth water_images; do
   require_path "${DATA_ROOT}/${name}"
 done
 
+WATERGAN_DIR="${WATERGAN_DIR}" \
+  bash scripts/exp_2/synthesis/patch_watergan_gpu_selection.sh
+
 cat <<EOF
 ============================================================
 WaterGAN early-five checkpoint sweep
@@ -207,7 +210,11 @@ run_wave() {
     mkdir -p "${output}"
     (
       cd "${WATERGAN_DIR}"
-      CUDA_VISIBLE_DEVICES="${gpu}" python mainmhl.py \
+      env -u LD_LIBRARY_PATH -u LD_PRELOAD \
+        CUDA_DEVICE_ORDER=PCI_BUS_ID \
+        CUDA_VISIBLE_DEVICES="${gpu}" \
+        TF_FORCE_GPU_ALLOW_GROWTH=true \
+        python mainmhl.py \
         --is_train=False \
         --water_dataset "${DATA_NAME}_water_images" \
         --air_dataset "${DATA_NAME}_air_images" \

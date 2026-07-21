@@ -83,6 +83,8 @@ mkdir -p "${LOG_ROOT}" "${RESULT_ROOT}" "${WATERGAN_DIR}/data"
 
 WATERGAN_DIR="${WATERGAN_DIR}" \
   bash scripts/exp_2/synthesis/patch_watergan_depth_safety.sh
+WATERGAN_DIR="${WATERGAN_DIR}" \
+  bash scripts/exp_2/synthesis/patch_watergan_gpu_selection.sh
 
 # Keep the initial model-2 checkpoint and every epoch checkpoint. Legacy
 # copies may contain the original Saver(), a fixed max_to_keep value, or the

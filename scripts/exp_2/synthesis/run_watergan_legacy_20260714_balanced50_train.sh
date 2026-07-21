@@ -48,7 +48,7 @@ OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
 OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-8}"
 MKL_NUM_THREADS="${MKL_NUM_THREADS:-8}"
 TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
-EXPLICIT_MATMUL_GRAD="${EXPLICIT_MATMUL_GRAD:-1}"
+EXPLICIT_MATMUL_GRAD="${EXPLICIT_MATMUL_GRAD:-0}"
 
 RUN_PREPARE="${RUN_PREPARE:-1}"
 RUN_TRAIN="${RUN_TRAIN:-1}"
@@ -440,6 +440,12 @@ done
 
 WATERGAN_DIR="${LEGACY_WATERGAN_DIR}" \
   bash "${SNAPSHOT_DIR}/patch_watergan_tf15_compat.sh"
+
+# Preserve historical normalization for valid maps while preventing a zero or
+# non-finite depth map from poisoning training. This also repairs the legacy
+# results_dir typo and is safe to run again on an existing clone.
+WATERGAN_DIR="${LEGACY_WATERGAN_DIR}" \
+  bash scripts/exp_2/synthesis/patch_watergan_depth_safety.sh
 
 if [[ "${EXPLICIT_MATMUL_GRAD}" == "1" ]]; then
   python - "${LEGACY_WATERGAN_DIR}/ops.py" <<'PY'

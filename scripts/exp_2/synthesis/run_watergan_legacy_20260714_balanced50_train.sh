@@ -48,6 +48,7 @@ OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
 OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-8}"
 MKL_NUM_THREADS="${MKL_NUM_THREADS:-8}"
 TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
+EXPLICIT_MATMUL_GRAD="${EXPLICIT_MATMUL_GRAD:-1}"
 
 RUN_PREPARE="${RUN_PREPARE:-1}"
 RUN_TRAIN="${RUN_TRAIN:-1}"
@@ -287,6 +288,7 @@ omp_num_threads=${OMP_NUM_THREADS}
 openblas_num_threads=${OPENBLAS_NUM_THREADS}
 mkl_num_threads=${MKL_NUM_THREADS}
 tf_force_gpu_allow_growth=${TF_FORCE_GPU_ALLOW_GROWTH}
+explicit_matmul_grad=${EXPLICIT_MATMUL_GRAD}
 EOF
 
 echo "============================================================"
@@ -310,6 +312,7 @@ echo "BATCH_SIZE:          ${BATCH_SIZE}"
 echo "TRAIN_SIZE:          ${TRAIN_SIZE}"
 echo "CPU_THREADS:         OMP=${OMP_NUM_THREADS}, OpenBLAS=${OPENBLAS_NUM_THREADS}, MKL=${MKL_NUM_THREADS}"
 echo "TF_ALLOW_GROWTH:     ${TF_FORCE_GPU_ALLOW_GROWTH}"
+echo "EXPLICIT_MATMUL_GRAD:${EXPLICIT_MATMUL_GRAD}"
 echo "RUN_PREPARE:         ${RUN_PREPARE}"
 echo "RUN_TRAIN:           ${RUN_TRAIN}"
 echo "RESET_DATA:          ${RESET_DATA}"
@@ -438,6 +441,63 @@ done
 WATERGAN_DIR="${LEGACY_WATERGAN_DIR}" \
   bash "${SNAPSHOT_DIR}/patch_watergan_tf15_compat.sh"
 
+if [[ "${EXPLICIT_MATMUL_GRAD}" == "1" ]]; then
+  python - "${LEGACY_WATERGAN_DIR}/ops.py" <<'PY'
+from __future__ import print_function
+
+import io
+import sys
+
+path = sys.argv[1]
+marker = "WaterGAN explicit-transpose MatMul gradient compatibility"
+
+with io.open(path, "r", encoding="utf-8") as handle:
+    text = handle.read()
+
+if marker not in text:
+    linear_marker = "def linear("
+    if linear_marker not in text:
+        raise RuntimeError("could not find WaterGAN linear() in {}".format(path))
+
+    helper = '''# WaterGAN explicit-transpose MatMul gradient compatibility.
+@tf.custom_gradient
+def _watergan_matmul_explicit_gradient(left, right):
+  value = tf.matmul(left, right)
+
+  def gradient(output_gradient):
+    left_gradient = tf.matmul(output_gradient, tf.transpose(right))
+    right_gradient = tf.matmul(tf.transpose(left), output_gradient)
+    return left_gradient, right_gradient
+
+  return value, gradient
+
+
+'''
+    text = text.replace(linear_marker, helper + linear_marker, 1)
+
+    target = "tf.matmul(input_, matrix)"
+    replacements = text.count(target)
+    if replacements < 1:
+        raise RuntimeError(
+            "could not find linear MatMul call in {}".format(path)
+        )
+    text = text.replace(
+        target,
+        "_watergan_matmul_explicit_gradient(input_, matrix)",
+    )
+
+    with io.open(path, "w", encoding="utf-8", newline="") as handle:
+        handle.write(text)
+    print(
+        "Explicit MatMul gradient patched: {} call(s) in {}".format(
+            replacements, path
+        )
+    )
+else:
+    print("Explicit MatMul gradient already patched: {}".format(path))
+PY
+fi
+
 # Historical tf.train.Saver() retained only the latest five checkpoints. Keep
 # more files for the requested epoch-by-epoch comparison; model math is intact.
 python - "${LEGACY_WATERGAN_DIR}/modelmhl.py" "${LEGACY_WATERGAN_DIR}/modeljamaica.py" "${MAX_TO_KEEP}" <<'PY'
@@ -493,7 +553,8 @@ PY
 
 python -m py_compile \
   "${LEGACY_WATERGAN_DIR}/modelmhl.py" \
-  "${LEGACY_WATERGAN_DIR}/modeljamaica.py"
+  "${LEGACY_WATERGAN_DIR}/modeljamaica.py" \
+  "${LEGACY_WATERGAN_DIR}/ops.py"
 
 mkdir -p "${LEGACY_WATERGAN_DIR}/data" "${RESULTS_DIR}"
 ln -sfn "${DATA_ROOT}/air_images" \

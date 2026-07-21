@@ -71,6 +71,8 @@ TRAIN_LOG="${LOG_ROOT}/training/resume_to_epoch10.log"
 TRAIN_PID_FILE="${LOG_ROOT}/training/resume_to_epoch10.pid"
 TRAIN_COMPLETE_MARKER="${RESUME_CHECKPOINT_ROOT}/.cumulative_epoch10_complete"
 FINAL_CHECKPOINT_MARKER="${FINAL_CHECKPOINT_ROOT}/.cumulative_epoch5_frozen"
+training_monitor_pid=""
+train_pid=""
 
 mkdir -p "${LOG_ROOT}" "${LOG_ROOT}/training"
 
@@ -261,12 +263,12 @@ EOF
       kill -TERM "${train_pid}" 2>/dev/null || true
       exit 1
     }
-    echo "Checkpoint seed loaded successfully. Waiting for cumulative epoch 10."
+    echo "Checkpoint seed loaded successfully. Waiting for cumulative epoch 5."
 
-    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 7812 || \
-          ! grep -q 'model_checkpoint_path: "DCGAN.model-7812"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
+    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 3907 || \
+          ! grep -q 'model_checkpoint_path: "DCGAN.model-3907"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
       if ! kill -0 "${train_pid}" 2>/dev/null; then
-        echo "Error: training stopped before cumulative epoch 10 was saved" >&2
+        echo "Error: training stopped before cumulative epoch 5 was saved" >&2
         tail -n 120 "${TRAIN_LOG}" >&2
         exit 1
       fi
@@ -274,7 +276,7 @@ EOF
       sleep 15
     done
 
-    epoch_steps=(2345 3126 3907 4688 5469 6250 7031 7812)
+    epoch_steps=(2345 3126 3907)
     epoch_number=3
     for epoch_step in "${epoch_steps[@]}"; do
       checkpoint_complete "${RESUME_MODEL_DIR}" "${epoch_step}" || {
@@ -284,11 +286,6 @@ EOF
       echo "Verified cumulative epoch ${epoch_number}: DCGAN.model-${epoch_step}"
       epoch_number=$((epoch_number + 1))
     done
-    echo "Cumulative epoch 10 saved; stop the unnecessary final loop epoch."
-    kill -TERM "${train_pid}" 2>/dev/null || true
-    wait "${train_pid}" 2>/dev/null || true
-    date > "${TRAIN_COMPLETE_MARKER}"
-
     mkdir -p "${FINAL_MODEL_DIR}"
     for suffix in index meta data-00000-of-00001; do
       cp -a \
@@ -302,17 +299,42 @@ EOF
     cat > "${FINAL_CHECKPOINT_MARKER}" <<EOF
 source=${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}
 trajectory=cumulative_epoch5
-resume_saved_epoch3=DCGAN.model-2345
-resume_saved_epoch4=DCGAN.model-3126
-resume_saved_epoch5=DCGAN.model-3907
-resume_saved_epoch6=DCGAN.model-4688
-resume_saved_epoch7=DCGAN.model-5469
-resume_saved_epoch8=DCGAN.model-6250
-resume_saved_epoch9=DCGAN.model-7031
-resume_saved_epoch10=DCGAN.model-7812
+target=DCGAN.model-3907
 created=$(date --iso-8601=seconds)
 EOF
     echo "Frozen cumulative epoch-5 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-3907"
+
+    # Continue training in parallel with generation. This monitor owns the
+    # epoch-10 completion check while the main process proceeds to inference,
+    # restoration, packaging, and upload with the frozen epoch-5 checkpoint.
+    (
+      while ! checkpoint_complete "${RESUME_MODEL_DIR}" 7812 || \
+            ! grep -q 'model_checkpoint_path: "DCGAN.model-7812"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
+        if ! kill -0 "${train_pid}" 2>/dev/null; then
+          echo "Error: training stopped before cumulative epoch 10 was saved" >&2
+          tail -n 120 "${TRAIN_LOG}" >&2
+          exit 1
+        fi
+        sleep 15
+      done
+
+      epoch_steps=(2345 3126 3907 4688 5469 6250 7031 7812)
+      epoch_number=3
+      for epoch_step in "${epoch_steps[@]}"; do
+        checkpoint_complete "${RESUME_MODEL_DIR}" "${epoch_step}" || {
+          echo "Error: cumulative epoch-${epoch_number} checkpoint model-${epoch_step} is incomplete" >&2
+          exit 1
+        }
+        echo "Verified cumulative epoch ${epoch_number}: DCGAN.model-${epoch_step}"
+        epoch_number=$((epoch_number + 1))
+      done
+
+      echo "Cumulative epoch 10 saved; stop the unnecessary final loop epoch."
+      kill -TERM "${train_pid}" 2>/dev/null || true
+      date > "${TRAIN_COMPLETE_MARKER}"
+    ) &
+    training_monitor_pid="$!"
+    echo "Training continues through epoch 10 in parallel; monitor PID=${training_monitor_pid}"
   fi
 fi
 
@@ -435,6 +457,18 @@ if [[ "${RUN_UPLOAD}" == 1 ]]; then
     "${HF_REPO_ID}" "${UPLOAD_STAGE}" \
     --repo-type dataset \
     --num-workers "${UPLOAD_WORKERS}"
+fi
+
+if [[ -n "${training_monitor_pid}" ]]; then
+  echo
+  echo "===== Final stage: wait for cumulative epoch 10 training ====="
+  wait "${training_monitor_pid}"
+  wait "${train_pid}" 2>/dev/null || true
+  checkpoint_complete "${RESUME_MODEL_DIR}" 7812 || {
+    echo "Error: cumulative epoch-10 checkpoint is incomplete after monitoring" >&2
+    exit 1
+  }
+  echo "Training and downstream epoch-5 generation pipeline are both complete."
 fi
 
 echo

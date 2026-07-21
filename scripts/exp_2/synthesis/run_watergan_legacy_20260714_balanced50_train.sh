@@ -434,13 +434,32 @@ python - "${LEGACY_WATERGAN_DIR}/modelmhl.py" "${LEGACY_WATERGAN_DIR}/modeljamai
 from __future__ import print_function
 
 import io
+import re
 import sys
 
 max_to_keep = int(sys.argv[-1])
+broken_batch_division = re.compile(
+    r"int\(\((.+?)\s*/\)\s*//\s*config\.batch_size\)"
+)
 
 for filename in sys.argv[1:-1]:
     with io.open(filename, "r", encoding="utf-8") as handle:
         text = handle.read()
+
+    text, repaired = broken_batch_division.subn(
+        r"int((\1) // config.batch_size)",
+        text,
+    )
+    if "/) // config.batch_size" in text:
+        raise RuntimeError(
+            "unrepaired historical batch division in {}".format(filename)
+        )
+    if repaired:
+        print(
+            "Historical batch division repaired: {} occurrence(s) in {}".format(
+                repaired, filename
+            )
+        )
 
     current = "tf.train.Saver(max_to_keep={})".format(max_to_keep)
     if current in text:

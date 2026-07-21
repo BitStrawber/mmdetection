@@ -31,6 +31,7 @@ TRAIN_SIZE="${TRAIN_SIZE:-50000}"
 AIR_PER_CLASS="${AIR_PER_CLASS:-50}"
 WATER_REPEAT_TO="${WATER_REPEAT_TO:-50000}"
 SAMPLE_SEED="${SAMPLE_SEED:-2026}"
+PREP_WORKERS="${PREP_WORKERS:-16}"
 SAVE_EPOCH="${SAVE_EPOCH:-1}"
 MAX_TO_KEEP="${MAX_TO_KEEP:-20}"
 
@@ -99,6 +100,7 @@ require_positive_integer "${BATCH_SIZE}" "BATCH_SIZE"
 require_positive_integer "${TRAIN_SIZE}" "TRAIN_SIZE"
 require_positive_integer "${AIR_PER_CLASS}" "AIR_PER_CLASS"
 require_positive_integer "${WATER_REPEAT_TO}" "WATER_REPEAT_TO"
+require_positive_integer "${PREP_WORKERS}" "PREP_WORKERS"
 require_positive_integer "${MAX_TO_KEEP}" "MAX_TO_KEEP"
 
 git cat-file -e "${LEGACY_COMMIT}^{commit}" 2>/dev/null || \
@@ -111,6 +113,149 @@ git show "${LEGACY_COMMIT}:${HISTORICAL_PREP_PATH}" \
 git show "${LEGACY_COMMIT}:${HISTORICAL_PATCH_PATH}" \
   > "${SNAPSHOT_DIR}/patch_watergan_tf15_compat.sh"
 chmod +x "${SNAPSHOT_DIR}/patch_watergan_tf15_compat.sh"
+
+cp "${SNAPSHOT_DIR}/prepare_watergan_imagenet_ruod_dataset.py" \
+  "${SNAPSHOT_DIR}/prepare_watergan_imagenet_ruod_dataset_parallel.py"
+
+# Apply a narrowly scoped concurrency patch to the pinned historical tool. The
+# ordered executor preserves filenames, selected samples, and manifest order.
+python - "${SNAPSHOT_DIR}/prepare_watergan_imagenet_ruod_dataset_parallel.py" <<'PY'
+from __future__ import print_function
+
+import io
+import sys
+
+path = sys.argv[1]
+with io.open(path, "r", encoding="utf-8") as handle:
+    text = handle.read()
+
+replacements = [
+    (
+        "import argparse\n",
+        "import argparse\nfrom concurrent.futures import ThreadPoolExecutor\n",
+    ),
+    (
+        "    parser.add_argument('--overwrite', action='store_true')\n",
+        "    parser.add_argument('--workers', type=int, default=16)\n"
+        "    parser.add_argument('--overwrite', action='store_true')\n",
+    ),
+    (
+        """    for index, image_path in enumerate(tqdm(air_images, desc='prepare WaterGAN air/depth', unit='image')):
+        rel = image_path.relative_to(air_source)
+        depth_path = depth_source / rel.with_suffix('.png')
+        if not depth_path.exists():
+            missing_depth.append(str(rel).replace('\\\\', '/'))
+            continue
+        stem = f'{index:08d}'
+        air_dst = out_dir / 'air_images' / f'{stem}.png'
+        depth_dst = out_dir / 'air_depth' / f'{stem}.mat'
+        prepare_rgb(image_path, air_dst, air_size)
+        prepare_depth(depth_path, depth_dst, air_size)
+        records.append({
+            'index': index,
+            'source': str(image_path),
+            'depth': str(depth_path),
+            'relative': str(rel).replace('\\\\', '/'),
+            'synset': rel.parts[0] if len(rel.parts) > 1 else 'unknown',
+            'original_name': image_path.name,
+            'air_image': str(air_dst),
+            'air_depth': str(depth_dst),
+        })
+""",
+        """    def prepare_air_item(item):
+        index, image_path = item
+        rel = image_path.relative_to(air_source)
+        depth_path = depth_source / rel.with_suffix('.png')
+        if not depth_path.exists():
+            return None, str(rel).replace('\\\\', '/')
+        stem = f'{index:08d}'
+        air_dst = out_dir / 'air_images' / f'{stem}.png'
+        depth_dst = out_dir / 'air_depth' / f'{stem}.mat'
+        prepare_rgb(image_path, air_dst, air_size)
+        prepare_depth(depth_path, depth_dst, air_size)
+        return {
+            'index': index,
+            'source': str(image_path),
+            'depth': str(depth_path),
+            'relative': str(rel).replace('\\\\', '/'),
+            'synset': rel.parts[0] if len(rel.parts) > 1 else 'unknown',
+            'original_name': image_path.name,
+            'air_image': str(air_dst),
+            'air_depth': str(depth_dst),
+        }, None
+
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        results = executor.map(prepare_air_item, enumerate(air_images))
+        for record, missing in tqdm(
+                results,
+                total=len(air_images),
+                desc='prepare WaterGAN air/depth',
+                unit='image'):
+            if missing is not None:
+                missing_depth.append(missing)
+            else:
+                records.append(record)
+""",
+    ),
+    (
+        """    linked_water = 0
+    for index, image_path in enumerate(tqdm(water_images, desc='prepare WaterGAN water', unit='image')):
+        water_dst = out_dir / 'water_images' / f'{index:08d}.png'
+        if args.water_repeat_to > 0 and selected_water_before_repeat > 0 and index >= selected_water_before_repeat:
+            base_dst = out_dir / 'water_images' / f'{index % selected_water_before_repeat:08d}.png'
+            link_or_copy(base_dst, water_dst)
+            linked_water += 1
+        else:
+            prepare_rgb(image_path, water_dst, water_size)
+""",
+        """    linked_water = 0
+    unique_water_count = len(water_images)
+    if args.water_repeat_to > 0 and selected_water_before_repeat > 0:
+        unique_water_count = min(selected_water_before_repeat, len(water_images))
+
+    def prepare_water_item(item):
+        index, image_path = item
+        water_dst = out_dir / 'water_images' / f'{index:08d}.png'
+        prepare_rgb(image_path, water_dst, water_size)
+
+    unique_water_items = enumerate(water_images[:unique_water_count])
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        results = executor.map(prepare_water_item, unique_water_items)
+        for _ in tqdm(
+                results,
+                total=unique_water_count,
+                desc='prepare WaterGAN water',
+                unit='image'):
+            pass
+
+    for index in tqdm(
+            range(unique_water_count, len(water_images)),
+            desc='link repeated WaterGAN water',
+            unit='image'):
+        water_dst = out_dir / 'water_images' / f'{index:08d}.png'
+        base_dst = out_dir / 'water_images' / f'{index % selected_water_before_repeat:08d}.png'
+        link_or_copy(base_dst, water_dst)
+        linked_water += 1
+""",
+    ),
+]
+
+for old, new in replacements:
+    count = text.count(old)
+    if count != 1:
+        raise RuntimeError(
+            "legacy preparation patch expected one match, found {}".format(
+                count
+            )
+        )
+    text = text.replace(old, new)
+
+with io.open(path, "w", encoding="utf-8", newline="") as handle:
+    handle.write(text)
+PY
+
+python -m py_compile \
+  "${SNAPSHOT_DIR}/prepare_watergan_imagenet_ruod_dataset_parallel.py"
 
 cat > "${SNAPSHOT_DIR}/provenance.txt" <<EOF
 legacy_commit=${LEGACY_COMMIT}
@@ -126,6 +271,7 @@ water_source=${WATER_SOURCE}
 air_per_class=${AIR_PER_CLASS}
 water_repeat_to=${WATER_REPEAT_TO}
 seed=${SAMPLE_SEED}
+prep_workers=${PREP_WORKERS}
 epoch=${EPOCH}
 batch_size=${BATCH_SIZE}
 train_size=${TRAIN_SIZE}
@@ -146,6 +292,7 @@ echo "DATA_ROOT:           ${DATA_ROOT}"
 echo "AIR_PER_CLASS:       ${AIR_PER_CLASS}"
 echo "WATER_REPEAT_TO:     ${WATER_REPEAT_TO}"
 echo "SAMPLE_SEED:         ${SAMPLE_SEED}"
+echo "PREP_WORKERS:        ${PREP_WORKERS}"
 echo "GPU:                 ${GPU}"
 echo "EPOCH:               ${EPOCH}"
 echo "BATCH_SIZE:          ${BATCH_SIZE}"
@@ -172,7 +319,7 @@ if [[ "${RUN_PREPARE}" == "1" ]]; then
 
   echo
   echo "Step 1/3: prepare the historical balanced50 dataset"
-  python "${SNAPSHOT_DIR}/prepare_watergan_imagenet_ruod_dataset.py" \
+  python "${SNAPSHOT_DIR}/prepare_watergan_imagenet_ruod_dataset_parallel.py" \
     --air-source "${SOURCE_DIR}" \
     --depth-source "${DEPTH_DIR}" \
     --water-source "${WATER_SOURCE}" \
@@ -186,6 +333,7 @@ if [[ "${RUN_PREPARE}" == "1" ]]; then
     --air-height "${AIR_HEIGHT}" \
     --water-width "${WATER_WIDTH}" \
     --water-height "${WATER_HEIGHT}" \
+    --workers "${PREP_WORKERS}" \
     --overwrite \
     2>&1 | tee "${LOG_DIR}/prepare_balanced50.log"
 else

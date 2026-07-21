@@ -13,10 +13,15 @@ import sys
 
 root = sys.argv[1]
 pattern = re.compile(
-    r"os\.environ\[(['\"])CUDA_VISIBLE_DEVICES\1\]\s*=\s*(['\"])0\2"
+    r"os\.environ\[(['\"])CUDA_VISIBLE_DEVICES\1\]\s*=\s*(['\"])(\d+)\2"
 )
-replacement = "os.environ.setdefault('CUDA_VISIBLE_DEVICES', '0')"
 found = False
+
+
+def make_default(match):
+    return "os.environ.setdefault('CUDA_VISIBLE_DEVICES', '{}')".format(
+        match.group(3)
+    )
 
 for name in ("mainmhl.py", "mainjamaica.py"):
     path = os.path.join(root, name)
@@ -27,12 +32,12 @@ for name in ("mainmhl.py", "mainjamaica.py"):
     with io.open(path, "r", encoding="utf-8") as handle:
         text = handle.read()
 
-    updated, count = pattern.subn(replacement, text)
+    updated, count = pattern.subn(make_default, text)
     if count:
         with io.open(path, "w", encoding="utf-8", newline="") as handle:
             handle.write(updated)
         print("GPU selection patched: {}".format(path))
-    elif replacement in text:
+    elif "os.environ.setdefault('CUDA_VISIBLE_DEVICES'" in text:
         print("GPU selection already patched: {}".format(path))
     elif "CUDA_VISIBLE_DEVICES" in text:
         raise RuntimeError(
@@ -51,4 +56,3 @@ python -m py_compile \
 if [[ -f "${WATERGAN_DIR}/mainjamaica.py" ]]; then
   python -m py_compile "${WATERGAN_DIR}/mainjamaica.py"
 fi
-

@@ -44,6 +44,10 @@ OUTPUT_WIDTH="${OUTPUT_WIDTH:-64}"
 OUTPUT_HEIGHT="${OUTPUT_HEIGHT:-48}"
 LEARNING_RATE="${LEARNING_RATE:-0.0002}"
 BETA1="${BETA1:-0.5}"
+OMP_NUM_THREADS="${OMP_NUM_THREADS:-8}"
+OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS:-8}"
+MKL_NUM_THREADS="${MKL_NUM_THREADS:-8}"
+TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH:-true}"
 
 RUN_PREPARE="${RUN_PREPARE:-1}"
 RUN_TRAIN="${RUN_TRAIN:-1}"
@@ -279,6 +283,10 @@ batch_size=${BATCH_SIZE}
 train_size=${TRAIN_SIZE}
 gpu=${GPU}
 max_to_keep=${MAX_TO_KEEP}
+omp_num_threads=${OMP_NUM_THREADS}
+openblas_num_threads=${OPENBLAS_NUM_THREADS}
+mkl_num_threads=${MKL_NUM_THREADS}
+tf_force_gpu_allow_growth=${TF_FORCE_GPU_ALLOW_GROWTH}
 EOF
 
 echo "============================================================"
@@ -300,6 +308,8 @@ echo "GPU:                 ${GPU}"
 echo "EPOCH:               ${EPOCH}"
 echo "BATCH_SIZE:          ${BATCH_SIZE}"
 echo "TRAIN_SIZE:          ${TRAIN_SIZE}"
+echo "CPU_THREADS:         OMP=${OMP_NUM_THREADS}, OpenBLAS=${OPENBLAS_NUM_THREADS}, MKL=${MKL_NUM_THREADS}"
+echo "TF_ALLOW_GROWTH:     ${TF_FORCE_GPU_ALLOW_GROWTH}"
 echo "RUN_PREPARE:         ${RUN_PREPARE}"
 echo "RUN_TRAIN:           ${RUN_TRAIN}"
 echo "RESET_DATA:          ${RESET_DATA}"
@@ -499,7 +509,14 @@ echo "Training log: ${LOG_DIR}/train_legacy.log"
 
 (
   cd "${LEGACY_WATERGAN_DIR}"
-  CUDA_VISIBLE_DEVICES="${GPU}" python mainmhl.py \
+  CUDA_DEVICE_ORDER=PCI_BUS_ID \
+  CUDA_VISIBLE_DEVICES="${GPU}" \
+  TF_FORCE_GPU_ALLOW_GROWTH="${TF_FORCE_GPU_ALLOW_GROWTH}" \
+  PYTHONUNBUFFERED=1 \
+  OMP_NUM_THREADS="${OMP_NUM_THREADS}" \
+  OPENBLAS_NUM_THREADS="${OPENBLAS_NUM_THREADS}" \
+  MKL_NUM_THREADS="${MKL_NUM_THREADS}" \
+  python mainmhl.py \
     --water_dataset "${DATA_NAME}_water_images" \
     --air_dataset "${DATA_NAME}_air_images" \
     --depth_dataset "${DATA_NAME}_air_depth" \

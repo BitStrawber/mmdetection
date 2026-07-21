@@ -288,6 +288,10 @@ replacements = [
     ("tf.initialize_all_variables()", "tf.global_variables_initializer()"),
     ("tf.train.SummaryWriter", "tf.summary.FileWriter"),
     ("self.resuts_dir", "self.results_dir"),
+    (
+        "tf.train.Saver()",
+        "tf.train.Saver(max_to_keep=int(os.environ.get('WATERGAN_MAX_TO_KEEP', '5')))",
+    ),
 ]
 
 # Very old DCGAN-style code sometimes used positional sigmoid CE:

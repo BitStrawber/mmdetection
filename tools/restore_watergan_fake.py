@@ -88,11 +88,15 @@ def main():
 
     written = 0
     skipped = 0
+    padding_skipped = 0
     missing = []
     for idx, record in enumerate(tqdm(records, desc='restore WaterGAN fake', unit='image')):
         generated = outputs.get(idx)
         if generated is None:
             missing.append(idx)
+            continue
+        if record.get('is_padding'):
+            padding_skipped += 1
             continue
         synset = record.get('synset') or 'unknown'
         original_name = Path(record.get('original_name') or f'{idx:08d}.png')
@@ -114,6 +118,7 @@ def main():
         'effective_batch_size': effective_batch,
         'written': written,
         'skipped_existing': skipped,
+        'padding_skipped': padding_skipped,
         'missing': len(missing),
         'missing_samples': missing[:20],
         'bad_names': len(bad_names),

@@ -14,6 +14,13 @@ def parse_args():
     parser.add_argument('--out-root', required=True)
     parser.add_argument('--num-shards', type=int, required=True)
     parser.add_argument('--batch-size', type=int, required=True)
+    parser.add_argument(
+        '--pad-to-batch', action='store_true',
+        help=(
+            'Repeat the final record until the total is divisible by the '
+            'batch size. Padding records are marked so restore can skip them.'
+        ),
+    )
     parser.add_argument('--reset', action='store_true')
     return parser.parse_args()
 
@@ -22,13 +29,15 @@ def list_files(path):
     return sorted(item for item in path.iterdir() if item.is_file())
 
 
-def shard_sizes(total, num_shards, batch_size):
+def shard_sizes(total, num_shards, batch_size, pad_to_batch=False):
     if total % batch_size:
-        raise RuntimeError(
-            'Manifest size {} is not divisible by batch size {}'.format(
-                total, batch_size
+        if not pad_to_batch:
+            raise RuntimeError(
+                'Manifest size {} is not divisible by batch size {}'.format(
+                    total, batch_size
+                )
             )
-        )
+        total += batch_size - total % batch_size
     total_batches = total // batch_size
     base, extra = divmod(total_batches, num_shards)
     return [
@@ -37,8 +46,8 @@ def shard_sizes(total, num_shards, batch_size):
     ]
 
 
-def valid_existing(path, expected, water_count, data_root, shard_index,
-                   num_shards, batch_size, start):
+def valid_existing(path, expected, logical_total, padded_total, water_count,
+                   data_root, shard_index, num_shards, batch_size, start):
     summary = path / 'shard_summary.json'
     if not summary.is_file():
         return False
@@ -54,6 +63,8 @@ def valid_existing(path, expected, water_count, data_root, shard_index,
         'start': start,
         'end': start + expected,
         'count': expected,
+        'logical_total': logical_total,
+        'padded_total': padded_total,
         'water_count': water_count,
     }
     if any(payload.get(key) != value
@@ -102,7 +113,10 @@ def main():
     if not water_files:
         raise RuntimeError('water_images is empty: {}'.format(data_root))
 
-    sizes = shard_sizes(total, args.num_shards, args.batch_size)
+    sizes = shard_sizes(
+        total, args.num_shards, args.batch_size, args.pad_to_batch
+    )
+    padded_total = sum(sizes)
     out_root.mkdir(parents=True, exist_ok=True)
     offset = 0
     for shard_index, count in enumerate(sizes):
@@ -110,8 +124,8 @@ def main():
         if args.reset and shard.exists():
             shutil.rmtree(str(shard))
         if valid_existing(
-            shard, count, len(water_files), data_root, shard_index,
-            args.num_shards, args.batch_size, offset
+            shard, count, total, padded_total, len(water_files), data_root,
+            shard_index, args.num_shards, args.batch_size, offset
         ):
             print('reuse {}: start={}, count={}'.format(shard, offset, count))
             offset += count
@@ -138,16 +152,18 @@ def main():
         shard_records = []
         for local_index in range(count):
             global_index = offset + local_index
+            source_index = min(global_index, total - 1)
             stem = '{:08d}'.format(local_index)
             destinations = {}
             for name, files in paired_inputs.items():
-                source = files[global_index]
+                source = files[source_index]
                 destination = temporary / name / (stem + source.suffix.lower())
                 link_file(source, destination)
                 destinations[name] = destination
-            record = dict(records[global_index])
-            record['global_index'] = record.get('index', global_index)
+            record = dict(records[source_index])
+            record['global_index'] = record.get('index', source_index)
             record['index'] = local_index
+            record['is_padding'] = global_index >= total
             record['air_image'] = str(
                 shard / 'air_images' / destinations['air_images'].name
             )
@@ -169,6 +185,8 @@ def main():
             'start': offset,
             'end': offset + count,
             'count': count,
+            'logical_total': total,
+            'padded_total': padded_total,
             'water_count': len(water_files),
         }
         (temporary / 'shard_summary.json').write_text(
@@ -180,7 +198,11 @@ def main():
         print('created {}: start={}, count={}'.format(shard, offset, count))
         offset += count
 
-    print('total={}, sizes={}'.format(total, sizes))
+    print(
+        'logical_total={}, padded_total={}, padding={}, sizes={}'.format(
+            total, padded_total, padded_total - total, sizes
+        )
+    )
 
 
 if __name__ == '__main__':

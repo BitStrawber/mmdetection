@@ -133,7 +133,8 @@ fi
 require_path "${TRAIN_MODEL_DIR}"
 
 mapfile -t ALL_STEPS < <(
-  find "${TRAIN_MODEL_DIR}" -maxdepth 1 -type f -name 'DCGAN.model-*.index' -printf '%f\n' |
+  find "${TRAIN_MODEL_DIR}" -maxdepth 1 \( -type f -o -type l \) \
+    -name 'DCGAN.model-*.index' -printf '%f\n' |
     sed -E 's/^DCGAN\.model-([0-9]+)\.index$/\1/' |
     sort -n
 )

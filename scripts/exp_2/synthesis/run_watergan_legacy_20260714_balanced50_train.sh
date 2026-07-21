@@ -12,6 +12,7 @@ cd "${REPO_ROOT}"
 LEGACY_COMMIT="${LEGACY_COMMIT:-a9686c0b}"
 WATERGAN_SOURCE_DIR="${WATERGAN_SOURCE_DIR:-/home/fcp/xcx/exp_2/syn/WaterGAN}"
 LEGACY_WATERGAN_DIR="${LEGACY_WATERGAN_DIR:-/home/fcp/xcx/exp_2/syn/WaterGAN_legacy_20260714}"
+LEGACY_WATERGAN_COMMIT="${LEGACY_WATERGAN_COMMIT:-auto}"
 
 SOURCE_DIR="${SOURCE_DIR:-/media/SSD1/XCX/exp_2/synthetic_imagenet/watergan/source/train}"
 DEPTH_DIR="${DEPTH_DIR:-/media/SSD1/XCX/exp_2/depthanything_v2_maps/watergan/train}"
@@ -263,6 +264,7 @@ historical_prepare=${HISTORICAL_PREP_PATH}
 historical_patch=${HISTORICAL_PATCH_PATH}
 watergan_source=${WATERGAN_SOURCE_DIR}
 watergan_clone=${LEGACY_WATERGAN_DIR}
+watergan_requested_commit=${LEGACY_WATERGAN_COMMIT}
 data_name=${DATA_NAME}
 data_root=${DATA_ROOT}
 source_dir=${SOURCE_DIR}
@@ -285,6 +287,7 @@ echo "============================================================"
 echo "LEGACY_COMMIT:       ${LEGACY_COMMIT}"
 echo "WATERGAN_SOURCE_DIR: ${WATERGAN_SOURCE_DIR}"
 echo "LEGACY_WATERGAN_DIR: ${LEGACY_WATERGAN_DIR}"
+echo "WATERGAN_COMMIT:     ${LEGACY_WATERGAN_COMMIT}"
 echo "SOURCE_DIR:          ${SOURCE_DIR}"
 echo "DEPTH_DIR:           ${DEPTH_DIR}"
 echo "WATER_SOURCE:        ${WATER_SOURCE}"
@@ -382,6 +385,45 @@ fi
 echo
 echo "Step 2/3: create and patch an isolated historical WaterGAN clone"
 git clone --local --no-hardlinks "${WATERGAN_SOURCE_DIR}" "${LEGACY_WATERGAN_DIR}"
+
+if [[ "${LEGACY_WATERGAN_COMMIT}" == "auto" ]]; then
+  LEGACY_WATERGAN_COMMIT="$(
+    git -C "${LEGACY_WATERGAN_DIR}" rev-list \
+      --reverse \
+      HEAD \
+      -- modelmhl.py | sed -n '1p'
+  )"
+fi
+
+[[ -n "${LEGACY_WATERGAN_COMMIT}" ]] || \
+  die "could not resolve the original WaterGAN commit"
+git -C "${LEGACY_WATERGAN_DIR}" cat-file \
+  -e "${LEGACY_WATERGAN_COMMIT}^{commit}" 2>/dev/null || \
+  die "WaterGAN commit is unavailable: ${LEGACY_WATERGAN_COMMIT}"
+
+echo "Check out original WaterGAN commit: ${LEGACY_WATERGAN_COMMIT}"
+git -C "${LEGACY_WATERGAN_DIR}" checkout \
+  --detach "${LEGACY_WATERGAN_COMMIT}"
+
+for legacy_file in \
+  mainmhl.py \
+  mainjamaica.py \
+  modelmhl.py \
+  modeljamaica.py \
+  ops.py \
+  utils.py; do
+  require_path \
+    "${LEGACY_WATERGAN_DIR}/${legacy_file}" \
+    "original WaterGAN ${legacy_file}"
+done
+
+{
+  echo "watergan_resolved_commit=${LEGACY_WATERGAN_COMMIT}"
+  echo "watergan_resolved_subject=$(
+    git -C "${LEGACY_WATERGAN_DIR}" log \
+      -1 --format=%s "${LEGACY_WATERGAN_COMMIT}"
+  )"
+} >> "${SNAPSHOT_DIR}/provenance.txt"
 
 WATERGAN_DIR="${LEGACY_WATERGAN_DIR}" \
   bash "${SNAPSHOT_DIR}/patch_watergan_tf15_compat.sh"

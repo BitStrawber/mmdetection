@@ -3,7 +3,7 @@ set -euo pipefail
 
 # End-to-end WaterGAN replacement pipeline:
 #   1. Resume the legacy batch-64 trajectory from cumulative epoch 2.
-#   2. Train through cumulative epoch 10, save every epoch, and freeze epoch 3.
+#   2. Preserve global steps, train through epoch 10, and freeze epoch 3.
 #   3. Generate train/val with 48 shards on 8 GPUs (16 concurrent workers).
 #   4. Restore the ImageNet class layout, atomically replace old outputs.
 #   5. Package train+val and upload the replacement archive to Hugging Face.
@@ -140,6 +140,12 @@ require_dir "${TRAINING_DATA_ROOT}"
 require_dir "${TRAIN_DATA_ROOT}"
 require_dir "${VAL_DATA_ROOT}"
 
+[[ "${SOURCE_CHECKPOINT_STEP}" =~ ^[0-9]+$ ]] && \
+  (( SOURCE_CHECKPOINT_STEP > 0 )) || {
+  echo "Error: SOURCE_CHECKPOINT_STEP must be a positive integer; got ${SOURCE_CHECKPOINT_STEP}" >&2
+  exit 1
+}
+
 for suffix in index meta data-00000-of-00001; do
   require_file "${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}.${suffix}"
 done
@@ -164,8 +170,10 @@ if [[ "${RUN_TRAIN}" == 1 ]]; then
   WATERGAN_DIR="${WATERGAN_DIR}" \
     bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.sh"
 
-  if [[ -f "${FINAL_CHECKPOINT_MARKER}" ]] && checkpoint_complete "${FINAL_MODEL_DIR}" 783; then
-    echo "Reuse frozen cumulative epoch-3 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-783"
+  if [[ -f "${TRAIN_COMPLETE_MARKER}" && -f "${FINAL_CHECKPOINT_MARKER}" ]] && \
+     checkpoint_complete "${RESUME_MODEL_DIR}" 7812 && \
+     checkpoint_complete "${FINAL_MODEL_DIR}" 2345; then
+    echo "Reuse complete cumulative epoch-3..10 trajectory and frozen epoch-3 checkpoint."
   else
     if [[ "${RESET_TRAIN}" == 1 ]]; then
       safe_remove_tree "${RESUME_CHECKPOINT_ROOT}" "${WATERGAN_DIR}/checkpoint_legacy_bs64_"
@@ -186,11 +194,11 @@ if [[ "${RUN_TRAIN}" == 1 ]]; then
     for suffix in index meta data-00000-of-00001; do
       cp -a \
         "${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}.${suffix}" \
-        "${RESUME_MODEL_DIR}/DCGAN.model-0.${suffix}"
+        "${RESUME_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}.${suffix}"
     done
-    cat > "${RESUME_MODEL_DIR}/checkpoint" <<'EOF'
-model_checkpoint_path: "DCGAN.model-0"
-all_model_checkpoint_paths: "DCGAN.model-0"
+    cat > "${RESUME_MODEL_DIR}/checkpoint" <<EOF
+model_checkpoint_path: "DCGAN.model-${SOURCE_CHECKPOINT_STEP}"
+all_model_checkpoint_paths: "DCGAN.model-${SOURCE_CHECKPOINT_STEP}"
 EOF
 
     mkdir -p "${WATERGAN_DIR}/data"
@@ -198,6 +206,16 @@ EOF
     ln -sfn "${TRAINING_DATA_ROOT}/air_depth" "${WATERGAN_DIR}/data/${DATA_NAME}_air_depth"
     ln -sfn "${TRAINING_DATA_ROOT}/water_images" "${WATERGAN_DIR}/data/${DATA_NAME}_water_images"
 
+    WATERGAN_DIR="${WATERGAN_DIR}" \
+      bash "${SCRIPT_DIR}/patch_watergan_resume_counter.sh"
+
+    # Keep the loaded checkpoint named model-${SOURCE_CHECKPOINT_STEP}. The
+    # runtime value is one lower only because this legacy training loop
+    # increments counter immediately before writing the next checkpoint.
+    resume_counter_start=$((SOURCE_CHECKPOINT_STEP - 1))
+
+    # Nine loop epochs are required because legacy WaterGAN saves the
+    # completed epoch when the next loop epoch starts.
     (
       cd "${WATERGAN_DIR}"
       env -u LD_LIBRARY_PATH -u LD_PRELOAD \
@@ -205,6 +223,7 @@ EOF
         CUDA_VISIBLE_DEVICES="${TRAIN_GPU}" \
         TF_FORCE_GPU_ALLOW_GROWTH=true \
         PYTHONUNBUFFERED=1 \
+        WATERGAN_COUNTER_START="${resume_counter_start}" \
         WATERGAN_IO_WORKERS="${WATERGAN_IO_WORKERS}" \
         WATERGAN_MAX_TO_KEEP=20 \
         python mainmhl.py \
@@ -236,16 +255,16 @@ EOF
       (( SECONDS < load_deadline )) || { echo "Error: checkpoint load confirmation timed out" >&2; exit 1; }
       sleep 5
     done
-    grep -aq 'Success to read DCGAN.model-0' "${TRAIN_LOG}" || {
-      echo "Error: training did not load the isolated model-0 seed" >&2
+    grep -aq "Success to read DCGAN.model-${SOURCE_CHECKPOINT_STEP}" "${TRAIN_LOG}" || {
+      echo "Error: training did not load DCGAN.model-${SOURCE_CHECKPOINT_STEP}" >&2
       grep -aE 'Reading checkpoints|Restoring parameters|Success to read|Load failed|Traceback' "${TRAIN_LOG}" >&2 || true
       kill -TERM "${train_pid}" 2>/dev/null || true
       exit 1
     }
     echo "Checkpoint seed loaded successfully. Waiting for cumulative epoch 10."
 
-    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 6250 || \
-          ! grep -q 'model_checkpoint_path: "DCGAN.model-6250"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
+    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 7812 || \
+          ! grep -q 'model_checkpoint_path: "DCGAN.model-7812"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
       if ! kill -0 "${train_pid}" 2>/dev/null; then
         echo "Error: training stopped before cumulative epoch 10 was saved" >&2
         tail -n 120 "${TRAIN_LOG}" >&2
@@ -255,7 +274,7 @@ EOF
       sleep 15
     done
 
-    epoch_steps=(783 1564 2345 3126 3907 4688 5469 6250)
+    epoch_steps=(2345 3126 3907 4688 5469 6250 7031 7812)
     epoch_number=3
     for epoch_step in "${epoch_steps[@]}"; do
       checkpoint_complete "${RESUME_MODEL_DIR}" "${epoch_step}" || {
@@ -273,31 +292,31 @@ EOF
     mkdir -p "${FINAL_MODEL_DIR}"
     for suffix in index meta data-00000-of-00001; do
       cp -a \
-        "${RESUME_MODEL_DIR}/DCGAN.model-783.${suffix}" \
-        "${FINAL_MODEL_DIR}/DCGAN.model-783.${suffix}"
+        "${RESUME_MODEL_DIR}/DCGAN.model-2345.${suffix}" \
+        "${FINAL_MODEL_DIR}/DCGAN.model-2345.${suffix}"
     done
     cat > "${FINAL_MODEL_DIR}/checkpoint" <<'EOF'
-model_checkpoint_path: "DCGAN.model-783"
-all_model_checkpoint_paths: "DCGAN.model-783"
+model_checkpoint_path: "DCGAN.model-2345"
+all_model_checkpoint_paths: "DCGAN.model-2345"
 EOF
     cat > "${FINAL_CHECKPOINT_MARKER}" <<EOF
 source=${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}
 trajectory=cumulative_epoch3
-resume_saved_epoch3=DCGAN.model-783
-resume_saved_epoch4=DCGAN.model-1564
-resume_saved_epoch5=DCGAN.model-2345
-resume_saved_epoch6=DCGAN.model-3126
-resume_saved_epoch7=DCGAN.model-3907
-resume_saved_epoch8=DCGAN.model-4688
-resume_saved_epoch9=DCGAN.model-5469
-resume_saved_epoch10=DCGAN.model-6250
+resume_saved_epoch3=DCGAN.model-2345
+resume_saved_epoch4=DCGAN.model-3126
+resume_saved_epoch5=DCGAN.model-3907
+resume_saved_epoch6=DCGAN.model-4688
+resume_saved_epoch7=DCGAN.model-5469
+resume_saved_epoch8=DCGAN.model-6250
+resume_saved_epoch9=DCGAN.model-7031
+resume_saved_epoch10=DCGAN.model-7812
 created=$(date --iso-8601=seconds)
 EOF
-    echo "Frozen cumulative epoch-3 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-783"
+    echo "Frozen cumulative epoch-3 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-2345"
   fi
 fi
 
-checkpoint_complete "${FINAL_MODEL_DIR}" 783 || {
+checkpoint_complete "${FINAL_MODEL_DIR}" 2345 || {
   echo "Error: final cumulative epoch-3 checkpoint is unavailable: ${FINAL_MODEL_DIR}" >&2
   exit 1
 }
@@ -311,7 +330,7 @@ if [[ "${RUN_GENERATE}" == 1 ]]; then
     echo "Reuse complete staged generation: ${STAGING_GENERATED_ROOT}"
   else
     CHECKPOINT_DIR="${FINAL_CHECKPOINT_NAME}" \
-    CHECKPOINT_STEP=783 \
+    CHECKPOINT_STEP=2345 \
     TRAIN_DATA_NAME="${DATA_NAME}" \
     WATERGAN_DIR="${WATERGAN_DIR}" \
     TRAIN_DATA_ROOT="${TRAIN_DATA_ROOT}" \
@@ -422,7 +441,7 @@ echo
 echo "============================================================"
 echo "WaterGAN epoch-3 replacement pipeline complete"
 echo "============================================================"
-echo "Checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-783"
+echo "Checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-2345"
 echo "Train:      ${FINAL_GENERATED_ROOT}/train ($(count_images "${FINAL_GENERATED_ROOT}/train"))"
 echo "Val:        ${FINAL_GENERATED_ROOT}/val ($(count_images "${FINAL_GENERATED_ROOT}/val"))"
 echo "Archive:    ${archive}"

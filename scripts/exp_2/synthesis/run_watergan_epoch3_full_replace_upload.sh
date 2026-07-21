@@ -3,7 +3,7 @@ set -euo pipefail
 
 # End-to-end WaterGAN replacement pipeline:
 #   1. Resume the legacy batch-64 trajectory from cumulative epoch 2.
-#   2. Train through cumulative epoch 4 and freeze cumulative epoch 3.
+#   2. Train through cumulative epoch 10, save every epoch, and freeze epoch 3.
 #   3. Generate train/val with 48 shards on 8 GPUs (16 concurrent workers).
 #   4. Restore the ImageNet class layout, atomically replace old outputs.
 #   5. Package train+val and upload the replacement archive to Hugging Face.
@@ -18,7 +18,7 @@ TRAINING_DATA_ROOT="${TRAINING_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/w
 SOURCE_CHECKPOINT_ROOT="${SOURCE_CHECKPOINT_ROOT:-${WATERGAN_DIR}/checkpoint_legacy_official_bs64_e10_gpu0}"
 SOURCE_CHECKPOINT_STEP="${SOURCE_CHECKPOINT_STEP:-1564}"
 
-RESUME_CHECKPOINT_NAME="${RESUME_CHECKPOINT_NAME:-checkpoint_legacy_bs64_cumulative_epoch4_pipeline}"
+RESUME_CHECKPOINT_NAME="${RESUME_CHECKPOINT_NAME:-checkpoint_legacy_bs64_cumulative_epoch10_pipeline}"
 RESUME_CHECKPOINT_ROOT="${WATERGAN_DIR}/${RESUME_CHECKPOINT_NAME}"
 FINAL_CHECKPOINT_NAME="${FINAL_CHECKPOINT_NAME:-checkpoint_watergan_final_legacy_bs64_cumulative_epoch3}"
 FINAL_CHECKPOINT_ROOT="${WATERGAN_DIR}/${FINAL_CHECKPOINT_NAME}"
@@ -67,9 +67,9 @@ VERIFY_ARCHIVE="${VERIFY_ARCHIVE:-0}"
 SOURCE_MODEL_DIR="${SOURCE_CHECKPOINT_ROOT}/${DATA_NAME}_water_images_${BATCH_SIZE}_${OUTPUT_HEIGHT}_${OUTPUT_WIDTH}"
 RESUME_MODEL_DIR="${RESUME_CHECKPOINT_ROOT}/${DATA_NAME}_water_images_${BATCH_SIZE}_${OUTPUT_HEIGHT}_${OUTPUT_WIDTH}"
 FINAL_MODEL_DIR="${FINAL_CHECKPOINT_ROOT}/${DATA_NAME}_water_images_${BATCH_SIZE}_${OUTPUT_HEIGHT}_${OUTPUT_WIDTH}"
-TRAIN_LOG="${LOG_ROOT}/training/resume_to_epoch4.log"
-TRAIN_PID_FILE="${LOG_ROOT}/training/resume_to_epoch4.pid"
-TRAIN_COMPLETE_MARKER="${RESUME_CHECKPOINT_ROOT}/.cumulative_epoch4_complete"
+TRAIN_LOG="${LOG_ROOT}/training/resume_to_epoch10.log"
+TRAIN_PID_FILE="${LOG_ROOT}/training/resume_to_epoch10.pid"
+TRAIN_COMPLETE_MARKER="${RESUME_CHECKPOINT_ROOT}/.cumulative_epoch10_complete"
 FINAL_CHECKPOINT_MARKER="${FINAL_CHECKPOINT_ROOT}/.cumulative_epoch3_frozen"
 
 mkdir -p "${LOG_ROOT}" "${LOG_ROOT}/training"
@@ -112,7 +112,7 @@ safe_remove_tree() {
 
 cat <<EOF
 ============================================================
-WaterGAN cumulative epoch-3 full replacement pipeline
+WaterGAN cumulative epoch-3 full replacement pipeline (train through epoch 10)
 ============================================================
 WATERGAN_DIR:             ${WATERGAN_DIR}
 SOURCE_CHECKPOINT:        ${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}
@@ -159,7 +159,7 @@ fi
 
 if [[ "${RUN_TRAIN}" == 1 ]]; then
   echo
-  echo "===== Stage 1: resume through cumulative epoch 4 ====="
+  echo "===== Stage 1: resume through cumulative epoch 10 ====="
 
   WATERGAN_DIR="${WATERGAN_DIR}" \
     bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.sh"
@@ -212,14 +212,14 @@ EOF
           --water_dataset "${DATA_NAME}_water_images" \
           --air_dataset "${DATA_NAME}_air_images" \
           --depth_dataset "${DATA_NAME}_air_depth" \
-          --epoch 3 --train_size 50000 --batch_size "${BATCH_SIZE}" \
+          --epoch 9 --train_size 50000 --batch_size "${BATCH_SIZE}" \
           --num_samples 64 --learning_rate 0.0002 --beta1 0.5 \
           --input_height 480 --input_width 640 \
           --input_water_height 1024 --input_water_width 1360 \
           --output_height "${OUTPUT_HEIGHT}" --output_width "${OUTPUT_WIDTH}" \
           --save_epoch 1 \
           --checkpoint_dir "${RESUME_CHECKPOINT_NAME}" \
-          --sample_dir samples_legacy_bs64_cumulative_epoch4_pipeline \
+          --sample_dir samples_legacy_bs64_cumulative_epoch10_pipeline \
           --results_dir "${TRAIN_RESULT_ROOT}"
     ) > "${TRAIN_LOG}" 2>&1 &
     train_pid="$!"
@@ -242,12 +242,12 @@ EOF
       kill -TERM "${train_pid}" 2>/dev/null || true
       exit 1
     }
-    echo "Checkpoint seed loaded successfully. Waiting for cumulative epoch 4."
+    echo "Checkpoint seed loaded successfully. Waiting for cumulative epoch 10."
 
-    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 1564 || \
-          ! grep -q 'model_checkpoint_path: "DCGAN.model-1564"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
+    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 6250 || \
+          ! grep -q 'model_checkpoint_path: "DCGAN.model-6250"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
       if ! kill -0 "${train_pid}" 2>/dev/null; then
-        echo "Error: training stopped before cumulative epoch 4 was saved" >&2
+        echo "Error: training stopped before cumulative epoch 10 was saved" >&2
         tail -n 120 "${TRAIN_LOG}" >&2
         exit 1
       fi
@@ -255,10 +255,17 @@ EOF
       sleep 15
     done
 
-    checkpoint_complete "${RESUME_MODEL_DIR}" 783 || {
-      echo "Error: cumulative epoch-3 checkpoint model-783 is incomplete" >&2; exit 1;
-    }
-    echo "Cumulative epoch 4 saved; stop the unnecessary final loop epoch."
+    epoch_steps=(783 1564 2345 3126 3907 4688 5469 6250)
+    epoch_number=3
+    for epoch_step in "${epoch_steps[@]}"; do
+      checkpoint_complete "${RESUME_MODEL_DIR}" "${epoch_step}" || {
+        echo "Error: cumulative epoch-${epoch_number} checkpoint model-${epoch_step} is incomplete" >&2
+        exit 1
+      }
+      echo "Verified cumulative epoch ${epoch_number}: DCGAN.model-${epoch_step}"
+      epoch_number=$((epoch_number + 1))
+    done
+    echo "Cumulative epoch 10 saved; stop the unnecessary final loop epoch."
     kill -TERM "${train_pid}" 2>/dev/null || true
     wait "${train_pid}" 2>/dev/null || true
     date > "${TRAIN_COMPLETE_MARKER}"
@@ -278,6 +285,12 @@ source=${SOURCE_MODEL_DIR}/DCGAN.model-${SOURCE_CHECKPOINT_STEP}
 trajectory=cumulative_epoch3
 resume_saved_epoch3=DCGAN.model-783
 resume_saved_epoch4=DCGAN.model-1564
+resume_saved_epoch5=DCGAN.model-2345
+resume_saved_epoch6=DCGAN.model-3126
+resume_saved_epoch7=DCGAN.model-3907
+resume_saved_epoch8=DCGAN.model-4688
+resume_saved_epoch9=DCGAN.model-5469
+resume_saved_epoch10=DCGAN.model-6250
 created=$(date --iso-8601=seconds)
 EOF
     echo "Frozen cumulative epoch-3 checkpoint: ${FINAL_MODEL_DIR}/DCGAN.model-783"

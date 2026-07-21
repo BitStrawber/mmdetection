@@ -18,6 +18,7 @@ DATA_ROOT="${DATA_ROOT:-${WORK_ROOT}/watergan/datasets/${DATA_NAME}}"
 TRAIN_GPU="${TRAIN_GPU:-0}"
 INFER_GPUS="${INFER_GPUS:-0 1 2 3}"
 EPOCHS="${EPOCHS:-5}"
+DISPLAY_EPOCH_START="${DISPLAY_EPOCH_START:-1}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 TRAIN_SIZE="${TRAIN_SIZE:-50000}"
 NUM_COMPARE="${NUM_COMPARE:-40}"
@@ -73,6 +74,7 @@ DATA_ROOT:          ${DATA_ROOT}
 TRAIN_GPU:          ${TRAIN_GPU}
 INFER_GPUS:         ${INFER_GPUS}
 EPOCHS:             ${EPOCHS}
+DISPLAY_EPOCH_START:${DISPLAY_EPOCH_START}
 BATCH_SIZE:         ${BATCH_SIZE}
 TRAIN_SIZE:         ${TRAIN_SIZE}
 NUM_COMPARE:        ${NUM_COMPARE}
@@ -258,7 +260,8 @@ for STEP in "${STEPS[@]}"; do
   }
 done
 
-python - "${DATA_ROOT}/air_images" "${RESULT_ROOT}" "${NUM_COMPARE}" "${STEPS[@]}" <<'PY'
+python - "${DATA_ROOT}/air_images" "${RESULT_ROOT}" "${NUM_COMPARE}" \
+  "${DISPLAY_EPOCH_START}" "${STEPS[@]}" <<'PY'
 from __future__ import print_function
 
 import re
@@ -269,7 +272,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 source_root = Path(sys.argv[1])
 result_root = Path(sys.argv[2])
 expected = int(sys.argv[3])
-steps = sys.argv[4:]
+epoch_start = int(sys.argv[4])
+steps = sys.argv[5:]
 panel_root = result_root / 'panels'
 panel_root.mkdir(parents=True, exist_ok=True)
 
@@ -294,7 +298,10 @@ for step in steps:
 
 tile_size = (320, 240)
 header = 38
-labels = ['Original'] + ['epoch {} / step {}'.format(i + 1, step) for i, step in enumerate(steps)]
+labels = ['Original'] + [
+    'epoch {} / step {}'.format(epoch_start + i, step)
+    for i, step in enumerate(steps)
+]
 manifest = ['index\tsource\t' + '\t'.join('step_' + step for step in steps) + '\tpanel']
 
 for index in range(expected):

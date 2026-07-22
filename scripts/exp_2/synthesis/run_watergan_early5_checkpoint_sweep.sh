@@ -18,6 +18,7 @@ DATA_ROOT="${DATA_ROOT:-${WORK_ROOT}/watergan/datasets/${DATA_NAME}}"
 TRAIN_GPU="${TRAIN_GPU:-0}"
 INFER_GPUS="${INFER_GPUS:-0 1 2 3}"
 EPOCHS="${EPOCHS:-5}"
+CHECKPOINT_STEPS="${CHECKPOINT_STEPS:-}"
 DISPLAY_EPOCH_START="${DISPLAY_EPOCH_START:-1}"
 BATCH_SIZE="${BATCH_SIZE:-8}"
 TRAIN_SIZE="${TRAIN_SIZE:-50000}"
@@ -74,6 +75,7 @@ DATA_ROOT:          ${DATA_ROOT}
 TRAIN_GPU:          ${TRAIN_GPU}
 INFER_GPUS:         ${INFER_GPUS}
 EPOCHS:             ${EPOCHS}
+CHECKPOINT_STEPS:   ${CHECKPOINT_STEPS:-auto}
 DISPLAY_EPOCH_START:${DISPLAY_EPOCH_START}
 BATCH_SIZE:         ${BATCH_SIZE}
 TRAIN_SIZE:         ${TRAIN_SIZE}
@@ -137,22 +139,34 @@ fi
 
 require_path "${TRAIN_MODEL_DIR}"
 
-mapfile -t ALL_STEPS < <(
-  find "${TRAIN_MODEL_DIR}" -maxdepth 1 \( -type f -o -type l \) \
-    -name 'DCGAN.model-*.index' -printf '%f\n' |
-    sed -E 's/^DCGAN\.model-([0-9]+)\.index$/\1/' |
-    sort -n
-)
+if [[ -n "${CHECKPOINT_STEPS}" ]]; then
+  read -r -a STEPS <<< "${CHECKPOINT_STEPS}"
+  LABEL_MODE=step
+  for step in "${STEPS[@]}"; do
+    [[ "${step}" =~ ^[0-9]+$ ]] || {
+      echo "Error: invalid checkpoint step: ${step}" >&2
+      exit 1
+    }
+  done
+else
+  LABEL_MODE=epoch
+  mapfile -t ALL_STEPS < <(
+    find "${TRAIN_MODEL_DIR}" -maxdepth 1 \( -type f -o -type l \) \
+      -name 'DCGAN.model-*.index' -printf '%f\n' |
+      sed -E 's/^DCGAN\.model-([0-9]+)\.index$/\1/' |
+      sort -n
+  )
 
-if (( ${#ALL_STEPS[@]} < EPOCHS )); then
-  echo "Error: found only ${#ALL_STEPS[@]} checkpoints; expected at least ${EPOCHS}" >&2
-  printf '  %s\n' "${ALL_STEPS[@]}" >&2
-  exit 1
+  if (( ${#ALL_STEPS[@]} < EPOCHS )); then
+    echo "Error: found only ${#ALL_STEPS[@]} checkpoints; expected at least ${EPOCHS}" >&2
+    printf '  %s\n' "${ALL_STEPS[@]}" >&2
+    exit 1
+  fi
+
+  # The original loop also saves model-2 immediately. The final EPOCHS
+  # entries are the completed epoch checkpoints when SAVE_EPOCH=1.
+  STEPS=("${ALL_STEPS[@]: -EPOCHS}")
 fi
-
-# The original loop also saves model-2 immediately. The final EPOCHS entries
-# are the completed epoch checkpoints when SAVE_EPOCH=1.
-STEPS=("${ALL_STEPS[@]: -EPOCHS}")
 printf '%s\n' "${STEPS[@]}" > "${RESULT_ROOT}/selected_checkpoint_steps.txt"
 
 echo
@@ -261,7 +275,7 @@ for STEP in "${STEPS[@]}"; do
 done
 
 python - "${DATA_ROOT}/air_images" "${RESULT_ROOT}" "${NUM_COMPARE}" \
-  "${DISPLAY_EPOCH_START}" "${STEPS[@]}" <<'PY'
+  "${DISPLAY_EPOCH_START}" "${LABEL_MODE}" "${STEPS[@]}" <<'PY'
 from __future__ import print_function
 
 import re
@@ -273,7 +287,8 @@ source_root = Path(sys.argv[1])
 result_root = Path(sys.argv[2])
 expected = int(sys.argv[3])
 epoch_start = int(sys.argv[4])
-steps = sys.argv[5:]
+label_mode = sys.argv[5]
+steps = sys.argv[6:]
 panel_root = result_root / 'panels'
 panel_root.mkdir(parents=True, exist_ok=True)
 
@@ -298,10 +313,13 @@ for step in steps:
 
 tile_size = (320, 240)
 header = 38
-labels = ['Original'] + [
-    'epoch {} / step {}'.format(epoch_start + i, step)
-    for i, step in enumerate(steps)
-]
+if label_mode == 'step':
+    labels = ['Original'] + ['step {}'.format(step) for step in steps]
+else:
+    labels = ['Original'] + [
+        'epoch {} / step {}'.format(epoch_start + i, step)
+        for i, step in enumerate(steps)
+    ]
 manifest = ['index\tsource\t' + '\t'.join('step_' + step for step in steps) + '\tpanel']
 
 for index in range(expected):

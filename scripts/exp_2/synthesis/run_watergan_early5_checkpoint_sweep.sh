@@ -190,7 +190,8 @@ export OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=4 MKL_NUM_THREADS=4
 
 if [[ "${RESET_OUTPUTS}" == 1 ]]; then
   case "${RESULT_ROOT}" in
-    /media/SSD2/XCX/exp_2/watergan_early5_checkpoint_sweep*)
+    /media/SSD2/XCX/exp_2/watergan_early5_checkpoint_sweep*|\
+    /media/SSD2/XCX/exp_2/watergan_checkpoint_compare_*)
       rm -rf "${RESULT_ROOT}/generated" "${RESULT_ROOT}/panels"
       ;;
     *) echo "Error: refusing to reset unexpected result root: ${RESULT_ROOT}" >&2; exit 1 ;;

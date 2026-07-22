@@ -35,7 +35,9 @@ WATERGAN_IO_WORKERS="${WATERGAN_IO_WORKERS:-2}"
 RESET_BASE_SHARDS="${RESET_BASE_SHARDS:-0}"
 RESET_OUTPUTS="${RESET_OUTPUTS:-0}"
 KEEP_FAILED_MAT="${KEEP_FAILED_MAT:-1}"
-RUN_SMOKE="${RUN_SMOKE:-1}"
+RUN_SMOKE="${RUN_SMOKE:-0}"
+REQUIRE_SMOKE_PASS="${REQUIRE_SMOKE_PASS:-1}"
+SMOKE_PASS_MARKER="${SMOKE_PASS_MARKER:-${REPO_ROOT}/logs/synthesis_full/watergan_step1564_official_mat_smoke64/smoke_passed.env}"
 
 read -r -a GPU_LIST <<< "${GPUS}"
 NUM_GPUS="${#GPU_LIST[@]}"
@@ -130,8 +132,27 @@ FLAT ROOT:           ${FLAT_ROOT}
 FINAL ROOT:          ${FINAL_ROOT}
 RUN SMOKE:           ${RUN_SMOKE}
 RESET OUTPUTS:       ${RESET_OUTPUTS}
+REQUIRE SMOKE PASS:  ${REQUIRE_SMOKE_PASS}
+SMOKE PASS MARKER:   ${SMOKE_PASS_MARKER}
 ============================================================
 EOF
+
+if [[ "${REQUIRE_SMOKE_PASS}" == 1 && "${RUN_SMOKE}" != 1 ]]; then
+  require_file "${SMOKE_PASS_MARKER}"
+  grep -qx "checkpoint_step=${CHECKPOINT_STEP}" "${SMOKE_PASS_MARKER}" || {
+    echo "Error: smoke marker checkpoint does not match model-${CHECKPOINT_STEP}" >&2
+    exit 1
+  }
+  grep -qx "data_root=${TRAIN_DATA_ROOT}" "${SMOKE_PASS_MARKER}" || {
+    echo "Error: smoke marker data root does not match TRAIN_DATA_ROOT" >&2
+    exit 1
+  }
+  grep -qx 'fake_count=64' "${SMOKE_PASS_MARKER}" || {
+    echo "Error: smoke marker does not confirm 64 generated outputs" >&2
+    exit 1
+  }
+  echo "Verified isolated smoke-test marker: ${SMOKE_PASS_MARKER}"
+fi
 
 prepare_base_split() {
   local split="$1" data_root="$2" args=()
@@ -237,6 +258,8 @@ run_inference() {
 }
 
 if [[ "${RUN_SMOKE}" == 1 ]]; then
+  echo "Warning: embedded smoke mode is retained for compatibility."
+  echo "Prefer running smoke_test_watergan_step1564_official_mat.sh first."
   echo "===== Official-MAT smoke test: 64 images on GPU ${GPU_LIST[0]} ====="
   run_inference smoke 0 "${GPU_LIST[0]}" 64
   echo "Smoke test passed. Starting full generation."

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Generate the full WaterGAN train/val set with the official MAT depth input
-# contract. PNG depth is converted one shard at a time and removed after a
-# successful inference, so the complete 260k MAT set is never stored at once.
+# Generate the full WaterGAN train/val set with compact PNG depth by default.
+# The patched loader decodes PNG to the same float32/255 array stored in the
+# official MAT files, avoiding redundant MAT serialization and loadmat work.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
@@ -17,6 +17,7 @@ CHECKPOINT_STEP="${CHECKPOINT_STEP:-1564}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 OUTPUT_HEIGHT="${OUTPUT_HEIGHT:-48}"
 OUTPUT_WIDTH="${OUTPUT_WIDTH:-64}"
+DEPTH_INPUT_MODE="${DEPTH_INPUT_MODE:-png}"
 
 TRAIN_DATA_ROOT="${TRAIN_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/watergan/datasets/imagenet_ruod_watergan_train_full250k_ssd}"
 VAL_DATA_ROOT="${VAL_DATA_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/watergan/datasets/imagenet_ruod_watergan_val_full10k_infer_ssd}"
@@ -29,10 +30,10 @@ LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/synthesis_full/watergan_step1564_officia
 
 GPUS="${GPUS:-0 1 2 3 4 5 6 7}"
 NUM_SHARDS="${NUM_SHARDS:-48}"
-PROCESSES_PER_GPU="${PROCESSES_PER_GPU:-4}"
+PROCESSES_PER_GPU="${PROCESSES_PER_GPU:-1}"
 MAT_WORKERS_PER_PROCESS="${MAT_WORKERS_PER_PROCESS:-${MAT_WORKERS_PER_GPU:-2}}"
 RESTORE_WORKERS="${RESTORE_WORKERS:-16}"
-WATERGAN_IO_WORKERS="${WATERGAN_IO_WORKERS:-2}"
+WATERGAN_IO_WORKERS="${WATERGAN_IO_WORKERS:-16}"
 RESET_BASE_SHARDS="${RESET_BASE_SHARDS:-0}"
 RESET_OUTPUTS="${RESET_OUTPUTS:-0}"
 KEEP_FAILED_MAT="${KEEP_FAILED_MAT:-1}"
@@ -75,6 +76,9 @@ safe_clear_dir() {
 
 [[ "${NUM_GPUS}" -eq 8 ]] || { echo "Error: exactly 8 GPUs are required; got ${NUM_GPUS}" >&2; exit 1; }
 [[ "${NUM_SHARDS}" -eq 48 ]] || { echo "Error: NUM_SHARDS must be 48" >&2; exit 1; }
+[[ "${DEPTH_INPUT_MODE}" == png || "${DEPTH_INPUT_MODE}" == mat ]] || {
+  echo "Error: DEPTH_INPUT_MODE must be png or mat" >&2; exit 1;
+}
 [[ "${PROCESSES_PER_GPU}" -gt 0 ]] || { echo "Error: PROCESSES_PER_GPU must be positive" >&2; exit 1; }
 [[ "${MAX_CONCURRENT}" -le "${NUM_SHARDS}" ]] || {
   echo "Error: concurrent process slots ${MAX_CONCURRENT} exceed NUM_SHARDS=${NUM_SHARDS}" >&2
@@ -123,11 +127,30 @@ printf '%s\n' \
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.sh"
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_inference_aux_outputs.sh"
 
+if [[ "${DEPTH_INPUT_MODE}" == png ]]; then
+  for model in "${WATERGAN_DIR}/modelmhl.py" "${WATERGAN_DIR}/modeljamaica.py"; do
+    grep -q 'def _watergan_load_depth_file' "${model}" || {
+      echo "Error: compact PNG depth loader is missing: ${model}" >&2
+      echo "Run patch_watergan_tf15_compat.sh before inference." >&2
+      exit 1
+    }
+    [[ "$(grep -c '_watergan_load_depth_file(' "${model}")" -ge 2 ]] || {
+      echo "Error: compact PNG depth loader is defined but not used: ${model}" >&2
+      exit 1
+    }
+    grep -q '_watergan_list_depth_files' "${model}" || {
+      echo "Error: compact depth file discovery is missing: ${model}" >&2
+      exit 1
+    }
+  done
+fi
+
 cat <<EOF
 ============================================================
-WaterGAN model-1564 official-MAT full generation
+WaterGAN model-1564 full generation
 ============================================================
 CHECKPOINT:          ${MODEL_DIR}/DCGAN.model-${CHECKPOINT_STEP}
+DEPTH INPUT MODE:    ${DEPTH_INPUT_MODE}
 GPUS:                ${GPUS}
 SHARDS:              ${NUM_SHARDS}
 PROCESSES PER GPU:   ${PROCESSES_PER_GPU}
@@ -147,7 +170,7 @@ SMOKE PASS MARKER:   ${SMOKE_PASS_MARKER}
 ============================================================
 EOF
 
-if [[ "${REQUIRE_SMOKE_PASS}" == 1 && "${RUN_SMOKE}" != 1 ]]; then
+if [[ "${DEPTH_INPUT_MODE}" == mat && "${REQUIRE_SMOKE_PASS}" == 1 && "${RUN_SMOKE}" != 1 ]]; then
   require_file "${SMOKE_PASS_MARKER}"
   grep -qx "checkpoint_step=${CHECKPOINT_STEP}" "${SMOKE_PASS_MARKER}" || {
     echo "Error: smoke marker checkpoint does not match model-${CHECKPOINT_STEP}" >&2
@@ -189,10 +212,10 @@ fi
 
 run_inference() {
   local split="$1" shard_index="$2" gpu="$3" limit="${4:-0}"
-  local tag alias base_shard mat_shard results expected alias_model log
+  local tag alias base_shard mat_shard depth_root results expected alias_model log
   local -a materialize_args
   if [[ "${limit}" -gt 0 ]]; then
-    tag="smoke_${limit}"
+    tag="smoke_${DEPTH_INPUT_MODE}_${limit}"
     alias="${DATA_NAME}_${tag}"
     base_shard="${BASE_SHARD_ROOT}/train/shard0of${NUM_SHARDS}"
     mat_shard="${MAT_SHARD_ROOT}/${tag}"
@@ -214,23 +237,28 @@ run_inference() {
     return 0
   fi
   rm -f "${results}"/fake_*.png "${results}"/air_*.png "${results}"/depth_*.mat
-  safe_clear_dir "${mat_shard}" "${MAT_SHARD_ROOT}/"
-  materialize_args=(
-    --source-shard "${base_shard}"
-    --out-dir "${mat_shard}"
-    --workers "${MAT_WORKERS_PER_PROCESS}"
-    --reset
-  )
-  [[ "${limit}" -gt 0 ]] && materialize_args+=(--limit "${limit}")
-  python tools/materialize_watergan_official_mat_shard.py "${materialize_args[@]}"
+  if [[ "${DEPTH_INPUT_MODE}" == mat ]]; then
+    safe_clear_dir "${mat_shard}" "${MAT_SHARD_ROOT}/"
+    materialize_args=(
+      --source-shard "${base_shard}"
+      --out-dir "${mat_shard}"
+      --workers "${MAT_WORKERS_PER_PROCESS}"
+      --reset
+    )
+    [[ "${limit}" -gt 0 ]] && materialize_args+=(--limit "${limit}")
+    python tools/materialize_watergan_official_mat_shard.py "${materialize_args[@]}"
+    depth_root="${mat_shard}/air_depth"
+  else
+    depth_root="${base_shard}/air_depth"
+  fi
 
   alias_model="${CHECKPOINT_ROOT}/${alias}_water_images_${BATCH_SIZE}_${OUTPUT_HEIGHT}_${OUTPUT_WIDTH}"
   [[ ! -e "${alias_model}" || -L "${alias_model}" ]] || {
     echo "Error: checkpoint alias is not a symlink: ${alias_model}" >&2; return 1;
   }
   ln -sfn "${MODEL_DIR}" "${alias_model}"
-  ln -sfn "${mat_shard}/air_images" "${WATERGAN_DIR}/data/${alias}_air_images"
-  ln -sfn "${mat_shard}/air_depth" "${WATERGAN_DIR}/data/${alias}_air_depth"
+  ln -sfn "${base_shard}/air_images" "${WATERGAN_DIR}/data/${alias}_air_images"
+  ln -sfn "${depth_root}" "${WATERGAN_DIR}/data/${alias}_air_depth"
   ln -sfn "${base_shard}/water_images" "${WATERGAN_DIR}/data/${alias}_water_images"
 
   (
@@ -254,7 +282,9 @@ run_inference() {
         --output_height "${OUTPUT_HEIGHT}" --output_width "${OUTPUT_WIDTH}"
   ) > "${log}" 2>&1 || {
     echo "FAILED ${split}/${tag} gpu=${gpu}; log=${log}" >&2
-    [[ "${KEEP_FAILED_MAT}" == 1 ]] || safe_clear_dir "${mat_shard}" "${MAT_SHARD_ROOT}/"
+    if [[ "${DEPTH_INPUT_MODE}" == mat && "${KEEP_FAILED_MAT}" != 1 ]]; then
+      safe_clear_dir "${mat_shard}" "${MAT_SHARD_ROOT}/"
+    fi
     return 1
   }
   local actual
@@ -263,15 +293,37 @@ run_inference() {
     echo "Error: ${split}/${tag} generated ${actual}/${expected}; log=${log}" >&2
     return 1
   }
-  safe_clear_dir "${mat_shard}" "${MAT_SHARD_ROOT}/"
+  if [[ "${DEPTH_INPUT_MODE}" == mat ]]; then
+    safe_clear_dir "${mat_shard}" "${MAT_SHARD_ROOT}/"
+  fi
   echo "finished ${split}/${tag} gpu=${gpu}: ${actual}/${expected}"
 }
 
 if [[ "${RUN_SMOKE}" == 1 ]]; then
   echo "Warning: embedded smoke mode is retained for compatibility."
-  echo "Prefer running smoke_test_watergan_step1564_official_mat.sh first."
-  echo "===== Official-MAT smoke test: 64 images on GPU ${GPU_LIST[0]} ====="
+  echo "===== ${DEPTH_INPUT_MODE} depth smoke test: 64 images on GPU ${GPU_LIST[0]} ====="
   run_inference smoke 0 "${GPU_LIST[0]}" 64
+  python - "${FLAT_ROOT}/smoke_${DEPTH_INPUT_MODE}_64" <<'PY'
+from __future__ import print_function
+
+import sys
+from pathlib import Path
+
+from PIL import Image
+
+root = Path(sys.argv[1])
+files = sorted(root.glob('fake_*.png'))
+if len(files) != 64:
+    raise SystemExit('smoke output count is {}/64'.format(len(files)))
+for path in files:
+    with Image.open(str(path)) as image:
+        image.load()
+        if image.size != (640, 480):
+            raise SystemExit(
+                'unexpected smoke image size {}: {}'.format(image.size, path)
+            )
+print('decoded smoke outputs: 64/64, size=640x480')
+PY
   echo "Smoke test passed. Starting full generation."
 fi
 

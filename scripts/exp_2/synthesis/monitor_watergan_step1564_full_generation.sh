@@ -43,18 +43,28 @@ while true; do
   remaining=$((EXPECTED_TOTAL_FLAT - current))
   (( remaining < 0 )) && remaining=0
 
-  rate="$(awk -v n="${delta}" -v s="${elapsed}" \
-    'BEGIN { printf "%.2f", s > 0 ? n / s : 0 }')"
-  progress="$(awk -v n="${current}" -v total="${EXPECTED_TOTAL_FLAT}" \
-    'BEGIN { printf "%.2f", total > 0 ? n / total * 100 : 0 }')"
-  eta="$(awk -v remaining="${remaining}" -v rate="${rate}" '
-    BEGIN {
-      if (rate <= 0) { print "unknown"; exit }
-      seconds = remaining / rate
-      hours = int(seconds / 3600)
-      minutes = int((seconds - hours * 3600) / 60)
-      printf "%dh %02dm", hours, minutes
-    }')"
+  rate_scaled=0
+  per_minute=0
+  if (( elapsed > 0 )); then
+    rate_scaled=$((delta * 100 / elapsed))
+    per_minute=$((delta * 60 / elapsed))
+  fi
+  printf -v rate '%d.%02d' $((rate_scaled / 100)) $((rate_scaled % 100))
+
+  progress_scaled=0
+  if (( EXPECTED_TOTAL_FLAT > 0 )); then
+    progress_scaled=$((current * 10000 / EXPECTED_TOTAL_FLAT))
+  fi
+  printf -v progress '%d.%02d' \
+    $((progress_scaled / 100)) $((progress_scaled % 100))
+
+  eta="unknown"
+  if (( delta > 0 )); then
+    eta_seconds=$((remaining * elapsed / delta))
+    eta_hours=$((eta_seconds / 3600))
+    eta_minutes=$(((eta_seconds % 3600) / 60))
+    printf -v eta '%dh %02dm' "${eta_hours}" "${eta_minutes}"
+  fi
 
   train_restored="$(count_images "${FINAL_ROOT}/train")"
   val_restored="$(count_images "${FINAL_ROOT}/val")"
@@ -75,7 +85,7 @@ while true; do
   echo "===== Speed ====="
   printf 'last %ds:       +%d images\n' "${elapsed}" "${delta}"
   printf 'current speed:  %s images/s\n' "${rate}"
-  printf 'per minute:     %.0f images/min\n' "$(awk -v r="${rate}" 'BEGIN { print r * 60 }')"
+  printf 'per minute:     %d images/min\n' "${per_minute}"
   printf 'remaining:      %d images\n' "${remaining}"
   printf 'estimated ETA:  %s\n' "${eta}"
   echo

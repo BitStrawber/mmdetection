@@ -145,6 +145,9 @@ all_model_checkpoint_paths: "DCGAN.model-${SOURCE_CHECKPOINT_STEP}"
 EOF
 
 WATERGAN_DIR="${WATERGAN_DIR}" \
+  bash "${SCRIPT_DIR}/patch_watergan_inference_aux_outputs.sh"
+
+WATERGAN_DIR="${WATERGAN_DIR}" \
   bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.sh"
 
 WATERGAN_DIR="${WATERGAN_DIR}" \

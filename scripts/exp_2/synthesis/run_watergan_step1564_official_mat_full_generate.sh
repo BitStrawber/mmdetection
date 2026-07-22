@@ -29,7 +29,8 @@ LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/synthesis_full/watergan_step1564_officia
 
 GPUS="${GPUS:-0 1 2 3 4 5 6 7}"
 NUM_SHARDS="${NUM_SHARDS:-48}"
-MAT_WORKERS_PER_GPU="${MAT_WORKERS_PER_GPU:-2}"
+PROCESSES_PER_GPU="${PROCESSES_PER_GPU:-4}"
+MAT_WORKERS_PER_PROCESS="${MAT_WORKERS_PER_PROCESS:-${MAT_WORKERS_PER_GPU:-2}}"
 RESTORE_WORKERS="${RESTORE_WORKERS:-16}"
 WATERGAN_IO_WORKERS="${WATERGAN_IO_WORKERS:-2}"
 RESET_BASE_SHARDS="${RESET_BASE_SHARDS:-0}"
@@ -41,6 +42,7 @@ SMOKE_PASS_MARKER="${SMOKE_PASS_MARKER:-${REPO_ROOT}/logs/synthesis_full/waterga
 
 read -r -a GPU_LIST <<< "${GPUS}"
 NUM_GPUS="${#GPU_LIST[@]}"
+MAX_CONCURRENT=$((NUM_GPUS * PROCESSES_PER_GPU))
 MODEL_SUBDIR="${DATA_NAME}_water_images_${BATCH_SIZE}_${OUTPUT_HEIGHT}_${OUTPUT_WIDTH}"
 CHECKPOINT_ROOT="${WATERGAN_DIR}/${CHECKPOINT_NAME}"
 MODEL_DIR="${CHECKPOINT_ROOT}/${MODEL_SUBDIR}"
@@ -73,8 +75,14 @@ safe_clear_dir() {
 
 [[ "${NUM_GPUS}" -eq 8 ]] || { echo "Error: exactly 8 GPUs are required; got ${NUM_GPUS}" >&2; exit 1; }
 [[ "${NUM_SHARDS}" -eq 48 ]] || { echo "Error: NUM_SHARDS must be 48" >&2; exit 1; }
-[[ "${MAT_WORKERS_PER_GPU}" -eq 2 ]] || {
-  echo "Error: MAT_WORKERS_PER_GPU must be 2 (8 GPUs x 2 = 16 workers)" >&2; exit 1;
+[[ "${PROCESSES_PER_GPU}" -gt 0 ]] || { echo "Error: PROCESSES_PER_GPU must be positive" >&2; exit 1; }
+[[ "${MAX_CONCURRENT}" -le "${NUM_SHARDS}" ]] || {
+  echo "Error: concurrent process slots ${MAX_CONCURRENT} exceed NUM_SHARDS=${NUM_SHARDS}" >&2
+  exit 1
+}
+[[ "${MAT_WORKERS_PER_PROCESS}" -gt 0 ]] || {
+  echo "Error: MAT_WORKERS_PER_PROCESS must be positive" >&2
+  exit 1
 }
 for suffix in index meta data-00000-of-00001; do
   require_file "${SOURCE_MODEL_DIR}/DCGAN.model-${CHECKPOINT_STEP}.${suffix}"
@@ -122,8 +130,10 @@ WaterGAN model-1564 official-MAT full generation
 CHECKPOINT:          ${MODEL_DIR}/DCGAN.model-${CHECKPOINT_STEP}
 GPUS:                ${GPUS}
 SHARDS:              ${NUM_SHARDS}
-CONCURRENT INFER:    ${NUM_GPUS} (one process per GPU)
-MAT WORKERS:         $((NUM_GPUS * MAT_WORKERS_PER_GPU)) total
+PROCESSES PER GPU:   ${PROCESSES_PER_GPU}
+CONCURRENT INFER:    ${MAX_CONCURRENT}
+MAT WORKERS/PROCESS: ${MAT_WORKERS_PER_PROCESS}
+MAX MAT WORKERS:     $((MAX_CONCURRENT * MAT_WORKERS_PER_PROCESS))
 RESTORE WORKERS:     ${RESTORE_WORKERS}
 TRAIN DATA:          ${TRAIN_DATA_ROOT}
 VAL DATA:            ${VAL_DATA_ROOT}
@@ -208,7 +218,7 @@ run_inference() {
   materialize_args=(
     --source-shard "${base_shard}"
     --out-dir "${mat_shard}"
-    --workers "${MAT_WORKERS_PER_GPU}"
+    --workers "${MAT_WORKERS_PER_PROCESS}"
     --reset
   )
   [[ "${limit}" -gt 0 ]] && materialize_args+=(--limit "${limit}")
@@ -266,35 +276,55 @@ if [[ "${RUN_SMOKE}" == 1 ]]; then
 fi
 
 run_split() {
-  local split="$1" expected_total="$2" wave index gpu pid failed wait_index
+  local split="$1" expected_total="$2" slot pid failed wait_index
+  local failure_marker="${LOG_ROOT}/${split}/generation_failed.marker"
   local pids=() labels=()
-  echo "===== Generate ${split} in 48 shards ====="
-  for ((wave=0; wave<NUM_SHARDS; wave+=NUM_GPUS)); do
-    pids=(); labels=()
-    for ((wait_index=0; wait_index<NUM_GPUS; wait_index++)); do
-      index=$((wave + wait_index))
-      (( index < NUM_SHARDS )) || break
-      gpu="${GPU_LIST[$wait_index]}"
-      run_inference "${split}" "${index}" "${gpu}" 0 &
-      pid="$!"
-      pids+=("${pid}")
-      labels+=("${split}/shard${index}of${NUM_SHARDS}:gpu${gpu}")
-      echo "started ${labels[-1]} pid=${pid}"
-    done
-    failed=0
-    for wait_index in "${!pids[@]}"; do
-      if wait "${pids[$wait_index]}"; then
-        echo "completed ${labels[$wait_index]}"
+  mkdir -p "${LOG_ROOT}/${split}"
+  rm -f "${failure_marker}"
+
+  run_worker_slot() {
+    local worker_slot="$1" gpu index
+    gpu="${GPU_LIST[$((worker_slot % NUM_GPUS))]}"
+    for ((index=worker_slot; index<NUM_SHARDS; index+=MAX_CONCURRENT)); do
+      if [[ -e "${failure_marker}" ]]; then
+        echo "slot${worker_slot}: stop before shard${index} because another slot failed"
+        return 1
+      fi
+      echo "dispatch ${split}/shard${index}of${NUM_SHARDS}:gpu${gpu}:slot${worker_slot}"
+      if run_inference "${split}" "${index}" "${gpu}" 0; then
+        echo "completed ${split}/shard${index}of${NUM_SHARDS}:gpu${gpu}:slot${worker_slot}"
       else
-        echo "FAILED ${labels[$wait_index]}" >&2
-        failed=1
+        printf 'split=%s slot=%s gpu=%s shard=%s\n' \
+          "${split}" "${worker_slot}" "${gpu}" "${index}" > "${failure_marker}"
+        echo "FAILED ${split}/shard${index}of${NUM_SHARDS}:gpu${gpu}:slot${worker_slot}" >&2
+        return 1
       fi
     done
-    [[ "${failed}" == 0 ]] || {
-      echo "Error: wave starting at shard ${wave} failed; later waves were not started" >&2
-      return 1
-    }
+  }
+
+  echo "===== Generate ${split}: ${MAX_CONCURRENT} persistent worker slots ====="
+  for ((slot=0; slot<MAX_CONCURRENT && slot<NUM_SHARDS; slot++)); do
+    run_worker_slot "${slot}" &
+    pid="$!"
+    pids+=("${pid}")
+    labels+=("${split}:slot${slot}:gpu${GPU_LIST[$((slot % NUM_GPUS))]}")
+    echo "started worker ${labels[-1]} pid=${pid}"
   done
+
+  failed=0
+  for wait_index in "${!pids[@]}"; do
+    if wait "${pids[$wait_index]}"; then
+      echo "finished worker ${labels[$wait_index]}"
+    else
+      echo "FAILED worker ${labels[$wait_index]}" >&2
+      failed=1
+    fi
+  done
+  [[ "${failed}" == 0 && ! -e "${failure_marker}" ]] || {
+    echo "Error: one or more ${split} worker slots failed" >&2
+    [[ -s "${failure_marker}" ]] && cat "${failure_marker}" >&2
+    return 1
+  }
 
   local jobs="${LOG_ROOT}/${split}/restore_jobs.tsv" shard manifest results out log
   mkdir -p "${LOG_ROOT}/${split}" "${RESTORE_ROOT}/${split}"

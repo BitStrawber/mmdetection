@@ -128,6 +128,8 @@ WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_inference_aux_outputs.sh"
 
 if [[ "${DEPTH_INPUT_MODE}" == png ]]; then
+  WATERGAN_DIR="${WATERGAN_DIR}" \
+    bash "${SCRIPT_DIR}/patch_watergan_png_depth_loader.sh"
   for model in "${WATERGAN_DIR}/modelmhl.py" "${WATERGAN_DIR}/modeljamaica.py"; do
     grep -q 'def _watergan_load_depth_file' "${model}" || {
       echo "Error: compact PNG depth loader is missing: ${model}" >&2

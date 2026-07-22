@@ -265,8 +265,11 @@ EOF
     }
     echo "Checkpoint seed loaded successfully. Waiting for cumulative epoch 5."
 
-    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 3907 || \
-          ! grep -q 'model_checkpoint_path: "DCGAN.model-3907"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
+    # A later save may advance the TensorFlow checkpoint pointer before this
+    # polling loop wakes up. The immutable model-3907 file triple is the
+    # authoritative readiness condition; the pointer does not need to remain
+    # on model-3907 after those files are complete.
+    while ! checkpoint_complete "${RESUME_MODEL_DIR}" 3907; do
       if ! kill -0 "${train_pid}" 2>/dev/null; then
         echo "Error: training stopped before cumulative epoch 5 was saved" >&2
         tail -n 120 "${TRAIN_LOG}" >&2
@@ -308,8 +311,7 @@ EOF
     # epoch-10 completion check while the main process proceeds to inference,
     # restoration, packaging, and upload with the frozen epoch-5 checkpoint.
     (
-      while ! checkpoint_complete "${RESUME_MODEL_DIR}" 7812 || \
-            ! grep -q 'model_checkpoint_path: "DCGAN.model-7812"' "${RESUME_MODEL_DIR}/checkpoint" 2>/dev/null; do
+      while ! checkpoint_complete "${RESUME_MODEL_DIR}" 7812; do
         if ! kill -0 "${train_pid}" 2>/dev/null; then
           echo "Error: training stopped before cumulative epoch 10 was saved" >&2
           tail -n 120 "${TRAIN_LOG}" >&2

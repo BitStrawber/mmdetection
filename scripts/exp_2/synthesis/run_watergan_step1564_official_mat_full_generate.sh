@@ -56,7 +56,8 @@ export WATERGAN_SAVE_AUX_OUTPUTS=0 WATERGAN_IO_WORKERS
 export OMP_NUM_THREADS=2 OPENBLAS_NUM_THREADS=2 MKL_NUM_THREADS=2
 
 count_fake() {
-  find "$1" -maxdepth 1 -type f -name 'fake_*.png' 2>/dev/null | wc -l | tr -d ' '
+  find "$1" -maxdepth 1 -type f -name 'fake_*.png' -size +0c 2>/dev/null \
+    | wc -l | tr -d ' '
 }
 
 count_images() {

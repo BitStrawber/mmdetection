@@ -15,10 +15,13 @@ LOG_ROOT="${LOG_ROOT:-${REPO_ROOT}/logs/synthesis_full/watergan_step1564_officia
 NUM_SHARDS="${NUM_SHARDS:-48}"
 BATCH_SIZE="${BATCH_SIZE:-64}"
 OVERWRITE="${OVERWRITE:-0}"
+RESTORE_WORKERS="${RESTORE_WORKERS:-16}"
 
 FINAL_TRAIN="${FINAL_ROOT}/train"
 RESTORE_LOG_ROOT="${LOG_ROOT}/train_restore_only"
 PROGRESS_FILE="${RESTORE_LOG_ROOT}/progress.tsv"
+SUMMARY_ROOT="${RESTORE_LOG_ROOT}/summaries"
+DONE_ROOT="${RESTORE_LOG_ROOT}/done"
 LOCK_FILE="${LOG_ROOT}/restore_train_only.lock"
 
 [[ "${NUM_SHARDS}" -eq 48 ]] || {
@@ -29,12 +32,16 @@ LOCK_FILE="${LOG_ROOT}/restore_train_only.lock"
   echo "Error: OVERWRITE must be 0 or 1" >&2
   exit 1
 }
+[[ "${RESTORE_WORKERS}" -gt 0 && "${RESTORE_WORKERS}" -le "${NUM_SHARDS}" ]] || {
+  echo "Error: RESTORE_WORKERS must be between 1 and ${NUM_SHARDS}" >&2
+  exit 1
+}
 command -v flock >/dev/null 2>&1 || {
   echo "Error: flock is required" >&2
   exit 1
 }
 
-mkdir -p "${FINAL_TRAIN}" "${RESTORE_LOG_ROOT}"
+mkdir -p "${FINAL_TRAIN}" "${RESTORE_LOG_ROOT}" "${SUMMARY_ROOT}" "${DONE_ROOT}"
 exec 9>>"${LOCK_FILE}"
 if ! flock -n 9; then
   echo "Error: another standalone train restore holds ${LOCK_FILE}" >&2
@@ -42,6 +49,7 @@ if ! flock -n 9; then
 fi
 
 printf 'shard\twritten\tskipped\tfinished_at\n' > "${PROGRESS_FILE}"
+find "${DONE_ROOT}" -maxdepth 1 -type f -name 'shard*.done' -delete
 
 count_images() {
   find "$1" -type f \
@@ -56,16 +64,20 @@ echo "BASE SHARDS: ${BASE_SHARD_ROOT}/train"
 echo "FLAT ROOT:   ${FLAT_ROOT}/train"
 echo "FINAL TRAIN: ${FINAL_TRAIN}"
 echo "SHARDS:      ${NUM_SHARDS}"
-echo "PY WORKERS:  1"
+echo "PY WORKERS:  ${RESTORE_WORKERS}"
 echo "OVERWRITE:   ${OVERWRITE}"
 echo "PROGRESS:    ${PROGRESS_FILE}"
 echo "============================================================"
 
-for ((index=0; index<NUM_SHARDS; index++)); do
+restore_one() {
+  local index="$1" shard manifest results log summary
+  local expected valid written skipped missing bad_names duplicates
+  local -a args
   shard="shard${index}of${NUM_SHARDS}"
   manifest="${BASE_SHARD_ROOT}/train/${shard}/watergan_air_manifest.jsonl"
   results="${FLAT_ROOT}/train/${shard}"
   log="${RESTORE_LOG_ROOT}/${shard}.log"
+  summary="${SUMMARY_ROOT}/${shard}.json"
 
   [[ -s "${manifest}" ]] || {
     echo "Error: missing manifest: ${manifest}" >&2
@@ -87,12 +99,13 @@ for ((index=0; index<NUM_SHARDS; index++)); do
     --results-dir "${results}"
     --out-dir "${FINAL_TRAIN}"
     --batch-size "${BATCH_SIZE}"
+    --summary-path "${summary}"
   )
   [[ "${OVERWRITE}" == 1 ]] && args+=(--overwrite)
   python tools/restore_watergan_fake.py "${args[@]}" > "${log}" 2>&1
 
   read -r written skipped missing bad_names duplicates < <(
-    python - "${FINAL_TRAIN}/restore_watergan_fake_summary.json" <<'PY'
+    python - "${summary}" <<'PY'
 import json
 import sys
 
@@ -113,6 +126,35 @@ PY
   printf '%s\t%s\t%s\t%s\n' \
     "${shard}" "${written}" "${skipped}" "$(date --iso-8601=seconds)" \
     >> "${PROGRESS_FILE}"
+  : > "${DONE_ROOT}/${shard}.done"
+}
+
+failed=0
+for ((batch_start=0; batch_start<NUM_SHARDS; batch_start+=RESTORE_WORKERS)); do
+  pids=()
+  labels=()
+  batch_end=$((batch_start + RESTORE_WORKERS))
+  (( batch_end > NUM_SHARDS )) && batch_end="${NUM_SHARDS}"
+
+  for ((index=batch_start; index<batch_end; index++)); do
+    restore_one "${index}" &
+    pids+=("$!")
+    labels+=("shard${index}of${NUM_SHARDS}")
+  done
+
+  for offset in "${!pids[@]}"; do
+    if wait "${pids[$offset]}"; then
+      echo "completed ${labels[$offset]}"
+    else
+      echo "FAILED ${labels[$offset]}" >&2
+      failed=1
+    fi
+  done
+
+  [[ "${failed}" == 0 ]] || {
+    echo "Error: one or more standalone restore workers failed" >&2
+    exit 1
+  }
 done
 
 rm -f "${FINAL_TRAIN}/restore_watergan_fake_summary.json"

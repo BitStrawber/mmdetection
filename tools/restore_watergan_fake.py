@@ -33,6 +33,11 @@ def parse_args():
     parser.add_argument('--results-dir', required=True,
                         help='WaterGAN flat results directory containing fake_*.png')
     parser.add_argument('--out-dir', required=True)
+    parser.add_argument(
+        '--summary-path',
+        default='',
+        help='Optional summary JSON path. Defaults to <out-dir>/restore_watergan_fake_summary.json.',
+    )
     parser.add_argument('--batch-size', type=int, default=0,
                         help='Batch size used during WaterGAN generation. 0 infers from max item index + 1.')
     parser.add_argument('--overwrite', action='store_true')
@@ -126,7 +131,12 @@ def main():
         'duplicate_indices': len(duplicate_indices),
         'duplicate_index_samples': duplicate_indices[:20],
     }
-    summary_path = out_dir / 'restore_watergan_fake_summary.json'
+    summary_path = (
+        Path(args.summary_path)
+        if args.summary_path
+        else out_dir / 'restore_watergan_fake_summary.json'
+    )
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding='utf-8')
     print(json.dumps(summary, indent=2, ensure_ascii=False))
 

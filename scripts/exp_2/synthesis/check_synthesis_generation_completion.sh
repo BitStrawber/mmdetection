@@ -99,11 +99,13 @@ configs = {
         "depth_base": depth_root / "watergan",
         "generated": {
             "train": [
+                syn_root / "watergan" / "generated_step1564_official_mat" / "train",
                 syn_root / "watergan" / "generated" / "train",
                 work_root / "watergan" / "generated" / "train",
                 work_root / "watergan" / "results" / "train",
             ],
             "val": [
+                syn_root / "watergan" / "generated_step1564_official_mat" / "val",
                 syn_root / "watergan" / "generated" / "val",
                 work_root / "watergan" / "generated" / "val",
                 work_root / "watergan" / "results" / "val",

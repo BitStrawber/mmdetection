@@ -40,8 +40,10 @@ KEEP_FAILED_MAT="${KEEP_FAILED_MAT:-1}"
 RUN_SMOKE="${RUN_SMOKE:-0}"
 REQUIRE_SMOKE_PASS="${REQUIRE_SMOKE_PASS:-1}"
 SMOKE_PASS_MARKER="${SMOKE_PASS_MARKER:-${REPO_ROOT}/logs/synthesis_full/watergan_step1564_official_mat_smoke64/smoke_passed.env}"
+SPLITS="${SPLITS:-train val}"
 
 read -r -a GPU_LIST <<< "${GPUS}"
+read -r -a SPLIT_LIST <<< "${SPLITS}"
 NUM_GPUS="${#GPU_LIST[@]}"
 MAX_CONCURRENT=$((NUM_GPUS * PROCESSES_PER_GPU))
 MODEL_SUBDIR="${DATA_NAME}_water_images_${BATCH_SIZE}_${OUTPUT_HEIGHT}_${OUTPUT_WIDTH}"
@@ -74,7 +76,7 @@ safe_clear_dir() {
   esac
 }
 
-[[ "${NUM_GPUS}" -eq 8 ]] || { echo "Error: exactly 8 GPUs are required; got ${NUM_GPUS}" >&2; exit 1; }
+[[ "${NUM_GPUS}" -gt 0 ]] || { echo "Error: GPUS must not be empty" >&2; exit 1; }
 [[ "${NUM_SHARDS}" -eq 48 ]] || { echo "Error: NUM_SHARDS must be 48" >&2; exit 1; }
 [[ "${DEPTH_INPUT_MODE}" == png || "${DEPTH_INPUT_MODE}" == mat ]] || {
   echo "Error: DEPTH_INPUT_MODE must be png or mat" >&2; exit 1;
@@ -84,6 +86,34 @@ safe_clear_dir() {
   echo "Error: concurrent process slots ${MAX_CONCURRENT} exceed NUM_SHARDS=${NUM_SHARDS}" >&2
   exit 1
 }
+[[ "${#SPLIT_LIST[@]}" -gt 0 ]] || {
+  echo "Error: SPLITS must contain train, val, or both" >&2
+  exit 1
+}
+RUN_TRAIN=0
+RUN_VAL=0
+for split in "${SPLIT_LIST[@]}"; do
+  case "${split}" in
+    train)
+      [[ "${RUN_TRAIN}" == 0 ]] || {
+        echo "Error: duplicate split in SPLITS: train" >&2
+        exit 1
+      }
+      RUN_TRAIN=1
+      ;;
+    val)
+      [[ "${RUN_VAL}" == 0 ]] || {
+        echo "Error: duplicate split in SPLITS: val" >&2
+        exit 1
+      }
+      RUN_VAL=1
+      ;;
+    *)
+      echo "Error: unsupported split in SPLITS: ${split}" >&2
+      exit 1
+      ;;
+  esac
+done
 [[ "${MAT_WORKERS_PER_PROCESS}" -gt 0 ]] || {
   echo "Error: MAT_WORKERS_PER_PROCESS must be positive" >&2
   exit 1
@@ -91,37 +121,52 @@ safe_clear_dir() {
 for suffix in index meta data-00000-of-00001; do
   require_file "${SOURCE_MODEL_DIR}/DCGAN.model-${CHECKPOINT_STEP}.${suffix}"
 done
-for item in "${TRAIN_DATA_ROOT}" "${VAL_DATA_ROOT}"; do
-  require_file "${item}/watergan_air_manifest.jsonl"
-done
-[[ "$(wc -l < "${TRAIN_DATA_ROOT}/watergan_air_manifest.jsonl")" -eq 250000 ]] || {
-  echo "Error: train manifest is not 250000" >&2; exit 1;
-}
-[[ "$(wc -l < "${VAL_DATA_ROOT}/watergan_air_manifest.jsonl")" -eq 10000 ]] || {
-  echo "Error: val manifest is not 10000" >&2; exit 1;
-}
+if [[ "${RUN_TRAIN}" == 1 ]]; then
+  require_file "${TRAIN_DATA_ROOT}/watergan_air_manifest.jsonl"
+  [[ "$(wc -l < "${TRAIN_DATA_ROOT}/watergan_air_manifest.jsonl")" -eq 250000 ]] || {
+    echo "Error: train manifest is not 250000" >&2; exit 1;
+  }
+fi
+if [[ "${RUN_VAL}" == 1 ]]; then
+  require_file "${VAL_DATA_ROOT}/watergan_air_manifest.jsonl"
+  [[ "$(wc -l < "${VAL_DATA_ROOT}/watergan_air_manifest.jsonl")" -eq 10000 ]] || {
+    echo "Error: val manifest is not 10000" >&2; exit 1;
+  }
+fi
 
 mkdir -p "${LOG_ROOT}" "${BASE_SHARD_ROOT}" "${MAT_SHARD_ROOT}" \
   "${FLAT_ROOT}" "${RESTORE_ROOT}" "${WATERGAN_DIR}/data" "${MODEL_DIR}"
 
-# Prevent multiple launchers from writing the same shard/result directories.
-# The descriptor remains open for the lifetime of this launcher and is also
-# inherited by its worker shells, so the lock survives while generation runs.
+# Prevent multiple launchers from writing the same split. Train and val use
+# separate descriptors so they can run concurrently without sharing outputs.
 command -v flock >/dev/null 2>&1 || {
   echo "Error: flock is required to protect WaterGAN shard outputs" >&2
   exit 1
 }
-LOCK_FILE="${LOG_ROOT}/generation.lock"
-exec 9>>"${LOCK_FILE}"
-if ! flock -n 9; then
-  echo "Error: another WaterGAN launcher already holds ${LOCK_FILE}" >&2
-  echo "Active matching processes:" >&2
-  pgrep -af \
-    '[r]un_watergan_step1564_official_mat_full_generate|[m]ainmhl.py.*checkpoint_watergan_legacy_bs64_step1564_final' \
-    >&2 || true
-  exit 1
+if [[ "${RUN_TRAIN}" == 1 ]]; then
+  TRAIN_LOCK_FILE="${LOG_ROOT}/generation_train.lock"
+  exec 8>>"${TRAIN_LOCK_FILE}"
+  if ! flock -n 8; then
+    echo "Error: another WaterGAN train launcher holds ${TRAIN_LOCK_FILE}" >&2
+    exit 1
+  fi
+  printf 'pid=%s split=train started=%s\n' "$$" "$(date --iso-8601=seconds)" >&8
 fi
-printf 'pid=%s started=%s\n' "$$" "$(date --iso-8601=seconds)" >&9
+if [[ "${RUN_VAL}" == 1 ]]; then
+  VAL_LOCK_FILE="${LOG_ROOT}/generation_val.lock"
+  exec 9>>"${VAL_LOCK_FILE}"
+  if ! flock -n 9; then
+    echo "Error: another WaterGAN val launcher holds ${VAL_LOCK_FILE}" >&2
+    exit 1
+  fi
+  printf 'pid=%s split=val started=%s\n' "$$" "$(date --iso-8601=seconds)" >&9
+fi
+
+# Serialize the brief shared checkpoint and source-patching setup. The split
+# lock remains independent after this section, allowing concurrent inference.
+SETUP_LOCK_FILE="${LOG_ROOT}/generation_setup.lock"
+exec 7>>"${SETUP_LOCK_FILE}"
+flock 7
 
 # Freeze the selected trajectory checkpoint under an isolated TensorFlow
 # checkpoint state. This prevents a later checkpoint pointer from silently
@@ -138,10 +183,12 @@ for suffix in index meta data-00000-of-00001; do
     cp -a "${source_file}" "${frozen_file}"
   fi
 done
+checkpoint_tmp="${MODEL_DIR}/checkpoint.$$"
 printf '%s\n' \
   "model_checkpoint_path: \"DCGAN.model-${CHECKPOINT_STEP}\"" \
   "all_model_checkpoint_paths: \"DCGAN.model-${CHECKPOINT_STEP}\"" \
-  > "${MODEL_DIR}/checkpoint"
+  > "${checkpoint_tmp}"
+mv -f "${checkpoint_tmp}" "${MODEL_DIR}/checkpoint"
 
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.sh"
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_inference_aux_outputs.sh"
@@ -167,6 +214,7 @@ if [[ "${DEPTH_INPUT_MODE}" == png ]]; then
     }
   done
 fi
+flock -u 7
 
 cat <<EOF
 ============================================================
@@ -176,6 +224,7 @@ CHECKPOINT:          ${MODEL_DIR}/DCGAN.model-${CHECKPOINT_STEP}
 DEPTH INPUT MODE:    ${DEPTH_INPUT_MODE}
 GPUS:                ${GPUS}
 SHARDS:              ${NUM_SHARDS}
+SPLITS:              ${SPLITS}
 PROCESSES PER GPU:   ${PROCESSES_PER_GPU}
 CONCURRENT INFER:    ${MAX_CONCURRENT}
 MAT WORKERS/PROCESS: ${MAT_WORKERS_PER_PROCESS}
@@ -224,12 +273,21 @@ prepare_base_split() {
     | tee "${LOG_ROOT}/prepare_${split}_base_shards.log"
 }
 
-prepare_base_split train "${TRAIN_DATA_ROOT}"
-prepare_base_split val "${VAL_DATA_ROOT}"
+if [[ "${RUN_TRAIN}" == 1 ]]; then
+  prepare_base_split train "${TRAIN_DATA_ROOT}"
+fi
+if [[ "${RUN_VAL}" == 1 ]]; then
+  prepare_base_split val "${VAL_DATA_ROOT}"
+fi
 
 if [[ "${RESET_OUTPUTS}" == 1 ]]; then
-  safe_clear_dir "${FLAT_ROOT}" "/media/SSD2/XCX/exp_2/watergan_step1564_official_mat_"
-  safe_clear_dir "${FINAL_ROOT}" "/media/HDD1/XCX/exp_2/synthetic_imagenet/watergan/generated_step1564_official_mat"
+  for split in "${SPLIT_LIST[@]}"; do
+    safe_clear_dir "${FLAT_ROOT}/${split}" \
+      "/media/SSD2/XCX/exp_2/watergan_step1564_official_mat_"
+    safe_clear_dir "${FINAL_ROOT}/${split}" \
+      "/media/HDD1/XCX/exp_2/synthetic_imagenet/watergan/generated_step1564_official_mat"
+    safe_clear_dir "${RESTORE_ROOT}/${split}" "${RESTORE_ROOT}/"
+  done
   mkdir -p "${FLAT_ROOT}" "${FINAL_ROOT}" "${RESTORE_ROOT}"
 fi
 
@@ -436,13 +494,18 @@ run_split() {
   echo "restored ${split}: ${final_count}/${expected_total}, classes=${classes}/1000"
 }
 
-run_split train 250000
-run_split val 10000
+if [[ "${RUN_TRAIN}" == 1 ]]; then
+  run_split train 250000
+fi
+if [[ "${RUN_VAL}" == 1 ]]; then
+  run_split val 10000
+fi
 
 cat <<EOF
 ============================================================
 WaterGAN official-MAT generation complete
 ============================================================
+selected splits: ${SPLITS}
 train: $(count_images "${FINAL_ROOT}/train")/250000
 val:   $(count_images "${FINAL_ROOT}/val")/10000
 root:  ${FINAL_ROOT}

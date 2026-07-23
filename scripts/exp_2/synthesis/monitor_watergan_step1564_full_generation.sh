@@ -18,6 +18,10 @@ count_fake() {
   find "$1" -type f -name 'fake_*.png' 2>/dev/null | wc -l | tr -d ' '
 }
 
+count_zero_fake() {
+  find "$1" -type f -name 'fake_*.png' -size 0 2>/dev/null | wc -l | tr -d ' '
+}
+
 count_images() {
   find "$1" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) \
     2>/dev/null | wc -l | tr -d ' '
@@ -25,16 +29,22 @@ count_images() {
 
 trap 'echo; echo "Monitoring stopped; generation was not interrupted."; exit 0' INT TERM
 
-previous="$(count_fake "${FLAT_ROOT}")"
+previous_total="$(count_fake "${FLAT_ROOT}")"
+previous_zero="$(count_zero_fake "${FLAT_ROOT}")"
+previous=$((previous_total - previous_zero))
 previous_time="$(date +%s)"
-echo "Monitoring baseline: ${previous}/${EXPECTED_TOTAL_FLAT} flat images"
+echo "Monitoring baseline: ${previous}/${EXPECTED_TOTAL_FLAT} valid flat images"
 echo "First throughput sample will appear in ${INTERVAL} seconds."
 
 while true; do
   sleep "${INTERVAL}"
 
-  train_flat="$(count_fake "${FLAT_ROOT}/train")"
-  val_flat="$(count_fake "${FLAT_ROOT}/val")"
+  train_total="$(count_fake "${FLAT_ROOT}/train")"
+  val_total="$(count_fake "${FLAT_ROOT}/val")"
+  train_zero="$(count_zero_fake "${FLAT_ROOT}/train")"
+  val_zero="$(count_zero_fake "${FLAT_ROOT}/val")"
+  train_flat=$((train_total - train_zero))
+  val_flat=$((val_total - val_zero))
   current=$((train_flat + val_flat))
   current_time="$(date +%s)"
   elapsed=$((current_time - previous_time))
@@ -77,8 +87,10 @@ while true; do
   date
   echo
   echo "===== Flat generation ====="
-  printf 'train:    %8d / %8d\n' "${train_flat}" "${EXPECTED_TRAIN_FLAT}"
-  printf 'val:      %8d / %8d\n' "${val_flat}" "${EXPECTED_VAL_FLAT}"
+  printf 'train:    %8d / %8d valid  (total=%d, zero=%d)\n' \
+    "${train_flat}" "${EXPECTED_TRAIN_FLAT}" "${train_total}" "${train_zero}"
+  printf 'val:      %8d / %8d valid  (total=%d, zero=%d)\n' \
+    "${val_flat}" "${EXPECTED_VAL_FLAT}" "${val_total}" "${val_zero}"
   printf 'total:    %8d / %8d  (%s%%)\n' \
     "${current}" "${EXPECTED_TOTAL_FLAT}" "${progress}"
   echo
@@ -94,15 +106,31 @@ while true; do
   printf 'val:      %8d /  10000\n' "${val_restored}"
   echo
   echo "===== Processes ====="
-  if [[ -s "${LOG_ROOT}/launcher.pid" ]]; then
-    launcher_pid="$(cat "${LOG_ROOT}/launcher.pid")"
-    if ps -p "${launcher_pid}" >/dev/null 2>&1; then
-      ps -ww -p "${launcher_pid}" -o pid,ppid,stat,etime,%cpu,%mem,args
-    else
-      echo "launcher PID ${launcher_pid}: NOT RUNNING"
+  found_pid_file=0
+  for split in train val; do
+    pid_file="${LOG_ROOT}/launcher_${split}.pid"
+    if [[ -s "${pid_file}" ]]; then
+      found_pid_file=1
+      launcher_pid="$(cat "${pid_file}")"
+      if ps -p "${launcher_pid}" >/dev/null 2>&1; then
+        printf '%s launcher:\n' "${split}"
+        ps -ww -p "${launcher_pid}" -o pid,ppid,stat,etime,%cpu,%mem,args
+      else
+        echo "${split} launcher PID ${launcher_pid}: NOT RUNNING"
+      fi
     fi
-  else
-    echo "launcher PID file: MISSING"
+  done
+  if [[ "${found_pid_file}" == 0 ]]; then
+    if [[ -s "${LOG_ROOT}/launcher.pid" ]]; then
+      launcher_pid="$(cat "${LOG_ROOT}/launcher.pid")"
+      if ps -p "${launcher_pid}" >/dev/null 2>&1; then
+        ps -ww -p "${launcher_pid}" -o pid,ppid,stat,etime,%cpu,%mem,args
+      else
+        echo "launcher PID ${launcher_pid}: NOT RUNNING"
+      fi
+    else
+      echo "launcher PID files: MISSING"
+    fi
   fi
   echo "active WaterGAN shard processes: ${process_count:-0}"
   echo
@@ -112,9 +140,14 @@ while true; do
     --format=csv,noheader 2>/dev/null || true
   echo
   echo "===== Recent pipeline events ====="
-  grep -aE \
-    'reuse shard|started shard|finished shard|FAILED|complete|Error|Traceback' \
-    "${LOG_ROOT}/launcher.log" 2>/dev/null | tail -n 20 || true
+  shopt -s nullglob
+  launcher_logs=("${LOG_ROOT}"/launcher*.log)
+  if [[ "${#launcher_logs[@]}" -gt 0 ]]; then
+    grep -ahE \
+      'reuse |dispatch |started |finished |completed |FAILED|complete|Error|Traceback' \
+      "${launcher_logs[@]}" 2>/dev/null | tail -n 20 || true
+  fi
+  shopt -u nullglob
   echo
   echo "===== Recent errors ====="
   grep -RInaE \

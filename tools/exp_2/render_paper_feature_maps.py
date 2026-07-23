@@ -13,6 +13,8 @@ from typing import Dict, Iterable, List, Sequence, Tuple
 import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageOps
+from torchvision import models
+from torchvision.transforms.functional import to_pil_image
 
 
 RESAMPLE = getattr(Image, 'Resampling', Image)
@@ -124,6 +126,17 @@ def fit_fixed(image: Image.Image, size: Tuple[int, int]) -> Image.Image:
     return canvas
 
 
+def build_imagenet_model_input(image: Image.Image) -> Image.Image:
+    """Reproduce the exact visible crop consumed by the saved ResNet features."""
+    weights = models.ResNet50_Weights.DEFAULT
+    preprocess = weights.transforms()
+    tensor = preprocess(image.convert('RGB'))
+    mean = tensor.new_tensor(preprocess.mean)[:, None, None]
+    std = tensor.new_tensor(preprocess.std)[:, None, None]
+    visible = (tensor * std + mean).clamp(0.0, 1.0)
+    return to_pil_image(visible).convert('RGB')
+
+
 def draw_boxes(
     image: Image.Image,
     boxes: Sequence[Sequence[float]],
@@ -200,7 +213,8 @@ def write_subset_readme(
             args.low_percentile, args.high_percentile),
         'palette: deep blue -> blue -> cyan -> yellow',
         'fixed image size: {}x{}'.format(args.tile_width, args.tile_height),
-        'five-panel order: Original | Stage 1 | Stage 2 | Stage 3 | Stage 4',
+        'five-panel order: {} | Stage 1 | Stage 2 | Stage 3 | Stage 4'.format(
+            'Model Input' if subset == 'imagenet' else 'Original'),
         'prediction boxes: {}'.format('enabled' if with_boxes else 'disabled'),
     ]
     if with_boxes:
@@ -208,6 +222,11 @@ def write_subset_readme(
             'box source: J2 Cascade R-CNN predictions',
             'score threshold: {}'.format(args.score_threshold),
             'maximum boxes per image: {}'.format(args.max_boxes),
+        ])
+    if subset == 'imagenet':
+        lines.extend([
+            'first panel: actual torchvision ResNet-50 model input crop',
+            'ImageNet spatial reference: resized and center-cropped network input',
         ])
     (subset_root / 'README.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
 
@@ -298,6 +317,12 @@ def main() -> None:
             with Image.open(str(input_path)) as opened:
                 original = ImageOps.exif_transpose(opened).convert('RGB')
 
+            spatial_reference = (
+                build_imagenet_model_input(original)
+                if subset == 'imagenet'
+                else original
+            )
+
             boxes: List[List[float]] = []
             labels: List[int] = []
             scores: List[float] = []
@@ -316,15 +341,16 @@ def main() -> None:
                 normalized = aggregate_feature(
                     feature, args.low_percentile, args.high_percentile)
                 heatmap = colorize_blue_yellow(normalized)
-                heatmap = heatmap.resize(original.size, RESAMPLE.BICUBIC)
+                heatmap = heatmap.resize(spatial_reference.size, RESAMPLE.BICUBIC)
                 stage_images.append(heatmap)
                 stage_names.append(stage_name)
 
             sample_name = '{:02d}_{}'.format(index, input_path.stem)
             for variant_name, with_boxes in variant_specs[subset]:
                 paths = variant_paths[variant_name]
-                variant_original = draw_boxes(original, boxes, (255, 230, 0)) \
-                    if with_boxes else original
+                variant_original = draw_boxes(
+                    spatial_reference, boxes, (255, 230, 0)) \
+                    if with_boxes else spatial_reference
                 fixed_original = fit_fixed(variant_original, size)
                 original_output = paths['originals'] / '{}_original.png'.format(sample_name)
                 fixed_original.save(str(original_output))
@@ -343,7 +369,9 @@ def main() -> None:
                     fit_fixed(rendered, size).save(str(output))
                     feature_outputs.append(str(output.relative_to(out_root / variant_name)))
 
-                tiles = [labeled_tile(variant_original, 'Original', size, args.label_height)]
+                input_label = 'Model Input' if subset == 'imagenet' else 'Original'
+                tiles = [labeled_tile(
+                    variant_original, input_label, size, args.label_height)]
                 tiles.extend(
                     labeled_tile(image, 'Stage {}'.format(stage_index), size, args.label_height)
                     for stage_index, image in enumerate(rendered_stages, start=1)

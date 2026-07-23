@@ -20,6 +20,7 @@ SYN_ROOT="${SYN_ROOT:-/media/HDD1/XCX/exp_2/synthetic_imagenet}"
 UWDF_ROOT="${UWDF_ROOT:-/media/SSD1/XCX/exp_2/synthesis_work/uwdf_controlnet_ipadapter}"
 METHODS="${METHODS:-uwnr syreanet uwdf}"
 RESET_PARTIAL="${RESET_PARTIAL:-0}"
+REPLACE_ARCHIVE="${REPLACE_ARCHIVE:-0}"
 VERIFY_ARCHIVE="${VERIFY_ARCHIVE:-0}"
 TRAIN_EXPECTED="${TRAIN_EXPECTED:-250000}"
 VAL_EXPECTED="${VAL_EXPECTED:-10000}"
@@ -150,11 +151,23 @@ package_method() {
   fi
 
   if [[ -f "${archive}" ]]; then
-    echo "Reuse existing final archive: ${archive}"
-    if [[ ! -f "${archive}.sha256" ]]; then
-      write_checksum "${archive}"
+    if [[ "${REPLACE_ARCHIVE}" == 1 ]]; then
+      if partial_is_held "${archive}"; then
+        echo "Error: existing archive is held by a running process: ${archive}" >&2
+        exit 1
+      fi
+      backup_root="${ARCHIVE_ROOT}/replaced_archives/$(date +%Y%m%d_%H%M%S)"
+      mkdir -p "${backup_root}"
+      echo "Move replaced archive to: ${backup_root}"
+      mv -- "${archive}" "${backup_root}/"
+      [[ ! -e "${archive}.sha256" ]] || mv -- "${archive}.sha256" "${backup_root}/"
+    else
+      echo "Reuse existing final archive: ${archive}"
+      if [[ ! -f "${archive}.sha256" ]]; then
+        write_checksum "${archive}"
+      fi
+      return
     fi
-    return
   fi
 
   prepare_partial_path "${partial}"
@@ -199,6 +212,7 @@ SYN_ROOT:        ${SYN_ROOT}
 UWDF_ROOT:       ${UWDF_ROOT}
 METHODS:         ${METHODS}
 RESET_PARTIAL:   ${RESET_PARTIAL}
+REPLACE_ARCHIVE: ${REPLACE_ARCHIVE}
 VERIFY_ARCHIVE:  ${VERIFY_ARCHIVE}
 Expected:        train=${TRAIN_EXPECTED}, val=${VAL_EXPECTED}
 ============================================================
@@ -246,8 +260,8 @@ for method in ${METHODS}; do
       package_method \
         watergan \
         "${SYN_ROOT}" \
-        watergan/generated/train \
-        watergan/generated/val \
+        watergan/generated_step1564_official_mat/train \
+        watergan/generated_step1564_official_mat/val \
         watergan/generated/train \
         watergan/generated/val
       ;;

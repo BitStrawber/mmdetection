@@ -104,6 +104,25 @@ done
 mkdir -p "${LOG_ROOT}" "${BASE_SHARD_ROOT}" "${MAT_SHARD_ROOT}" \
   "${FLAT_ROOT}" "${RESTORE_ROOT}" "${WATERGAN_DIR}/data" "${MODEL_DIR}"
 
+# Prevent multiple launchers from writing the same shard/result directories.
+# The descriptor remains open for the lifetime of this launcher and is also
+# inherited by its worker shells, so the lock survives while generation runs.
+command -v flock >/dev/null 2>&1 || {
+  echo "Error: flock is required to protect WaterGAN shard outputs" >&2
+  exit 1
+}
+LOCK_FILE="${LOG_ROOT}/generation.lock"
+exec 9>>"${LOCK_FILE}"
+if ! flock -n 9; then
+  echo "Error: another WaterGAN launcher already holds ${LOCK_FILE}" >&2
+  echo "Active matching processes:" >&2
+  pgrep -af \
+    '[r]un_watergan_step1564_official_mat_full_generate|[m]ainmhl.py.*checkpoint_watergan_legacy_bs64_step1564_final' \
+    >&2 || true
+  exit 1
+fi
+printf 'pid=%s started=%s\n' "$$" "$(date --iso-8601=seconds)" >&9
+
 # Freeze the selected trajectory checkpoint under an isolated TensorFlow
 # checkpoint state. This prevents a later checkpoint pointer from silently
 # changing the model used by inference.

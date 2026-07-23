@@ -36,8 +36,7 @@ patched = 0
 verified = 0
 pattern = re.compile(
     r'(?P<indent>^[ \t]*)def _watergan_imread'
-    r'\(filename, flatten=False, mode=None\):\r?\n'
-    r'(?P<body_indent>[ \t]+)(?=with _PILImage\.open\(filename\) as image:)',
+    r'\([^)\r\n]*\):\r?\n',
     flags=re.MULTILINE,
 )
 
@@ -56,7 +55,7 @@ for path in paths:
     if match is None:
         raise RuntimeError(
             'Could not locate _watergan_imread body in {}'.format(path))
-    body_indent = match.group('body_indent')
+    body_indent = match.group('indent') + '    '
     block = ''.join(
         body_indent + line if line.strip() else line
         for line in injected.splitlines(True))

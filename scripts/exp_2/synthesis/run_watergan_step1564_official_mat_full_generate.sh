@@ -126,6 +126,8 @@ printf '%s\n' \
 
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_gpu_selection.sh"
 WATERGAN_DIR="${WATERGAN_DIR}" bash "${SCRIPT_DIR}/patch_watergan_inference_aux_outputs.sh"
+WATERGAN_DIR="${WATERGAN_DIR}" \
+  bash "${SCRIPT_DIR}/patch_watergan_pillow_png_metadata.sh"
 
 if [[ "${DEPTH_INPUT_MODE}" == png ]]; then
   WATERGAN_DIR="${WATERGAN_DIR}" \

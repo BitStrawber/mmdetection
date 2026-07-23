@@ -397,9 +397,19 @@ try:
     scipy.misc.imread
 except AttributeError:
     from PIL import Image as _PILImage
+    from PIL import PngImagePlugin as _WaterganPngImagePlugin
     import numpy as _watergan_np
 
     def _watergan_imread(filename, flatten=False, mode=None):
+        # WaterGAN exp_2 trusted-PNG metadata allowance.
+        # Some prepared ImageNet PNGs contain valid ICC profiles larger than
+        # Pillow's conservative default metadata limit.
+        _WaterganPngImagePlugin.MAX_TEXT_CHUNK = max(
+            _WaterganPngImagePlugin.MAX_TEXT_CHUNK, 128 * 1024 * 1024
+        )
+        _WaterganPngImagePlugin.MAX_TEXT_MEMORY = max(
+            _WaterganPngImagePlugin.MAX_TEXT_MEMORY, 256 * 1024 * 1024
+        )
         with _PILImage.open(filename) as image:
             if flatten:
                 image = image.convert('L')

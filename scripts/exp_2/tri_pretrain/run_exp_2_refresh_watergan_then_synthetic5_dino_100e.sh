@@ -16,6 +16,7 @@ HF_REVISION="${HF_REVISION:-main}"
 HF_ARCHIVE_PATH="${HF_ARCHIVE_PATH:-archives/watergan_train_val.tar}"
 HF_CHECKSUM_PATH="${HF_CHECKSUM_PATH:-archives/SHA256SUMS.txt}"
 EXPECTED_WATERGAN_SHA256="${EXPECTED_WATERGAN_SHA256:-92b1258ed3efbd51d5078fdc99e6ea15022512ac044c96cdd19f094fcfc16b79}"
+HF_BIN="${HF_BIN:-hf}"
 
 SYNTH_ROOT="${SYNTH_ROOT:-/media/SSD1/XCX/exp_2/synthetic_imagenet}"
 DOWNLOAD_ROOT="${DOWNLOAD_ROOT:-$SYNTH_ROOT/.hf_transfer_watergan}"
@@ -161,15 +162,16 @@ find_generated_root() {
 }
 
 download_watergan() {
-    command -v hf >/dev/null 2>&1 || die "hf CLI not found"
-    hf auth whoami >/dev/null 2>&1 || die "Hugging Face login required: hf auth login"
+    command -v "$HF_BIN" >/dev/null 2>&1 || die "hf CLI not found: $HF_BIN"
+    "$HF_BIN" auth whoami >/dev/null 2>&1 \
+        || die "Hugging Face login required: $HF_BIN auth login"
 
     echo "[$(timestamp)] Download corrected WaterGAN archive"
     echo "repo=$HF_REPO_ID revision=$HF_REVISION"
     echo "archive=$HF_ARCHIVE_PATH"
     HF_HOME="${HF_HOME:-$SYNTH_ROOT/.huggingface_cache}" \
     HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}" \
-    hf download \
+    "$HF_BIN" download \
         "$HF_REPO_ID" \
         "$HF_ARCHIVE_PATH" \
         "$HF_CHECKSUM_PATH" \

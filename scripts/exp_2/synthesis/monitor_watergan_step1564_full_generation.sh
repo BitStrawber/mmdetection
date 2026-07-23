@@ -140,19 +140,27 @@ while true; do
     --format=csv,noheader 2>/dev/null || true
   echo
   echo "===== Recent pipeline events ====="
-  shopt -s nullglob
-  launcher_logs=("${LOG_ROOT}"/launcher*.log)
+  launcher_logs=()
+  for split in train val; do
+    latest_log="$(
+      find "${LOG_ROOT}" -maxdepth 1 -type f \
+        -name "launcher_${split}*.log" -printf '%T@|%p\n' 2>/dev/null \
+        | sort -t '|' -k1,1nr | head -n 1 | cut -d '|' -f 2-
+    )"
+    [[ -n "${latest_log}" ]] && launcher_logs+=("${latest_log}")
+  done
   if [[ "${#launcher_logs[@]}" -gt 0 ]]; then
     grep -ahE \
       'reuse |dispatch |started |finished |completed |FAILED|complete|Error|Traceback' \
       "${launcher_logs[@]}" 2>/dev/null | tail -n 20 || true
   fi
-  shopt -u nullglob
   echo
   echo "===== Recent errors ====="
-  grep -RInaE \
-    'Traceback|FAILED|Error|InvalidArgument|ResourceExhausted|CUDA out of memory|No such file' \
-    "${LOG_ROOT}" 2>/dev/null | tail -n 10 || true
+  if [[ "${#launcher_logs[@]}" -gt 0 ]]; then
+    grep -aHinE \
+      'Traceback|FAILED|Error|InvalidArgument|ResourceExhausted|CUDA out of memory|No such file' \
+      "${launcher_logs[@]}" 2>/dev/null | tail -n 10 || true
+  fi
   echo
   echo "Press Ctrl+C to stop monitoring only."
 

@@ -337,6 +337,73 @@ validate_datasets() {
     done
 }
 
+validate_effective_dataset_paths() {
+    python - \
+        "$R50_DET_CONFIG" "$RUOD_ROOT" det \
+        "$VITS_DET_CONFIG" "$RUOD_ROOT" det \
+        "$R50_MASK_CONFIG" "$UIIS_ROOT" mask \
+        "$VITS_MASK_CONFIG" "$UIIS_ROOT" mask <<'PY'
+import sys
+from pathlib import Path
+from mmengine.config import Config
+
+arguments = sys.argv[1:]
+for index in range(0, len(arguments), 3):
+    config_path, root_string, task = arguments[index:index + 3]
+    root = Path(root_string)
+    cfg = Config.fromfile(config_path)
+
+    train_ann = root / 'annotations/instances_train.json'
+    val_ann = root / 'annotations/instances_val.json'
+    train_img = root / 'train'
+    val_img = root / 'val'
+
+    cfg.merge_from_dict({
+        'train_dataloader.dataset.data_root': f'{root}/',
+        'train_dataloader.dataset.ann_file': str(train_ann),
+        'train_dataloader.dataset.data_prefix.img': f'{train_img}/',
+        'val_dataloader.dataset.data_root': f'{root}/',
+        'val_dataloader.dataset.ann_file': str(val_ann),
+        'val_dataloader.dataset.data_prefix.img': f'{val_img}/',
+        'test_dataloader.dataset.data_root': f'{root}/',
+        'test_dataloader.dataset.ann_file': str(val_ann),
+        'test_dataloader.dataset.data_prefix.img': f'{val_img}/',
+        'val_evaluator.ann_file': str(val_ann),
+        'test_evaluator.ann_file': str(val_ann),
+    })
+
+    train_dataset = cfg.train_dataloader.dataset
+    val_dataset = cfg.val_dataloader.dataset
+    test_dataset = cfg.test_dataloader.dataset
+
+    checks = {
+        'train_ann': train_dataset.ann_file == str(train_ann),
+        'train_img': train_dataset.data_prefix.img == f'{train_img}/',
+        'val_ann': val_dataset.ann_file == str(val_ann),
+        'val_img': val_dataset.data_prefix.img == f'{val_img}/',
+        'test_ann': test_dataset.ann_file == str(val_ann),
+        'test_img': test_dataset.data_prefix.img == f'{val_img}/',
+        'val_evaluator': cfg.val_evaluator.ann_file == str(val_ann),
+        'test_evaluator': cfg.test_evaluator.ann_file == str(val_ann),
+    }
+
+    print('=' * 100)
+    print('effective config:', config_path)
+    print('task:', task)
+    print('train ann:', train_dataset.ann_file)
+    print('train img:', train_dataset.data_prefix.img)
+    print('val ann:', val_dataset.ann_file)
+    print('val img:', val_dataset.data_prefix.img)
+    print('path checks:', checks)
+
+    if not all(checks.values()):
+        raise SystemExit(
+            f'Effective dataset path validation failed: {config_path}')
+
+print('ALL EFFECTIVE DATASET PATHS: PASS')
+PY
+}
+
 run_task() {
     local dataset="$1"
     local backbone="$2"
@@ -395,8 +462,14 @@ run_task() {
                 model.backbone.init_cfg.type=Pretrained \
                 model.backbone.init_cfg.checkpoint="$checkpoint" \
                 train_dataloader.dataset.data_root="$data_root/" \
+                train_dataloader.dataset.ann_file="$data_root/annotations/instances_train.json" \
+                train_dataloader.dataset.data_prefix.img="$data_root/train/" \
                 val_dataloader.dataset.data_root="$data_root/" \
+                val_dataloader.dataset.ann_file="$data_root/annotations/instances_val.json" \
+                val_dataloader.dataset.data_prefix.img="$data_root/val/" \
                 test_dataloader.dataset.data_root="$data_root/" \
+                test_dataloader.dataset.ann_file="$data_root/annotations/instances_val.json" \
+                test_dataloader.dataset.data_prefix.img="$data_root/val/" \
                 val_evaluator.ann_file="$data_root/annotations/instances_val.json" \
                 test_evaluator.ann_file="$data_root/annotations/instances_val.json" \
                 default_hooks.checkpoint.save_best="$save_best" \
@@ -415,6 +488,8 @@ run_task() {
                 model.backbone.init_cfg.type=Pretrained \
                 model.backbone.init_cfg.checkpoint="$checkpoint" \
                 test_dataloader.dataset.data_root="$data_root/" \
+                test_dataloader.dataset.ann_file="$data_root/annotations/instances_val.json" \
+                test_dataloader.dataset.data_prefix.img="$data_root/val/" \
                 test_evaluator.ann_file="$data_root/annotations/instances_val.json" \
             2>&1 | tee "$test_log"
     fi
@@ -444,6 +519,7 @@ done
 
 validate_datasets
 validate_configs
+validate_effective_dataset_paths
 
 for dataset in imagenet100k realuw100k synthetic5_100k; do
     convert_one "$dataset" resnet50 resnet50 ""

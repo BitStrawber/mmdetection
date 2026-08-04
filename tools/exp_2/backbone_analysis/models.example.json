@@ -3,11 +3,7 @@
     {
       "id": "imagenet_backbone",
       "kind": "backbone",
-      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
-      "checkpoint": "/path/to/imagenet/checkpoint.pth",
-      "state_dict_key": "teacher",
-      "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.5,
+      "config": "configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py",
       "layers": {
         "res2": "layer1",
         "res3": "layer2",
@@ -18,8 +14,8 @@
     {
       "id": "cascade_ruod_backbone",
       "kind": "detector",
-      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
-      "checkpoint": "/path/to/ruod/cascade/best.pth",
+      "config": "configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/J2/det/checkpoint/best_coco_bbox_mAP_epoch_18.pth",
       "layers": {
         "res2": "layer1",
         "res3": "layer2",

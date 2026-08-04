@@ -129,12 +129,16 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
     if kind not in {'backbone', 'detector'}:
         raise ValueError(f'{model_id}: kind must be backbone or detector')
     config_path = existing_file(spec['config'])
-    checkpoint_path = existing_file(spec['checkpoint'])
+    checkpoint_value = spec.get('checkpoint')
+    checkpoint_path = existing_file(checkpoint_value) if checkpoint_value else None
     config = Config.fromfile(str(config_path))
-    if config.model.get('backbone', {}).get('init_cfg') is not None:
+    backbone_init_cfg = config.model.get('backbone', {}).get('init_cfg')
+    if checkpoint_path is not None and backbone_init_cfg is not None:
         config.model.backbone.init_cfg = None
 
     if kind == 'detector':
+        if checkpoint_path is None:
+            raise ValueError(f'{model_id}: detector requires a checkpoint')
         model = init_detector(config, str(checkpoint_path), device=device)
         load_report = {
             'kind': kind,
@@ -142,7 +146,7 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
             'checkpoint': str(checkpoint_path),
             'loader': 'mmdet.apis.init_detector',
         }
-    else:
+    elif checkpoint_path is not None:
         model = init_detector(config, checkpoint=None, device=device)
         checkpoint = _load_checkpoint(str(checkpoint_path), map_location='cpu')
         state = state_dict_from_checkpoint(checkpoint, spec.get('state_dict_key'))
@@ -164,6 +168,21 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
             'unexpected_keys': list(result.unexpected_keys),
         }
         del checkpoint, state, matched
+    else:
+        if backbone_init_cfg is None:
+            raise ValueError(
+                f'{model_id}: backbone has no checkpoint and its config has '
+                'no model.backbone.init_cfg')
+        model = init_detector(config, checkpoint=None, device=device)
+        model.backbone.init_weights()
+        load_report = {
+            'kind': kind,
+            'config': str(config_path),
+            'checkpoint': None,
+            'loader': 'model.backbone.init_cfg',
+            'init_cfg': dict(backbone_init_cfg),
+            'init_weights_called': True,
+        }
 
     model.eval()
     layer_map = spec.get('layers') or {

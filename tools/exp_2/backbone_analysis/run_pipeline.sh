@@ -6,9 +6,9 @@ set -euo pipefail
 
 RUOD_ANN="${RUOD_ANN:?Set RUOD_ANN to a COCO annotation JSON}"
 RUOD_IMAGE_ROOT="${RUOD_IMAGE_ROOT:?Set RUOD_IMAGE_ROOT to the image directory}"
-BACKBONE_CONFIG="${BACKBONE_CONFIG:?Set BACKBONE_CONFIG to a detector config used for preprocessing}"
-BACKBONE_CHECKPOINT="${BACKBONE_CHECKPOINT:?Set BACKBONE_CHECKPOINT}"
-CASCADE_CONFIG="${CASCADE_CONFIG:?Set CASCADE_CONFIG}"
+BACKBONE_CONFIG="${BACKBONE_CONFIG:-configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py}"
+BACKBONE_CHECKPOINT="${BACKBONE_CHECKPOINT:-}"
+CASCADE_CONFIG="${CASCADE_CONFIG:-configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py}"
 CASCADE_CHECKPOINT="${CASCADE_CHECKPOINT:?Set CASCADE_CHECKPOINT}"
 OUT_ROOT="${OUT_ROOT:?Set OUT_ROOT}"
 
@@ -60,7 +60,6 @@ backbone = {
     'id': 'imagenet_backbone',
     'kind': 'backbone',
     'config': backbone_config,
-    'checkpoint': backbone_checkpoint,
     'minimum_match_ratio': float(minimum_match),
     'layers': {
         'res2': 'layer1',
@@ -69,6 +68,8 @@ backbone = {
         'res5': 'layer4',
     },
 }
+if backbone_checkpoint:
+    backbone['checkpoint'] = backbone_checkpoint
 if state_key:
     backbone['state_dict_key'] = state_key
 if prefix:

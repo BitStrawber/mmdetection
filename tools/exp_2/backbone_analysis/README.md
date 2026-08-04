@@ -56,7 +56,21 @@ Copy and edit `models.example.json`, or let `run_pipeline.sh` generate a runtime
 configuration. A `backbone` entry builds a detector shell solely to reuse the
 same MMDetection preprocessing and loads the checkpoint into `model.backbone`.
 A `detector` entry loads a complete checkpoint but exports only configured
-backbone hooks.
+backbone hooks. When a `backbone` entry omits `checkpoint`, the loader preserves
+and executes `model.backbone.init_cfg` from the config. This is the intended
+mode for the supervised torchvision baseline in this experiment:
+
+```json
+{
+  "id": "imagenet_backbone",
+  "kind": "backbone",
+  "config": "configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py"
+}
+```
+
+That J2 config inherits `checkpoint='torchvision://resnet50'`. It must not be
+replaced by a DINO 100e checkpoint. The paired detector uses the same J2 config
+and the RUOD-trained J2 Cascade R-CNN checkpoint.
 
 Raw DINO checkpoints commonly need:
 
@@ -159,12 +173,9 @@ environment variables:
 ```bash
 RUOD_ANN=/path/to/instances_val.json \
 RUOD_IMAGE_ROOT=/path/to/val \
-BACKBONE_CONFIG=configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py \
-BACKBONE_CHECKPOINT=/path/to/imagenet/checkpoint.pth \
-BACKBONE_STATE_KEY=teacher \
-BACKBONE_PREFIX=module.backbone. \
-CASCADE_CONFIG=configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py \
-CASCADE_CHECKPOINT=/path/to/ruod/best.pth \
+BACKBONE_CONFIG=configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py \
+CASCADE_CONFIG=configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j2.py \
+CASCADE_CHECKPOINT=/media/SSD1/XCX/exp_2/BitStrawber_Output/J2/det/checkpoint/best_coco_bbox_mAP_epoch_18.pth \
 OUT_ROOT=/path/to/analysis/run01 \
 SAMPLES=50 DEVICE=cuda:0 \
 bash tools/exp_2/backbone_analysis/run_pipeline.sh

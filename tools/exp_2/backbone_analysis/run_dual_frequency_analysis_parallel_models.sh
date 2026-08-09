@@ -6,6 +6,8 @@ set -euo pipefail
 # parallel. Analysis starts only after every model/variant passes validation.
 
 BASE_OUT_ROOT="${BASE_OUT_ROOT:?Set BASE_OUT_ROOT}"
+FIXED_OUT_ROOT="${FIXED_OUT_ROOT:-${BASE_OUT_ROOT}/fixed}"
+DATASET_ENERGY_OUT_ROOT="${DATASET_ENERGY_OUT_ROOT:-${BASE_OUT_ROOT}/dataset_energy}"
 RUOD_ANN="${RUOD_ANN:?Set RUOD_ANN}"
 RUOD_IMAGE_ROOT="${RUOD_IMAGE_ROOT:?Set RUOD_IMAGE_ROOT}"
 MODELS_CONFIG_INPUT="${MODELS_CONFIG_INPUT:?Set MODELS_CONFIG_INPUT}"
@@ -45,6 +47,8 @@ RUN_DETECTION_FREQUENCY_EVAL="${RUN_DETECTION_FREQUENCY_EVAL:-0}"
 RUN_FOURIER_SENSITIVITY="${RUN_FOURIER_SENSITIVITY:-0}"
 RUN_TSNE="${RUN_TSNE:-1}"
 ACTIVATION_JOBS="${ACTIVATION_JOBS:-7}"
+FIXED_ACTIVATION_JOBS="${FIXED_ACTIVATION_JOBS:-${ACTIVATION_JOBS}}"
+DATASET_ENERGY_ACTIVATION_JOBS="${DATASET_ENERGY_ACTIVATION_JOBS:-3}"
 ACTIVATION_PNG_COMPRESS_LEVEL="${ACTIVATION_PNG_COMPRESS_LEVEL:-1}"
 ACTIVATION_REUSE_COMPLETE="${ACTIVATION_REUSE_COMPLETE:-1}"
 
@@ -127,7 +131,6 @@ common_pipeline_env=(
   FREQUENCY_ENERGY_QUANTILES="${FREQUENCY_ENERGY_QUANTILES}"
   FREQUENCY_ENERGY_BINS="${FREQUENCY_ENERGY_BINS}"
   FREQUENCY_ENERGY_COLOR_SPACE="${FREQUENCY_ENERGY_COLOR_SPACE}"
-  ACTIVATION_JOBS="${ACTIVATION_JOBS}"
   ACTIVATION_PNG_COMPRESS_LEVEL="${ACTIVATION_PNG_COMPRESS_LEVEL}"
   ACTIVATION_REUSE_COMPLETE="${ACTIVATION_REUSE_COMPLETE}"
 )
@@ -319,6 +322,7 @@ validate_policy() {
 run_analysis() {
   local policy="$1"
   local out_root="$2"
+  local activation_jobs="$3"
   CUDA_VISIBLE_DEVICES="${ANALYSIS_GPU}" \
   env "${common_pipeline_env[@]}" \
     OUT_ROOT="${out_root}" \
@@ -337,6 +341,7 @@ run_analysis() {
     RUN_DETECTION_FREQUENCY_EVAL="${RUN_DETECTION_FREQUENCY_EVAL}" \
     RUN_FOURIER_SENSITIVITY="${RUN_FOURIER_SENSITIVITY}" \
     RUN_TSNE="${RUN_TSNE}" \
+    ACTIVATION_JOBS="${activation_jobs}" \
     OVERWRITE="${OVERWRITE_ANALYSIS}" \
     bash "${PIPELINE}"
 }
@@ -347,6 +352,8 @@ cat <<EOF
 Sequential-policy, parallel-model backbone analysis
 ============================================================
 BASE_OUT_ROOT:      ${BASE_OUT_ROOT}
+FIXED_OUT_ROOT:     ${FIXED_OUT_ROOT}
+ENERGY_OUT_ROOT:    ${DATASET_ENERGY_OUT_ROOT}
 POLICIES:           ${POLICIES}
 MODELS:             ${model_list[*]}
 GPUS:               ${gpu_list[*]}
@@ -357,7 +364,8 @@ SPATIAL_SAMPLES:    ${SPATIAL_SAMPLES}
 CKA_X_MODEL:        ${CKA_X_MODEL}
 CKA_Y_MODELS:       ${CKA_Y_MODELS}
 OVERWRITE_ANALYSIS: ${OVERWRITE_ANALYSIS}
-ACTIVATION_JOBS:    ${ACTIVATION_JOBS}
+FIXED_ACT_JOBS:     ${FIXED_ACTIVATION_JOBS}
+ENERGY_ACT_JOBS:    ${DATASET_ENERGY_ACTIVATION_JOBS}
 PNG_COMPRESSION:    ${ACTIVATION_PNG_COMPRESS_LEVEL}
 ============================================================
 EOF
@@ -365,11 +373,13 @@ EOF
 for policy in "${policy_list[@]}"; do
   case "${policy}" in
     fixed)
-      policy_root="${BASE_OUT_ROOT}/fixed"
+      policy_root="${FIXED_OUT_ROOT}"
+      policy_activation_jobs="${FIXED_ACTIVATION_JOBS}"
       ;;
     dataset-energy|dataset_energy)
       policy="dataset-energy"
-      policy_root="${BASE_OUT_ROOT}/dataset_energy"
+      policy_root="${DATASET_ENERGY_OUT_ROOT}"
+      policy_activation_jobs="${DATASET_ENERGY_ACTIVATION_JOBS}"
       ;;
     *)
       echo "Error: unsupported policy: ${policy}" >&2
@@ -420,7 +430,7 @@ for policy in "${policy_list[@]}"; do
 
   echo
   echo "===== unified ${policy} analysis ====="
-  run_analysis "${policy}" "${policy_root}"
+  run_analysis "${policy}" "${policy_root}" "${policy_activation_jobs}"
   date --iso-8601=seconds > "${policy_root}/ANALYSIS_COMPLETE"
   echo "completed policy: ${policy}"
 done

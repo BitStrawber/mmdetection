@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 
@@ -16,8 +16,16 @@ from .common import ensure_empty_or_create, parse_csv, write_json
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--feature-root', required=True)
-    parser.add_argument('--model-a', required=True)
-    parser.add_argument('--model-b', required=True)
+    parser.add_argument(
+        '--model-a', '--y-model', dest='model_a', default='',
+        help='Single model shown on the heatmap y-axis (matrix rows).')
+    parser.add_argument(
+        '--y-models', default='',
+        help='Comma-separated y-axis models. Overrides --y-model and stacks '
+             'MODEL/LAYER rows in one reference heatmap.')
+    parser.add_argument(
+        '--model-b', '--x-model', dest='model_b', required=True,
+        help='Model shown on the heatmap x-axis (matrix columns).')
     parser.add_argument('--variant', default='clean')
     parser.add_argument('--layers-a', default='', help='Default: discover all .npy layers')
     parser.add_argument('--layers-b', default='')
@@ -64,54 +72,83 @@ def linear_cka(first: np.ndarray, second: np.ndarray, eps: float) -> float:
 def main() -> None:
     args = parse_args()
     feature_root = Path(args.feature_root).expanduser().resolve()
-    root_a = feature_root / 'features' / args.model_a / args.variant
+    y_models = parse_csv(args.y_models)
+    if not y_models:
+        y_models = [args.model_a] if args.model_a else []
+    if not y_models:
+        raise ValueError('Set --y-model or --y-models')
+    if len(set(y_models)) != len(y_models):
+        raise ValueError(f'Duplicate y-axis models: {y_models}')
     root_b = feature_root / 'features' / args.model_b / args.variant
-    if not root_a.is_dir() or not root_b.is_dir():
-        raise FileNotFoundError(f'Missing feature roots: {root_a}, {root_b}')
-    layers_a = discover_layers(root_a, args.layers_a)
+    if not root_b.is_dir():
+        raise FileNotFoundError(f'Missing x-axis feature root: {root_b}')
     layers_b = discover_layers(root_b, args.layers_b)
-    if not layers_a or not layers_b:
+    if not layers_b:
         raise ValueError('No layers were selected')
-    features_a = {layer: load_feature(root_a, layer) for layer in layers_a}
     features_b = {layer: load_feature(root_b, layer) for layer in layers_b}
-    sample_counts = {
-        value.shape[0] for value in list(features_a.values()) + list(features_b.values())
-    }
+    y_rows: List[Tuple[str, str, np.ndarray]] = []
+    requested_y_layers = parse_csv(args.layers_a)
+    for model in y_models:
+        root_a = feature_root / 'features' / model / args.variant
+        if not root_a.is_dir():
+            raise FileNotFoundError(f'Missing y-axis feature root: {root_a}')
+        layers_a = requested_y_layers or discover_layers(root_a, '')
+        if not layers_a:
+            raise ValueError(f'No layers were selected for {model}')
+        for layer in layers_a:
+            y_rows.append((model, layer, load_feature(root_a, layer)))
+    sample_counts = {value.shape[0] for value in features_b.values()}
+    sample_counts.update(value.shape[0] for _, _, value in y_rows)
     if len(sample_counts) != 1:
         raise ValueError(f'Feature files have inconsistent sample counts: {sample_counts}')
-    matrix = np.empty((len(layers_a), len(layers_b)), dtype=np.float64)
-    for row, layer_a in enumerate(layers_a):
+    matrix = np.empty((len(y_rows), len(layers_b)), dtype=np.float64)
+    for row, (_, _, feature_a) in enumerate(y_rows):
         for column, layer_b in enumerate(layers_b):
             matrix[row, column] = linear_cka(
-                features_a[layer_a], features_b[layer_b], args.eps)
+                feature_a, features_b[layer_b], args.eps)
 
     out_dir = ensure_empty_or_create(Path(args.out_dir), args.overwrite)
     np.save(out_dir / 'cka_matrix.npy', matrix.astype(np.float32), allow_pickle=False)
     with (out_dir / 'cka_matrix.tsv').open('w', encoding='utf-8', newline='') as handle:
         writer = csv.writer(handle, delimiter='\t')
-        writer.writerow(['layer'] + layers_b)
-        for layer, values in zip(layers_a, matrix):
-            writer.writerow([layer] + [f'{value:.8f}' for value in values])
+        writer.writerow(['y_model', 'y_layer'] + layers_b)
+        for (model, layer, _), values in zip(y_rows, matrix):
+            writer.writerow(
+                [model, layer] + [f'{value:.8f}' for value in values])
     write_json(out_dir / 'cka_metadata.json', {
         'feature_root': str(feature_root),
-        'model_a': args.model_a,
+        'model_a': y_models[0] if len(y_models) == 1 else None,
         'model_b': args.model_b,
+        'y_axis_model': y_models[0] if len(y_models) == 1 else None,
+        'y_axis_models': y_models,
+        'y_axis_rows': [
+            {'model': model, 'layer': layer}
+            for model, layer, _ in y_rows
+        ],
+        'x_axis_model': args.model_b,
         'variant': args.variant,
-        'layers_a': layers_a,
+        'layers_a': requested_y_layers or sorted({layer for _, layer, _ in y_rows}),
         'layers_b': layers_b,
         'samples': sample_counts.pop(),
         'method': 'linear CKA on column-centered pooled features',
     })
     try:
         import matplotlib.pyplot as plt
-        figure, axis = plt.subplots(figsize=(1.4 * len(layers_b) + 2, 1.2 * len(layers_a) + 2))
+        figure, axis = plt.subplots(
+            figsize=(1.4 * len(layers_b) + 2, 0.55 * len(y_rows) + 2.5))
         image = axis.imshow(matrix, vmin=0.0, vmax=1.0, cmap='viridis')
         axis.set_xticks(range(len(layers_b)))
         axis.set_xticklabels(layers_b, rotation=45, ha='right')
-        axis.set_yticks(range(len(layers_a)))
-        axis.set_yticklabels(layers_a)
-        axis.set_xlabel(args.model_b)
-        axis.set_ylabel(args.model_a)
+        axis.set_yticks(range(len(y_rows)))
+        if len(y_models) == 1:
+            y_labels = [layer for _, layer, _ in y_rows]
+        else:
+            y_labels = [f'{model} / {layer}' for model, layer, _ in y_rows]
+        axis.set_yticklabels(y_labels)
+        axis.set_xlabel(f'{args.model_b} layers')
+        axis.set_ylabel(
+            f'{y_models[0]} layers' if len(y_models) == 1
+            else 'Comparison model layers')
         for row in range(matrix.shape[0]):
             for column in range(matrix.shape[1]):
                 axis.text(column, row, f'{matrix[row, column]:.3f}',

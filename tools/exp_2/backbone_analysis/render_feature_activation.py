@@ -103,17 +103,33 @@ def mask_from_boxes(
     return mask
 
 
-def draw_boxes(image: Image.Image, boxes: Sequence[Sequence[float]], width: int) -> Image.Image:
+def draw_boxes(
+    image: Image.Image,
+    boxes: Sequence[Sequence[float]],
+    width: int,
+    source_size: Tuple[int, int],
+) -> Image.Image:
     result = image.copy()
     draw = ImageDraw.Draw(result)
+    source_width = max(float(source_size[0]), 1.0)
+    source_height = max(float(source_size[1]), 1.0)
     for box in boxes:
-        draw.rectangle(tuple(float(value) for value in box), outline=(255, 40, 40), width=width)
+        x1, y1, x2, y2 = [float(value) for value in box]
+        scaled = (
+            x1 * image.width / source_width,
+            y1 * image.height / source_height,
+            x2 * image.width / source_width,
+            y2 * image.height / source_height,
+        )
+        draw.rectangle(scaled, outline=(255, 40, 40), width=width)
     return result
 
 
 def image_path(row: dict) -> Path:
-    variants = row.get('variants', {})
-    value = variants.get('clean', {}).get('image_path', row.get('image_path'))
+    value = row.get('image_path')
+    if not value:
+        variants = row.get('variants', {})
+        value = variants.get('clean', {}).get('image_path')
     path = Path(value).expanduser().resolve()
     if not path.is_file():
         raise FileNotFoundError(path)
@@ -160,7 +176,8 @@ def main() -> None:
             panel_tiles = [original]
             for model, raw, display in zip(models, raw_values, normalized):
                 model_root = out_dir / model
-                raw_path = model_root / 'raw' / layer / f'{position:05d}_{int(row["image_id"])}.npy'
+                file_stem = f'{position:05d}_{int(row["image_id"])}'
+                raw_path = model_root / 'raw' / layer / f'{file_stem}.npy'
                 raw_path.parent.mkdir(parents=True, exist_ok=True)
                 np.save(raw_path, raw, allow_pickle=False)
                 fg_mask = mask_from_boxes(
@@ -187,12 +204,22 @@ def main() -> None:
                     'background_pixels': int(bg_mask.sum()),
                 })
                 rendered = colorize(display).resize(original.size, RESAMPLE.BICUBIC)
-                no_box_path = model_root / 'without_boxes' / layer / f'{position:05d}_{int(row["image_id"])}.png'
-                with_box_path = model_root / 'with_gt_boxes' / layer / f'{position:05d}_{int(row["image_id"])}.png'
+                no_box_path = (
+                    model_root / 'without_boxes' / layer / f'{file_stem}.png')
+                with_box_path = (
+                    model_root / 'with_gt_boxes' / layer / f'{file_stem}.png')
                 no_box_path.parent.mkdir(parents=True, exist_ok=True)
                 with_box_path.parent.mkdir(parents=True, exist_ok=True)
                 rendered.save(no_box_path)
-                draw_boxes(rendered, boxes, args.box_width).save(with_box_path)
+                draw_boxes(
+                    rendered,
+                    boxes,
+                    args.box_width,
+                    (
+                        int(row.get('width', original_width)),
+                        int(row.get('height', original_height)),
+                    ),
+                ).save(with_box_path)
                 panel_tiles.append(rendered)
             panel = Image.new(
                 'RGB', (sum(tile.width for tile in panel_tiles), original.height),

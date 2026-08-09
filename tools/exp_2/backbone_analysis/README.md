@@ -470,3 +470,29 @@ expensive Fourier analysis the clean sensitivity matrix is mathematically
 independent of the broad-band policy; running it twice only changes the cutoff
 overlays. It may be computed once and re-rendered with the two filter configs
 when compute time is limited.
+
+### 10.1 One model per GPU, policies in sequence
+
+For several models, use the parallel-model orchestrator. It runs the fixed
+policy first, assigns one model to one GPU, validates every model/variant, runs
+the unified analysis stages, and only then starts the dataset-energy policy:
+
+```bash
+BASE_OUT_ROOT=/path/to/run \
+RUOD_ANN=/path/to/instances_val.json \
+RUOD_IMAGE_ROOT=/path/to/val \
+MODELS_CONFIG_INPUT=/path/to/five_models.json \
+GPUS=2,3,4,5,6,7 ANALYSIS_GPU=7 \
+POLICIES=fixed,dataset-energy \
+SAMPLES=100 SPATIAL_SAMPLES=100 \
+RUN_TSNE=1 \
+bash tools/exp_2/backbone_analysis/run_dual_frequency_analysis_parallel_models.sh
+```
+
+The recovery unit is one `model/variant`. A complete task is reused from the
+official feature store; an incomplete task is regenerated in
+`.parallel_feature_stage`, validated, and then merged. Workers write different
+model directories, so they never concurrently write the same feature files.
+Existing fixed-policy results can therefore be resumed without deleting them.
+Per-model worker logs are stored under
+`POLICY_ROOT/logs/parallel_features/`.

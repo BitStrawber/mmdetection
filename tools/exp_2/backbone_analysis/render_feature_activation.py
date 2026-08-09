@@ -36,6 +36,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument('--box-width', type=int, default=3)
+    parser.add_argument(
+        '--png-compress-level', type=int, default=6,
+        help='Lossless PNG compression level from 0 (fastest) to 9 (smallest)')
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -140,6 +143,8 @@ def main() -> None:
     args = parse_args()
     if not 0 <= args.low_percentile < args.high_percentile <= 100:
         raise ValueError('Percentiles must satisfy 0 <= low < high <= 100')
+    if not 0 <= args.png_compress_level <= 9:
+        raise ValueError('--png-compress-level must be between 0 and 9')
     models = parse_csv(args.models)
     layers = parse_csv(args.layers)
     if not models or not layers:
@@ -210,7 +215,8 @@ def main() -> None:
                     model_root / 'with_gt_boxes' / layer / f'{file_stem}.png')
                 no_box_path.parent.mkdir(parents=True, exist_ok=True)
                 with_box_path.parent.mkdir(parents=True, exist_ok=True)
-                rendered.save(no_box_path)
+                rendered.save(
+                    no_box_path, compress_level=args.png_compress_level)
                 draw_boxes(
                     rendered,
                     boxes,
@@ -219,7 +225,8 @@ def main() -> None:
                         int(row.get('width', original_width)),
                         int(row.get('height', original_height)),
                     ),
-                ).save(with_box_path)
+                ).save(
+                    with_box_path, compress_level=args.png_compress_level)
                 panel_tiles.append(rendered)
             panel = Image.new(
                 'RGB', (sum(tile.width for tile in panel_tiles), original.height),
@@ -230,7 +237,8 @@ def main() -> None:
                 left += tile.width
             panel_path = out_dir / 'panels' / layer / f'{position:05d}_{int(row["image_id"])}.png'
             panel_path.parent.mkdir(parents=True, exist_ok=True)
-            panel.save(panel_path)
+            panel.save(
+                panel_path, compress_level=args.png_compress_level)
         print(f'[{position + 1}/{len(rows)}] {row["file_name"]}', flush=True)
 
     with (out_dir / 'activation_statistics.tsv').open(
@@ -253,6 +261,7 @@ def main() -> None:
         'foreground_definition': 'union of COCO GT bounding boxes',
         'normalization': 'shared per sample/layer across selected models',
         'percentiles': [args.low_percentile, args.high_percentile],
+        'png_compress_level': args.png_compress_level,
         'warning': 'These are feature activation maps, not Grad-CAM.',
     })
     print(f'Feature activation outputs: {out_dir}')

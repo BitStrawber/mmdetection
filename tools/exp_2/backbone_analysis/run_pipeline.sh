@@ -57,6 +57,43 @@ RUN_FREQUENCY_FIGURES="${RUN_FREQUENCY_FIGURES:-1}"
 RUN_DETECTION_FREQUENCY_EVAL="${RUN_DETECTION_FREQUENCY_EVAL:-0}"
 RUN_FOURIER_SENSITIVITY="${RUN_FOURIER_SENSITIVITY:-0}"
 RUN_TSNE="${RUN_TSNE:-0}"
+ACTIVATION_JOBS="${ACTIVATION_JOBS:-1}"
+ACTIVATION_PNG_COMPRESS_LEVEL="${ACTIVATION_PNG_COMPRESS_LEVEL:-6}"
+ACTIVATION_REUSE_COMPLETE="${ACTIVATION_REUSE_COMPLETE:-1}"
+
+if (( ACTIVATION_JOBS < 1 )); then
+  echo "Error: ACTIVATION_JOBS must be at least 1" >&2
+  exit 1
+fi
+if (( ACTIVATION_PNG_COMPRESS_LEVEL < 0 || ACTIVATION_PNG_COMPRESS_LEVEL > 9 )); then
+  echo "Error: ACTIVATION_PNG_COMPRESS_LEVEL must be between 0 and 9" >&2
+  exit 1
+fi
+
+activation_output_complete() {
+  local root="$1"
+  local sample_count model_count layer_count expected_model_files expected_panels
+  local raw_count without_count with_count panel_count
+  [[ -d "${root}" ]] || return 1
+  sample_count="$(grep -cve '^[[:space:]]*$' "${FREQUENCY_ROOT}/frequency_manifest.jsonl")"
+  IFS=',' read -r -a activation_model_ids <<< "${ANALYSIS_MODELS}"
+  IFS=',' read -r -a activation_layer_ids <<< "${LAYERS}"
+  model_count="${#activation_model_ids[@]}"
+  layer_count="${#activation_layer_ids[@]}"
+  expected_model_files=$((sample_count * model_count * layer_count))
+  expected_panels=$((sample_count * layer_count))
+  raw_count="$(find "${root}" -type f -path '*/raw/*' -name '*.npy' -size +0c 2>/dev/null | wc -l)"
+  without_count="$(find "${root}" -type f -path '*/without_boxes/*' -name '*.png' -size +0c 2>/dev/null | wc -l)"
+  with_count="$(find "${root}" -type f -path '*/with_gt_boxes/*' -name '*.png' -size +0c 2>/dev/null | wc -l)"
+  panel_count="$(find "${root}/panels" -type f -name '*.png' -size +0c 2>/dev/null | wc -l)"
+  (( raw_count == expected_model_files )) &&
+    (( without_count == expected_model_files )) &&
+    (( with_count == expected_model_files )) &&
+    (( panel_count == expected_panels )) &&
+    [[ -s "${root}/activation_statistics.tsv" ]] &&
+    [[ -s "${root}/shared_normalization.tsv" ]] &&
+    [[ -s "${root}/activation_metadata.json" ]]
+}
 
 SAMPLE_ROOT="${OUT_ROOT}/sample"
 FREQUENCY_ROOT="${OUT_ROOT}/frequency_inputs"
@@ -227,22 +264,60 @@ if [[ "${RUN_ACTIVATION}" == 1 ]]; then
     --models "${ANALYSIS_MODELS}" \
     --layers "${LAYERS}" \
     --variant clean \
+    --png-compress-level "${ACTIVATION_PNG_COMPRESS_LEVEL}" \
     --out-dir "${ANALYSIS_ROOT}/activation" \
     "${overwrite_args[@]}"
 fi
 
 if [[ "${RUN_FREQUENCY_ACTIVATION}" == 1 ]]; then
   IFS=',' read -r -a activation_variants <<< "${VARIANTS}"
+  activation_log_root="${ANALYSIS_ROOT}/activation_by_frequency_logs"
+  mkdir -p "${activation_log_root}"
+  activation_pids=()
+  activation_names=()
   for variant in "${activation_variants[@]}"; do
-    python -m tools.exp_2.backbone_analysis.render_feature_activation \
-      --feature-root "${FEATURE_ROOT}" \
-      --manifest "${FREQUENCY_ROOT}/frequency_manifest.jsonl" \
-      --models "${ANALYSIS_MODELS}" \
-      --layers "${LAYERS}" \
-      --variant "${variant}" \
-      --out-dir "${ANALYSIS_ROOT}/activation_by_frequency/${variant}" \
-      "${overwrite_args[@]}"
+    activation_output="${ANALYSIS_ROOT}/activation_by_frequency/${variant}"
+    if [[ "${ACTIVATION_REUSE_COMPLETE}" == 1 ]] && \
+        activation_output_complete "${activation_output}"; then
+      echo "reuse complete frequency activation: ${variant}"
+      continue
+    fi
+    while (( $(jobs -rp | wc -l) >= ACTIVATION_JOBS )); do
+      sleep 1
+    done
+    echo "started frequency activation: ${variant}"
+    (
+      export OMP_NUM_THREADS=1
+      export MKL_NUM_THREADS=1
+      export OPENBLAS_NUM_THREADS=1
+      python -m tools.exp_2.backbone_analysis.render_feature_activation \
+        --feature-root "${FEATURE_ROOT}" \
+        --manifest "${FREQUENCY_ROOT}/frequency_manifest.jsonl" \
+        --models "${ANALYSIS_MODELS}" \
+        --layers "${LAYERS}" \
+        --variant "${variant}" \
+        --png-compress-level "${ACTIVATION_PNG_COMPRESS_LEVEL}" \
+        --out-dir "${activation_output}" \
+        "${overwrite_args[@]}"
+    ) >"${activation_log_root}/${variant}.log" 2>&1 &
+    activation_pids+=("$!")
+    activation_names+=("${variant}")
   done
+
+  activation_failed=0
+  for index in "${!activation_pids[@]}"; do
+    if wait "${activation_pids[$index]}"; then
+      echo "finished frequency activation: ${activation_names[$index]}"
+    else
+      echo "FAILED frequency activation: ${activation_names[$index]}" >&2
+      echo "Log: ${activation_log_root}/${activation_names[$index]}.log" >&2
+      activation_failed=1
+    fi
+  done
+  (( activation_failed == 0 )) || {
+    echo "Error: one or more frequency activation workers failed" >&2
+    exit 1
+  }
 fi
 
 if [[ "${RUN_FREQUENCY_INPUT_VISUALS}" == 1 ]]; then

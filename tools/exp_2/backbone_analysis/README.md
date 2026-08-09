@@ -486,6 +486,8 @@ GPUS=2,3,4,5,6,7 ANALYSIS_GPU=7 \
 POLICIES=fixed,dataset-energy \
 SAMPLES=100 SPATIAL_SAMPLES=100 \
 RUN_TSNE=1 \
+ACTIVATION_JOBS=7 ACTIVATION_PNG_COMPRESS_LEVEL=1 \
+ACTIVATION_REUSE_COMPLETE=1 \
 bash tools/exp_2/backbone_analysis/run_dual_frequency_analysis_parallel_models.sh
 ```
 
@@ -496,3 +498,12 @@ model directories, so they never concurrently write the same feature files.
 Existing fixed-policy results can therefore be resumed without deleting them.
 Per-model worker logs are stored under
 `POLICY_ROOT/logs/parallel_features/`.
+
+Frequency activation variants can be rendered concurrently because each uses
+an independent output directory. `ACTIVATION_JOBS=7` runs all seven variants
+in parallel while preserving shared normalization across models inside each
+variant. `ACTIVATION_PNG_COMPRESS_LEVEL=1` uses faster lossless PNG encoding;
+it changes encoded file size, not image pixels or analysis values. Variant logs
+are stored under `analysis/activation_by_frequency_logs/`.
+Complete variant outputs are reused by default; a partial variant is rendered
+again so interrupted analysis runs can be resumed safely.

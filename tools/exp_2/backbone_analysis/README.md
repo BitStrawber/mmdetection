@@ -489,7 +489,7 @@ POLICIES=fixed,dataset-energy \
 SAMPLES=100 SPATIAL_SAMPLES=100 \
 RUN_TSNE=1 \
 ACTIVATION_JOBS=7 ACTIVATION_PNG_COMPRESS_LEVEL=1 \
-FIXED_ACTIVATION_JOBS=7 DATASET_ENERGY_ACTIVATION_JOBS=3 \
+FIXED_ACTIVATION_JOBS=7 DATASET_ENERGY_ACTIVATION_JOBS=7 \
 ACTIVATION_REUSE_COMPLETE=1 \
 bash tools/exp_2/backbone_analysis/run_dual_frequency_analysis_parallel_models.sh
 ```
@@ -512,6 +512,6 @@ Complete variant outputs are reused by default; a partial variant is rendered
 again so interrupted analysis runs can be resumed safely.
 
 `FIXED_OUT_ROOT` and `DATASET_ENERGY_OUT_ROOT` may point to different file
-systems. The policy-specific activation job counts allow NVMe-backed fixed
-outputs to use more CPU processes while limiting concurrent random I/O for an
-HDD-backed dataset-energy run.
+systems. Both policies default to the same activation concurrency, while the
+policy-specific job counts allow an HDD-backed dataset-energy run to be
+reduced independently if random I/O becomes the bottleneck.

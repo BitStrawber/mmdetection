@@ -55,6 +55,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         '--png-compress-level', type=int, default=6,
         help='Lossless PNG compression level from 0 (fastest) to 9 (smallest)')
+    parser.add_argument(
+        '--skip-raw-activation', action='store_true',
+        help=(
+            'Do not duplicate the aggregated 2D activation arrays as .npy '
+            'files. Rendering and quantitative statistics still use the '
+            'activation computed from the existing spatial feature store.'))
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -284,9 +290,10 @@ def main() -> None:
             for model, raw, display in zip(models, raw_values, normalized):
                 model_root = out_dir / model
                 file_stem = f'{position:05d}_{int(row["image_id"])}'
-                raw_path = model_root / 'raw' / layer / f'{file_stem}.npy'
-                raw_path.parent.mkdir(parents=True, exist_ok=True)
-                np.save(raw_path, raw, allow_pickle=False)
+                if not args.skip_raw_activation:
+                    raw_path = model_root / 'raw' / layer / f'{file_stem}.npy'
+                    raw_path.parent.mkdir(parents=True, exist_ok=True)
+                    np.save(raw_path, raw, allow_pickle=False)
                 fg_mask = mask_from_boxes(
                     boxes, raw.shape[1], raw.shape[0],
                     original_width, original_height)
@@ -405,6 +412,7 @@ def main() -> None:
                 else 'per-sample per-layer across selected models')),
         'percentiles': [args.low_percentile, args.high_percentile],
         'quantitative_statistics_source': 'raw activation before normalization',
+        'raw_activation_arrays_saved': not args.skip_raw_activation,
         'png_compress_level': args.png_compress_level,
         'warning': 'These are feature activation maps, not Grad-CAM.',
     })

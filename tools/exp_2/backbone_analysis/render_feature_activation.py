@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
 import math
 from pathlib import Path
@@ -61,6 +62,12 @@ def parse_args() -> argparse.Namespace:
             'Do not duplicate the aggregated 2D activation arrays as .npy '
             'files. Rendering and quantitative statistics still use the '
             'activation computed from the existing spatial feature store.'))
+    parser.add_argument(
+        '--model-workers', type=int, default=1,
+        help=(
+            'Render models in separate processes after reference bounds are '
+            'computed. Values greater than 1 require a reference normalization '
+            'mode. Set this to the model count for one process per backbone.'))
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -192,12 +199,179 @@ def image_path(row: dict) -> Path:
     return path
 
 
+def compute_per_sample_reference_ranges(
+    feature_root: Path, rows: Sequence[dict], reference_model: str,
+    variant: str, layers: Sequence[str], low_percentile: float,
+    high_percentile: float,
+) -> Dict[Tuple[int, str], Tuple[float, float]]:
+    ranges = {}
+    for position, row in enumerate(rows):
+        for layer in layers:
+            path = spatial_path(
+                feature_root, reference_model, variant, position,
+                int(row['image_id']), layer)
+            reference = load_activation(path)
+            low = float(np.percentile(reference, low_percentile))
+            high = float(np.percentile(reference, high_percentile))
+            if high <= low:
+                low = float(reference.min())
+                high = float(reference.max())
+            if not np.isfinite(low) or not np.isfinite(high) or high <= low:
+                raise ValueError(
+                    f'Invalid per-sample reference range for '
+                    f'{reference_model}/{position}/{layer}: '
+                    f'low={low}, high={high}')
+            ranges[(position, layer)] = (low, high)
+    return ranges
+
+
+def render_model_dataset(config: dict) -> Tuple[str, List[dict], List[dict]]:
+    model = config['model']
+    feature_root = Path(config['feature_root'])
+    out_dir = Path(config['out_dir'])
+    rows = config['rows']
+    layers = config['layers']
+    variant = config['variant']
+    dataset_ranges = config['dataset_ranges']
+    sample_ranges = config['sample_ranges']
+    statistics = []
+    clipping_rows = []
+
+    for position, row in enumerate(rows):
+        source_path = image_path(row)
+        with Image.open(source_path) as opened:
+            original_size = opened.size
+        original_width, original_height = original_size
+        boxes = row.get('boxes_xyxy', [])
+        file_stem = f'{position:05d}_{int(row["image_id"])}'
+
+        for layer in layers:
+            path = spatial_path(
+                feature_root, model, variant, position,
+                int(row['image_id']), layer)
+            raw = load_activation(path)
+            if dataset_ranges:
+                low, high = dataset_ranges[layer]
+            else:
+                low, high = sample_ranges[(position, layer)]
+            display = normalize_with_bounds(raw, low, high)
+
+            model_root = out_dir / model
+            if not config['skip_raw_activation']:
+                raw_path = model_root / 'raw' / layer / f'{file_stem}.npy'
+                raw_path.parent.mkdir(parents=True, exist_ok=True)
+                np.save(raw_path, raw, allow_pickle=False)
+
+            fg_mask = mask_from_boxes(
+                boxes, raw.shape[1], raw.shape[0],
+                original_width, original_height)
+            bg_mask = ~fg_mask
+            fg_mean = float(raw[fg_mask].mean()) if fg_mask.any() else float('nan')
+            bg_mean = float(raw[bg_mask].mean()) if bg_mask.any() else float('nan')
+            ratio = (
+                fg_mean / max(bg_mean, 1e-12)
+                if np.isfinite(fg_mean) else float('nan'))
+            total_energy = float(raw.sum())
+            energy_in_box = (
+                float(raw[fg_mask].sum()) / max(total_energy, 1e-12)
+                if fg_mask.any() else float('nan'))
+            statistics.append({
+                'sample_index': position,
+                'image_id': int(row['image_id']),
+                'model': model,
+                'layer': layer,
+                'fg_mean': fg_mean,
+                'bg_mean': bg_mean,
+                'fg_bg_ratio': ratio,
+                'energy_in_boxes': energy_in_box,
+                'foreground_pixels': int(fg_mask.sum()),
+                'background_pixels': int(bg_mask.sum()),
+            })
+            clipping_rows.append({
+                'sample_index': position,
+                'image_id': int(row['image_id']),
+                'model': model,
+                'layer': layer,
+                'low': low,
+                'high': high,
+                'below_low_fraction': float(np.mean(raw < low)),
+                'above_high_fraction': float(np.mean(raw > high)),
+                'raw_mean': float(raw.mean()),
+                'raw_median': float(np.median(raw)),
+                'raw_p01': float(np.percentile(raw, 1)),
+                'raw_p99': float(np.percentile(raw, 99)),
+                'normalized_mean': float(display.mean()),
+                'normalized_std': float(display.std()),
+            })
+
+            rendered = colorize(display).resize(original_size, RESAMPLE.BICUBIC)
+            no_box_path = (
+                model_root / 'without_boxes' / layer / f'{file_stem}.png')
+            with_box_path = (
+                model_root / 'with_gt_boxes' / layer / f'{file_stem}.png')
+            no_box_path.parent.mkdir(parents=True, exist_ok=True)
+            with_box_path.parent.mkdir(parents=True, exist_ok=True)
+            rendered.save(
+                no_box_path, compress_level=config['png_compress_level'])
+            draw_boxes(
+                rendered, boxes, config['box_width'],
+                (
+                    int(row.get('width', original_width)),
+                    int(row.get('height', original_height)),
+                ),
+            ).save(
+                with_box_path,
+                compress_level=config['png_compress_level'])
+
+        print(
+            f'[{model}] {position + 1}/{len(rows)} {row["file_name"]}',
+            flush=True)
+
+    return model, statistics, clipping_rows
+
+
+def render_combined_panels(
+    out_dir: Path, rows: Sequence[dict], models: Sequence[str],
+    layers: Sequence[str], png_compress_level: int,
+) -> None:
+    for position, row in enumerate(rows):
+        source_path = image_path(row)
+        with Image.open(source_path) as opened:
+            original = opened.convert('RGB')
+        file_stem = f'{position:05d}_{int(row["image_id"])}'
+        for layer in layers:
+            tiles = [original]
+            for model in models:
+                rendered_path = (
+                    out_dir / model / 'without_boxes' / layer /
+                    f'{file_stem}.png')
+                if not rendered_path.is_file():
+                    raise FileNotFoundError(rendered_path)
+                with Image.open(rendered_path) as opened:
+                    tiles.append(opened.convert('RGB'))
+            panel = Image.new(
+                'RGB', (sum(tile.width for tile in tiles), original.height),
+                color=(255, 255, 255))
+            left = 0
+            for tile in tiles:
+                panel.paste(tile, (left, 0))
+                left += tile.width
+            panel_path = out_dir / 'panels' / layer / f'{file_stem}.png'
+            panel_path.parent.mkdir(parents=True, exist_ok=True)
+            panel.save(panel_path, compress_level=png_compress_level)
+        print(
+            f'[panels] {position + 1}/{len(rows)} {row["file_name"]}',
+            flush=True)
+
+
 def main() -> None:
     args = parse_args()
     if not 0 <= args.low_percentile < args.high_percentile <= 100:
         raise ValueError('Percentiles must satisfy 0 <= low < high <= 100')
     if not 0 <= args.png_compress_level <= 9:
         raise ValueError('--png-compress-level must be between 0 and 9')
+    if args.model_workers < 1:
+        raise ValueError('--model-workers must be at least 1')
     models = parse_csv(args.models)
     layers = parse_csv(args.layers)
     if not models or not layers:
@@ -235,6 +409,118 @@ def main() -> None:
                     for layer, bounds in reference_ranges.items()
                 },
             })
+
+    if args.model_workers > 1:
+        if not args.normalization_mode.startswith('reference-'):
+            raise ValueError(
+                '--model-workers greater than 1 requires a reference '
+                'normalization mode')
+        sample_ranges = {}
+        if args.normalization_mode == 'reference-per-sample-layer':
+            sample_ranges = compute_per_sample_reference_ranges(
+                feature_root, rows, reference_model, args.variant, layers,
+                args.low_percentile, args.high_percentile)
+        for position, row in enumerate(rows):
+            for layer in layers:
+                if reference_ranges:
+                    low, high = reference_ranges[layer]
+                else:
+                    low, high = sample_ranges[(position, layer)]
+                normalization_rows.append({
+                    'sample_index': position,
+                    'image_id': int(row['image_id']),
+                    'layer': layer,
+                    'models': ','.join(models),
+                    'normalization_mode': args.normalization_mode,
+                    'reference_model': reference_model,
+                    'low': low,
+                    'high': high,
+                })
+
+        worker_count = min(args.model_workers, len(models))
+        futures = {}
+        with ProcessPoolExecutor(max_workers=worker_count) as executor:
+            for model in models:
+                future = executor.submit(render_model_dataset, {
+                    'model': model,
+                    'feature_root': str(feature_root),
+                    'out_dir': str(out_dir),
+                    'rows': rows,
+                    'layers': layers,
+                    'variant': args.variant,
+                    'dataset_ranges': reference_ranges,
+                    'sample_ranges': sample_ranges,
+                    'skip_raw_activation': args.skip_raw_activation,
+                    'png_compress_level': args.png_compress_level,
+                    'box_width': args.box_width,
+                })
+                futures[future] = model
+            for future in as_completed(futures):
+                model, model_statistics, model_clipping = future.result()
+                statistics.extend(model_statistics)
+                clipping_rows.extend(model_clipping)
+                print(f'Completed model worker: {model}', flush=True)
+
+        statistics.sort(
+            key=lambda item: (
+                item['sample_index'], item['layer'], item['model']))
+        clipping_rows.sort(
+            key=lambda item: (
+                item['sample_index'], item['layer'], item['model']))
+        render_combined_panels(
+            out_dir, rows, models, layers, args.png_compress_level)
+
+        with (out_dir / 'activation_statistics.tsv').open(
+                'w', encoding='utf-8', newline='') as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=list(statistics[0]), delimiter='\t')
+            writer.writeheader()
+            writer.writerows(statistics)
+        with (out_dir / 'shared_normalization.tsv').open(
+                'w', encoding='utf-8', newline='') as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=list(normalization_rows[0]), delimiter='\t')
+            writer.writeheader()
+            writer.writerows(normalization_rows)
+        with (out_dir / 'normalization_clipping_statistics.tsv').open(
+                'w', encoding='utf-8', newline='') as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=list(clipping_rows[0]), delimiter='\t')
+            writer.writeheader()
+            writer.writerows(clipping_rows)
+        if args.normalization_mode == 'reference-per-sample-layer':
+            write_json(out_dir / 'reference_normalization.json', {
+                'normalization_mode': args.normalization_mode,
+                'reference_model': reference_model,
+                'variant': args.variant,
+                'sample_count': len(rows),
+                'percentiles': [args.low_percentile, args.high_percentile],
+                'scope': 'per-sample per-layer',
+                'bounds_file': 'shared_normalization.tsv',
+            })
+        write_json(out_dir / 'activation_metadata.json', {
+            'feature_root': str(feature_root),
+            'models': models,
+            'layers': layers,
+            'variant': args.variant,
+            'aggregation': 'mean(abs(feature), channel)',
+            'foreground_definition': 'union of COCO GT bounding boxes',
+            'normalization': args.normalization_mode,
+            'normalization_reference_model': reference_model,
+            'normalization_scope': (
+                'dataset-level per-layer'
+                if args.normalization_mode == 'reference-dataset-per-layer'
+                else 'per-sample per-layer from reference model'),
+            'percentiles': [args.low_percentile, args.high_percentile],
+            'quantitative_statistics_source': (
+                'raw activation before normalization'),
+            'raw_activation_arrays_saved': not args.skip_raw_activation,
+            'model_workers': worker_count,
+            'png_compress_level': args.png_compress_level,
+            'warning': 'These are feature activation maps, not Grad-CAM.',
+        })
+        print(f'Feature activation outputs: {out_dir}')
+        return
 
     for position, row in enumerate(rows):
         source_path = image_path(row)

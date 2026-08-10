@@ -60,6 +60,8 @@ RUN_TSNE="${RUN_TSNE:-0}"
 ACTIVATION_JOBS="${ACTIVATION_JOBS:-1}"
 ACTIVATION_PNG_COMPRESS_LEVEL="${ACTIVATION_PNG_COMPRESS_LEVEL:-6}"
 ACTIVATION_REUSE_COMPLETE="${ACTIVATION_REUSE_COMPLETE:-1}"
+ACTIVATION_NORMALIZATION_MODE="${ACTIVATION_NORMALIZATION_MODE:-shared-per-sample}"
+ACTIVATION_REFERENCE_MODEL="${ACTIVATION_REFERENCE_MODEL:-}"
 
 if (( ACTIVATION_JOBS < 1 )); then
   echo "Error: ACTIVATION_JOBS must be at least 1" >&2
@@ -68,6 +70,17 @@ fi
 if (( ACTIVATION_PNG_COMPRESS_LEVEL < 0 || ACTIVATION_PNG_COMPRESS_LEVEL > 9 )); then
   echo "Error: ACTIVATION_PNG_COMPRESS_LEVEL must be between 0 and 9" >&2
   exit 1
+fi
+
+activation_normalization_args=(
+  --normalization-mode "${ACTIVATION_NORMALIZATION_MODE}")
+if [[ "${ACTIVATION_NORMALIZATION_MODE}" == reference-* ]]; then
+  [[ -n "${ACTIVATION_REFERENCE_MODEL}" ]] || {
+    echo "Error: set ACTIVATION_REFERENCE_MODEL for reference normalization" >&2
+    exit 1
+  }
+  activation_normalization_args+=(
+    --normalization-reference-model "${ACTIVATION_REFERENCE_MODEL}")
 fi
 
 activation_output_complete() {
@@ -264,6 +277,7 @@ if [[ "${RUN_ACTIVATION}" == 1 ]]; then
     --models "${ANALYSIS_MODELS}" \
     --layers "${LAYERS}" \
     --variant clean \
+    "${activation_normalization_args[@]}" \
     --png-compress-level "${ACTIVATION_PNG_COMPRESS_LEVEL}" \
     --out-dir "${ANALYSIS_ROOT}/activation" \
     "${overwrite_args[@]}"
@@ -296,6 +310,7 @@ if [[ "${RUN_FREQUENCY_ACTIVATION}" == 1 ]]; then
         --models "${ANALYSIS_MODELS}" \
         --layers "${LAYERS}" \
         --variant "${variant}" \
+        "${activation_normalization_args[@]}" \
         --png-compress-level "${ACTIVATION_PNG_COMPRESS_LEVEL}" \
         --out-dir "${activation_output}" \
         "${overwrite_args[@]}"

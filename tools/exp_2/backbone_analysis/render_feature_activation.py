@@ -35,6 +35,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--out-dir', required=True)
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
+    parser.add_argument(
+        '--normalization-mode',
+        choices=(
+            'shared-per-sample',
+            'reference-per-sample-layer',
+            'reference-dataset-per-layer',
+        ),
+        default='shared-per-sample',
+        help=(
+            'Color-scale normalization. reference-per-sample-layer computes '
+            'one range from the reference model for each sample/layer. '
+            'reference-dataset-per-layer computes one range per layer from '
+            'the reference model over the complete manifest.'))
+    parser.add_argument(
+        '--normalization-reference-model', default='',
+        help='Reference model ID required by either reference mode.')
     parser.add_argument('--box-width', type=int, default=3)
     parser.add_argument(
         '--png-compress-level', type=int, default=6,
@@ -74,6 +90,37 @@ def normalize_shared(
         np.clip((value - low) / scale, 0.0, 1.0).astype(np.float32)
         for value in values
     ], low, high
+
+
+def normalize_with_bounds(
+    value: np.ndarray, low: float, high: float,
+) -> np.ndarray:
+    scale = max(high - low, 1e-12)
+    return np.clip((value - low) / scale, 0.0, 1.0).astype(np.float32)
+
+
+def compute_reference_ranges(
+    feature_root: Path, rows: Sequence[dict], reference_model: str,
+    variant: str, layers: Sequence[str], low_percentile: float,
+    high_percentile: float,
+) -> Dict[str, Tuple[float, float]]:
+    ranges = {}
+    for layer in layers:
+        flattened = []
+        for position, row in enumerate(rows):
+            path = spatial_path(
+                feature_root, reference_model, variant, position,
+                int(row['image_id']), layer)
+            flattened.append(load_activation(path).reshape(-1))
+        values = np.concatenate(flattened)
+        low = float(np.percentile(values, low_percentile))
+        high = float(np.percentile(values, high_percentile))
+        if not np.isfinite(low) or not np.isfinite(high) or high <= low:
+            raise ValueError(
+                f'Invalid reference range for {reference_model}/{layer}: '
+                f'low={low}, high={high}')
+        ranges[layer] = (low, high)
+    return ranges
 
 
 def colorize(value: np.ndarray) -> Image.Image:
@@ -154,6 +201,34 @@ def main() -> None:
     out_dir = ensure_empty_or_create(Path(args.out_dir), args.overwrite)
     statistics = []
     normalization_rows = []
+    clipping_rows = []
+    reference_ranges = {}
+    if args.normalization_mode.startswith('reference-'):
+        reference_model = args.normalization_reference_model.strip()
+        if not reference_model:
+            raise ValueError(
+                '--normalization-reference-model is required for '
+                'reference normalization')
+        if reference_model not in models:
+            raise ValueError(
+                f'Normalization reference model {reference_model!r} is not '
+                f'in --models: {models}')
+        if args.normalization_mode == 'reference-dataset-per-layer':
+            reference_ranges = compute_reference_ranges(
+                feature_root, rows, reference_model, args.variant, layers,
+                args.low_percentile, args.high_percentile)
+            write_json(out_dir / 'reference_normalization.json', {
+                'normalization_mode': args.normalization_mode,
+                'reference_model': reference_model,
+                'variant': args.variant,
+                'sample_count': len(rows),
+                'percentiles': [args.low_percentile, args.high_percentile],
+                'scope': 'dataset-level per-layer',
+                'layers': {
+                    layer: {'low': bounds[0], 'high': bounds[1]}
+                    for layer, bounds in reference_ranges.items()
+                },
+            })
 
     for position, row in enumerate(rows):
         source_path = image_path(row)
@@ -168,13 +243,40 @@ def main() -> None:
                     feature_root, model, args.variant, position,
                     int(row['image_id']), layer)
                 raw_values.append(load_activation(path))
-            normalized, low, high = normalize_shared(
-                raw_values, args.low_percentile, args.high_percentile)
+            if args.normalization_mode == 'reference-dataset-per-layer':
+                low, high = reference_ranges[layer]
+                normalized = [
+                    normalize_with_bounds(raw, low, high)
+                    for raw in raw_values
+                ]
+            elif args.normalization_mode == 'reference-per-sample-layer':
+                reference = raw_values[models.index(reference_model)]
+                low = float(np.percentile(
+                    reference, args.low_percentile))
+                high = float(np.percentile(
+                    reference, args.high_percentile))
+                if high <= low:
+                    low = float(reference.min())
+                    high = float(reference.max())
+                if not np.isfinite(low) or not np.isfinite(high) or high <= low:
+                    raise ValueError(
+                        f'Invalid per-sample reference range for '
+                        f'{reference_model}/{position}/{layer}: '
+                        f'low={low}, high={high}')
+                normalized = [
+                    normalize_with_bounds(raw, low, high)
+                    for raw in raw_values
+                ]
+            else:
+                low, high = normalize_shared(
+                    raw_values, args.low_percentile, args.high_percentile)
             normalization_rows.append({
                 'sample_index': position,
                 'image_id': int(row['image_id']),
                 'layer': layer,
                 'models': ','.join(models),
+                'normalization_mode': args.normalization_mode,
+                'reference_model': args.normalization_reference_model,
                 'low': low,
                 'high': high,
             })
@@ -207,6 +309,22 @@ def main() -> None:
                     'energy_in_boxes': energy_in_box,
                     'foreground_pixels': int(fg_mask.sum()),
                     'background_pixels': int(bg_mask.sum()),
+                })
+                clipping_rows.append({
+                    'sample_index': position,
+                    'image_id': int(row['image_id']),
+                    'model': model,
+                    'layer': layer,
+                    'low': low,
+                    'high': high,
+                    'below_low_fraction': float(np.mean(raw < low)),
+                    'above_high_fraction': float(np.mean(raw > high)),
+                    'raw_mean': float(raw.mean()),
+                    'raw_median': float(np.median(raw)),
+                    'raw_p01': float(np.percentile(raw, 1)),
+                    'raw_p99': float(np.percentile(raw, 99)),
+                    'normalized_mean': float(display.mean()),
+                    'normalized_std': float(display.std()),
                 })
                 rendered = colorize(display).resize(original.size, RESAMPLE.BICUBIC)
                 no_box_path = (
@@ -252,6 +370,22 @@ def main() -> None:
             handle, fieldnames=list(normalization_rows[0]), delimiter='\t')
         writer.writeheader()
         writer.writerows(normalization_rows)
+    with (out_dir / 'normalization_clipping_statistics.tsv').open(
+            'w', encoding='utf-8', newline='') as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=list(clipping_rows[0]), delimiter='\t')
+        writer.writeheader()
+        writer.writerows(clipping_rows)
+    if args.normalization_mode == 'reference-per-sample-layer':
+        write_json(out_dir / 'reference_normalization.json', {
+            'normalization_mode': args.normalization_mode,
+            'reference_model': reference_model,
+            'variant': args.variant,
+            'sample_count': len(rows),
+            'percentiles': [args.low_percentile, args.high_percentile],
+            'scope': 'per-sample per-layer',
+            'bounds_file': 'shared_normalization.tsv',
+        })
     write_json(out_dir / 'activation_metadata.json', {
         'feature_root': str(feature_root),
         'models': models,
@@ -259,8 +393,18 @@ def main() -> None:
         'variant': args.variant,
         'aggregation': 'mean(abs(feature), channel)',
         'foreground_definition': 'union of COCO GT bounding boxes',
-        'normalization': 'shared per sample/layer across selected models',
+        'normalization': args.normalization_mode,
+        'normalization_reference_model': (
+            args.normalization_reference_model or None),
+        'normalization_scope': (
+            'dataset-level per-layer'
+            if args.normalization_mode == 'reference-dataset-per-layer'
+            else (
+                'per-sample per-layer from reference model'
+                if args.normalization_mode == 'reference-per-sample-layer'
+                else 'per-sample per-layer across selected models')),
         'percentiles': [args.low_percentile, args.high_percentile],
+        'quantitative_statistics_source': 'raw activation before normalization',
         'png_compress_level': args.png_compress_level,
         'warning': 'These are feature activation maps, not Grad-CAM.',
     })

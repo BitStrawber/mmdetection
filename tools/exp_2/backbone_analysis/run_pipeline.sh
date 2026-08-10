@@ -83,6 +83,30 @@ if [[ "${ACTIVATION_NORMALIZATION_MODE}" == reference-* ]]; then
     --normalization-reference-model "${ACTIVATION_REFERENCE_MODEL}")
 fi
 
+activation_metadata_matches() {
+  local root="$1"
+  python - \
+    "${root}/activation_metadata.json" \
+    "${ACTIVATION_NORMALIZATION_MODE}" \
+    "${ACTIVATION_REFERENCE_MODEL}" <<'PY'
+import json
+import sys
+
+path, expected_mode, expected_reference = sys.argv[1:4]
+try:
+    with open(path, 'r', encoding='utf-8') as handle:
+        metadata = json.load(handle)
+except (OSError, ValueError):
+    raise SystemExit(1)
+
+if metadata.get('normalization') != expected_mode:
+    raise SystemExit(1)
+actual_reference = metadata.get('normalization_reference_model') or ''
+if actual_reference != expected_reference:
+    raise SystemExit(1)
+PY
+}
+
 activation_output_complete() {
   local root="$1"
   local sample_count model_count layer_count expected_model_files expected_panels
@@ -105,7 +129,8 @@ activation_output_complete() {
     (( panel_count == expected_panels )) &&
     [[ -s "${root}/activation_statistics.tsv" ]] &&
     [[ -s "${root}/shared_normalization.tsv" ]] &&
-    [[ -s "${root}/activation_metadata.json" ]]
+    [[ -s "${root}/activation_metadata.json" ]] &&
+    activation_metadata_matches "${root}"
 }
 
 SAMPLE_ROOT="${OUT_ROOT}/sample"

@@ -200,6 +200,15 @@ raw CAM magnitude is affected by classifier, BN and logit scale, so shared-scale
 color intensity is supporting evidence only. Primary quantitative evidence
 should use scale-invariant spatial metrics.
 
+An additional compact old-style view is written to `image_aggregate/`. It
+combines the separate fixed-GT CAMs belonging to the same image and writes
+exactly one PNG for every image, model, layer and normalization strategy. The
+default aggregation is pixelwise `max`; `sum` and `mean` are also supported via
+`FIXED_GT_IMAGE_AGGREGATION`. The one saved view defaults to `pure` and can be
+changed to `overlay` or `with_gt` with `FIXED_GT_IMAGE_AGGREGATE_VIEW`. This
+compact output is useful for comparison with older top-k prediction aggregation
+scripts, while per-instance fixed-GT CAM remains the primary controlled result.
+
 ## Quantitative outputs
 
 The renderer computes, per model/instance/layer:

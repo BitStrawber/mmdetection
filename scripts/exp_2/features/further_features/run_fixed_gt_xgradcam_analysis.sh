@@ -31,6 +31,7 @@ RUN_SAMPLE="${RUN_SAMPLE:-1}"
 RUN_EXTRACT="${RUN_EXTRACT:-1}"
 RUN_RENDER="${RUN_RENDER:-1}"
 RUN_PLOTS="${RUN_PLOTS:-1}"
+RUN_IMAGE_AGGREGATE="${RUN_IMAGE_AGGREGATE:-1}"
 RESUME="${RESUME:-1}"
 
 STAMP="${STAMP:-$(date +%Y%m%d_%H%M%S)}"
@@ -39,6 +40,9 @@ OUT_ROOT="${OUT_ROOT:-/media/HDD2/XCX/exp_2/further_features/${RUN_NAME}}"
 SAMPLE_ROOT="${SAMPLE_ROOT:-${OUT_ROOT}/sample}"
 CAM_ROOT="${CAM_ROOT:-${OUT_ROOT}/fixed_gt_cam}"
 RENDER_ROOT="${RENDER_ROOT:-${OUT_ROOT}/rendered}"
+IMAGE_AGGREGATE_ROOT="${IMAGE_AGGREGATE_ROOT:-${OUT_ROOT}/image_aggregate}"
+IMAGE_AGGREGATION="${IMAGE_AGGREGATION:-max}"
+IMAGE_AGGREGATE_VIEW="${IMAGE_AGGREGATE_VIEW:-pure}"
 LOG_ROOT="${LOG_ROOT:-${OUT_ROOT}/logs}"
 
 mkdir -p "${OUT_ROOT}" "${LOG_ROOT}"
@@ -208,6 +212,26 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         2>&1 | tee "${LOG_ROOT}/04_render.log"
 fi
 
+if [[ "${RUN_IMAGE_AGGREGATE}" == 1 ]]; then
+    aggregate_args=(
+        --cam-root "${CAM_ROOT}"
+        --out-dir "${IMAGE_AGGREGATE_ROOT}"
+        --reference-model "${REFERENCE_MODEL}"
+        --models "${MODEL_CSV}"
+        --layers "${LAYERS}"
+        --aggregation "${IMAGE_AGGREGATION}"
+        --view "${IMAGE_AGGREGATE_VIEW}"
+        --low-percentile "${LOW_PERCENTILE}"
+        --high-percentile "${HIGH_PERCENTILE}"
+        --gamma "${DISPLAY_GAMMA}"
+        --overlay-alpha "${OVERLAY_ALPHA}"
+    )
+    [[ "${RESUME}" == 1 ]] && aggregate_args+=(--overwrite)
+    python "${SCRIPT_DIR}/render_fixed_gt_image_aggregate.py" \
+        "${aggregate_args[@]}" \
+        2>&1 | tee "${LOG_ROOT}/04b_render_image_aggregate.log"
+fi
+
 if [[ "${RUN_PLOTS}" == 1 ]]; then
     python "${SCRIPT_DIR}/plot_fixed_gt_cam_metrics.py" \
         --metrics-tsv "${RENDER_ROOT}/metrics/instance_layer_metrics.tsv" \
@@ -224,6 +248,9 @@ OUT_ROOT=${OUT_ROOT}
 SAMPLE_ROOT=${SAMPLE_ROOT}
 CAM_ROOT=${CAM_ROOT}
 RENDER_ROOT=${RENDER_ROOT}
+IMAGE_AGGREGATE_ROOT=${IMAGE_AGGREGATE_ROOT}
+IMAGE_AGGREGATION=${IMAGE_AGGREGATION}
+IMAGE_AGGREGATE_VIEW=${IMAGE_AGGREGATE_VIEW}
 REFERENCE_MODEL=${REFERENCE_MODEL}
 MODELS=${MODEL_CSV}
 LAYERS=${LAYERS}

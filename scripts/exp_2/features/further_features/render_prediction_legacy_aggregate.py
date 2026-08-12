@@ -20,6 +20,8 @@ if str(SCRIPT_DIR) not in sys.path:
 from cam_common import (  # noqa: E402
     atomic_write_json,
     clean_name,
+    compose_grid,
+    labeled_tile,
     load_rgb,
     parse_csv,
     resize_map,
@@ -45,6 +47,8 @@ def parse_args() -> argparse.Namespace:
         '--styles', default=','.join(STYLES),
         help='Comma-separated subset of legacy_jet,legacy_turbo_gamma05.')
     parser.add_argument('--png-compress-level', type=int, default=3)
+    parser.add_argument('--tile-width', type=int, default=420)
+    parser.add_argument('--tile-height', type=int, default=315)
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -97,6 +101,8 @@ def main() -> None:
     args = parse_args()
     if not 0 <= args.png_compress_level <= 9:
         raise ValueError('--png-compress-level must be in [0, 9]')
+    if args.tile_width <= 0 or args.tile_height <= 0:
+        raise ValueError('--tile-width and --tile-height must be positive')
     models = parse_csv(args.models)
     layers = parse_csv(args.layers)
     styles = parse_csv(args.styles)
@@ -119,9 +125,12 @@ def main() -> None:
 
     inventory: List[Dict[str, Any]] = []
     generated = 0
+    panel_inputs: Dict[tuple, Path] = {}
+    source_images: Dict[int, str] = {}
     for position, ((model, image_id), rows) in enumerate(
             sorted(grouped.items()), 1):
         image = load_rgb(rows[0]['image_path'])
+        source_images[image_id] = str(rows[0]['image_path'])
         height, width = image.shape[:2]
         for layer in layers:
             raw_maps = [
@@ -150,9 +159,39 @@ def main() -> None:
                     'path': str(destination),
                 })
                 generated += 1
+                panel_inputs[(style, image_id, layer, model)] = destination
         print(
             f'[{position}/{len(grouped)}] {model} image={image_id} '
             f'predictions={len(rows)}', flush=True)
+
+    panel_count = 0
+    skipped_incomplete_panels = 0
+    for style in styles:
+        for image_id in sorted(source_images):
+            for layer in layers:
+                paths = [
+                    panel_inputs.get((style, image_id, layer, model))
+                    for model in models
+                ]
+                if not all(path and path.is_file() for path in paths):
+                    skipped_incomplete_panels += 1
+                    continue
+                tiles = [labeled_tile(
+                    load_rgb(source_images[image_id]), 'Input',
+                    args.tile_width, args.tile_height)]
+                for model, path in zip(models, paths):
+                    tiles.append(labeled_tile(
+                        load_rgb(path), model,
+                        args.tile_width, args.tile_height))
+                panel = compose_grid([tiles])
+                destination = (
+                    out_dir / 'panels' / style / clean_name(layer) /
+                    f'image_{image_id:08d}.png')
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                panel.save(
+                    destination, format='PNG',
+                    compress_level=args.png_compress_level)
+                panel_count += 1
 
     if not inventory:
         raise RuntimeError('No legacy prediction CAM visualizations were rendered')
@@ -167,19 +206,29 @@ def main() -> None:
         'normalization': 'per-image-per-model-per-layer min-max after aggregation',
         'views': 'pure heatmap only',
         'model_image_groups': len(grouped),
+        'individual_png': generated,
+        'panel_png': panel_count,
+        'total_png': generated + panel_count,
         'generated_png': generated,
-        'output_contract': 'One PNG per style, image, model and layer.',
+        'skipped_incomplete_panels': skipped_incomplete_panels,
+        'output_contract': (
+            'One individual PNG per style, image, model and layer, plus one '
+            'input-and-model comparison panel per style, image and layer.'),
         'comparability_warning': (
             'Independent min-max improves visual contrast but color magnitude '
             'must not be compared quantitatively across models.'),
     })
     atomic_write_json(out_dir / 'COMPLETE.json', {
         'status': 'complete',
+        'individual_png': generated,
+        'panel_png': panel_count,
+        'total_png': generated + panel_count,
         'generated_png': generated,
         'render_summary': str(out_dir / 'render_summary.json'),
     })
     print(f'Legacy prediction aggregation outputs: {out_dir}')
     print(f'Generated PNG: {generated}')
+    print(f'Generated panels: {panel_count}')
 
 
 if __name__ == '__main__':

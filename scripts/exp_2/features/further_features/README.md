@@ -208,6 +208,11 @@ default aggregation is pixelwise `max`; `sum` and `mean` are also supported via
 changed to `overlay` or `with_gt` with `FIXED_GT_IMAGE_AGGREGATE_VIEW`. This
 compact output is useful for comparison with older top-k prediction aggregation
 scripts, while per-instance fixed-GT CAM remains the primary controlled result.
+It also writes final cross-model panels to
+`image_aggregate/panels/STRATEGY/LAYER/image_*.png`. Each panel fixes the
+strategy, source image and layer, then places the input image followed by the
+four detector-backbone results in columns. Incomplete model sets are skipped
+and counted in `render_summary.json`.
 
 For a direct reproduction of the three legacy prediction-CAM scripts, the
 prediction branch also writes `legacy_image_aggregate/`. It aggregates the
@@ -217,6 +222,16 @@ per image, model, layer and style. `legacy_jet` matches the older OpenCV JET
 renderer; `legacy_turbo_gamma05` matches the newer Turbo renderer with gamma
 0.5. These high-contrast images are for qualitative display only and must not
 be used to compare absolute response magnitude across models.
+Final legacy comparison panels are written to
+`legacy_image_aggregate/panels/STYLE/LAYER/image_*.png`, with the input image
+in the first column and the four detector results in the remaining columns.
+The style, image and layer are therefore held constant inside each panel.
+
+The bare pretrained-backbone branch already uses the same comparison contract:
+each normalization output contains `panels/LAYER/*.png`, where one panel fixes
+the normalization strategy, image and layer and compares the input against all
+four pretrained backbones. No new feature extraction or activation calculation
+is required to obtain these panels.
 
 ## Quantitative outputs
 

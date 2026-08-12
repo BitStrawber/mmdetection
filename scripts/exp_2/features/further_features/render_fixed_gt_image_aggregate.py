@@ -20,8 +20,10 @@ from cam_common import (  # noqa: E402
     atomic_write_json,
     blue_yellow_rgb,
     clean_name,
+    compose_grid,
     draw_box,
     finite_percentiles,
+    labeled_tile,
     load_rgb,
     normalize_with_limits,
     overlay_heatmap,
@@ -51,6 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--overlay-alpha', type=float, default=0.48)
     parser.add_argument('--png-compress-level', type=int, default=3)
+    parser.add_argument('--tile-width', type=int, default=420)
+    parser.add_argument('--tile-height', type=int, default=315)
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -106,6 +110,8 @@ def main() -> None:
         raise ValueError('--overlay-alpha must be in [0, 1]')
     if not 0 <= args.png_compress_level <= 9:
         raise ValueError('--png-compress-level must be in [0, 9]')
+    if args.tile_width <= 0 or args.tile_height <= 0:
+        raise ValueError('--tile-width and --tile-height must be positive')
 
     cam_root = Path(args.cam_root).expanduser().resolve()
     records = read_jsonl(cam_root / 'raw_cam_index.jsonl')
@@ -140,6 +146,8 @@ def main() -> None:
     image_rows: List[Dict[str, Any]] = []
     generated = 0
     skipped_incomplete = 0
+    panel_inputs: Dict[tuple, Path] = {}
+    source_images: Dict[int, str] = {}
 
     for position, image_id in enumerate(sorted(by_image), 1):
         model_rows = by_image[image_id]
@@ -155,6 +163,7 @@ def main() -> None:
             continue
 
         reference_row = model_rows[args.reference_model][annotation_ids[0]]
+        source_images[image_id] = str(reference_row['image_path'])
         image = load_rgb(reference_row['image_path'])
         height, width = image.shape[:2]
         boxes = reference_row.get('all_gt_boxes_xyxy_original', [])
@@ -215,6 +224,7 @@ def main() -> None:
                         'high_value': high,
                     })
                     generated += 1
+                    panel_inputs[(strategy, image_id, layer, model)] = destination
 
         image_rows.append({
             'image_id': image_id,
@@ -224,6 +234,35 @@ def main() -> None:
         print(
             f'[{position}/{len(by_image)}] image={image_id} '
             f'instances={len(annotation_ids)}', flush=True)
+
+    panel_count = 0
+    skipped_incomplete_panels = 0
+    for strategy in strategies:
+        for image_id in sorted(source_images):
+            for layer in layers:
+                paths = [
+                    panel_inputs.get((strategy, image_id, layer, model))
+                    for model in models
+                ]
+                if not all(path and path.is_file() for path in paths):
+                    skipped_incomplete_panels += 1
+                    continue
+                tiles = [labeled_tile(
+                    load_rgb(source_images[image_id]), 'Input',
+                    args.tile_width, args.tile_height)]
+                for model, path in zip(models, paths):
+                    tiles.append(labeled_tile(
+                        load_rgb(path), model,
+                        args.tile_width, args.tile_height))
+                panel = compose_grid([tiles])
+                destination = (
+                    out_dir / 'panels' / strategy / clean_name(layer) /
+                    f'image_{image_id:08d}.png')
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                panel.save(
+                    destination, format='PNG',
+                    compress_level=args.png_compress_level)
+                panel_count += 1
 
     if not normalization_rows:
         raise RuntimeError('No complete image-level CAM groups were rendered')
@@ -240,17 +279,26 @@ def main() -> None:
         'view': args.view,
         'images': len(image_rows),
         'skipped_incomplete_images': skipped_incomplete,
+        'individual_png': generated,
+        'panel_png': panel_count,
+        'total_png': generated + panel_count,
         'generated_png': generated,
+        'skipped_incomplete_panels': skipped_incomplete_panels,
         'output_contract': (
-            'Exactly one PNG per image, model, layer and strategy.'),
+            'One individual PNG per image, model, layer and strategy, plus '
+            'one input-and-model comparison panel per image, layer and strategy.'),
     })
     atomic_write_json(out_dir / 'COMPLETE.json', {
         'status': 'complete',
+        'individual_png': generated,
+        'panel_png': panel_count,
+        'total_png': generated + panel_count,
         'generated_png': generated,
         'render_summary': str(out_dir / 'render_summary.json'),
     })
     print(f'Fixed-GT image aggregation outputs: {out_dir}')
     print(f'Generated PNG: {generated}')
+    print(f'Generated panels: {panel_count}')
 
 
 if __name__ == '__main__':

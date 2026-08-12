@@ -195,7 +195,12 @@ def prepare_image(model: Any, pipeline: Compose, path: Path, image_id: int):
     data['inputs'] = [data['inputs']]
     data['data_samples'] = [data['data_samples']]
     processed = model.data_preprocessor(data, training=False)
-    return processed['inputs'], processed['data_samples']
+    # Downstream configs can freeze every backbone parameter. Autograd then
+    # drops the backbone graph unless another input requires gradients. CAM
+    # only needs gradients with respect to captured activations, so make the
+    # preprocessed image a detached leaf without unfreezing model weights.
+    batch_inputs = processed['inputs'].detach().requires_grad_(True)
+    return batch_inputs, processed['data_samples']
 
 
 def main() -> None:
@@ -304,6 +309,16 @@ def main() -> None:
                     if missing:
                         raise RuntimeError(f'{model_id}: hooks missed layers {sorted(missing)}')
                     activations = [captures[layer] for layer in selected_layers]
+                    non_differentiable = [
+                        layer for layer, activation in zip(
+                            selected_layers, activations)
+                        if not activation.requires_grad
+                    ]
+                    if non_differentiable:
+                        raise RuntimeError(
+                            f'{model_id}: target activations do not require gradients: '
+                            f'{non_differentiable}. Ensure CAM inference is not wrapped in '
+                            'torch.no_grad() and batch inputs require gradients.')
                     metadata = data_samples[0].metainfo
                     ori_shape = shape_pair(
                         metadata.get('ori_shape'),

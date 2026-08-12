@@ -275,6 +275,16 @@ def main() -> None:
                     if missing:
                         raise RuntimeError(f'{model_id}: hooks missed layers {sorted(missing)}')
                     activations = [captures[layer] for layer in selected_layers]
+                    non_differentiable = [
+                        layer for layer, activation in zip(
+                            selected_layers, activations)
+                        if not activation.requires_grad
+                    ]
+                    if non_differentiable:
+                        raise RuntimeError(
+                            f'{model_id}: target activations do not require gradients: '
+                            f'{non_differentiable}. Ensure CAM inference is not wrapped in '
+                            'torch.no_grad() and batch inputs require gradients.')
                     metadata = data_samples[0].metainfo
                     ori_shape = shape_pair(
                         metadata.get('ori_shape'),

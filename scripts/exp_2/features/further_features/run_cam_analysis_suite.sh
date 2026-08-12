@@ -155,6 +155,10 @@ if [[ "${RUN_PREDICTION_CAM}" == 1 ]]; then
         LOG_ROOT="${OUT_ROOT}/prediction/logs" \
         RUN_EXTRACT="${RUN_PREDICTION_EXTRACT:-1}" \
         RUN_RENDER="${RUN_PREDICTION_RENDER:-1}" \
+        RUN_LEGACY_AGGREGATE="${RUN_PREDICTION_LEGACY_AGGREGATE:-1}" \
+        LEGACY_AGGREGATE_ROOT="${OUT_ROOT}/prediction/legacy_image_aggregate" \
+        LEGACY_AGGREGATION="${PREDICTION_LEGACY_AGGREGATION:-sum}" \
+        LEGACY_STYLES="${PREDICTION_LEGACY_STYLES:-legacy_jet,legacy_turbo_gamma05}" \
         LAYERS="${LAYERS}" \
         CASCADE_STAGE="${CASCADE_STAGE}" \
         SCORE_THRESHOLD="${PREDICTION_SCORE_THRESHOLD}" \

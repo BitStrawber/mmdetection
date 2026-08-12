@@ -209,6 +209,15 @@ changed to `overlay` or `with_gt` with `FIXED_GT_IMAGE_AGGREGATE_VIEW`. This
 compact output is useful for comparison with older top-k prediction aggregation
 scripts, while per-instance fixed-GT CAM remains the primary controlled result.
 
+For a direct reproduction of the three legacy prediction-CAM scripts, the
+prediction branch also writes `legacy_image_aggregate/`. It aggregates the
+top-scoring prediction CAMs for each image and layer (`sum` by default), applies
+independent post-aggregation min-max normalization, and saves one pure heatmap
+per image, model, layer and style. `legacy_jet` matches the older OpenCV JET
+renderer; `legacy_turbo_gamma05` matches the newer Turbo renderer with gamma
+0.5. These high-contrast images are for qualitative display only and must not
+be used to compare absolute response magnitude across models.
+
 ## Quantitative outputs
 
 The renderer computes, per model/instance/layer:

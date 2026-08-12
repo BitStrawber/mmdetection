@@ -30,6 +30,10 @@ DEVICES="${DEVICES:-cuda:0}"
 PARALLEL_MODELS="${PARALLEL_MODELS:-1}"
 RUN_EXTRACT="${RUN_EXTRACT:-1}"
 RUN_RENDER="${RUN_RENDER:-1}"
+RUN_LEGACY_AGGREGATE="${RUN_LEGACY_AGGREGATE:-1}"
+LEGACY_AGGREGATE_ROOT="${LEGACY_AGGREGATE_ROOT:-${OUT_ROOT}/legacy_image_aggregate}"
+LEGACY_AGGREGATION="${LEGACY_AGGREGATION:-sum}"
+LEGACY_STYLES="${LEGACY_STYLES:-legacy_jet,legacy_turbo_gamma05}"
 RESUME="${RESUME:-1}"
 
 mkdir -p "${OUT_ROOT}" "${LOG_ROOT}"
@@ -142,11 +146,28 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         "${render_args[@]}" 2>&1 | tee "${LOG_ROOT}/render.log"
 fi
 
+if [[ "${RUN_LEGACY_AGGREGATE}" == 1 ]]; then
+    legacy_args=(
+        --cam-root "${CAM_ROOT}"
+        --out-dir "${LEGACY_AGGREGATE_ROOT}"
+        --models "${MODEL_CSV}"
+        --layers "${LAYERS}"
+        --aggregation "${LEGACY_AGGREGATION}"
+        --styles "${LEGACY_STYLES}"
+    )
+    [[ "${RESUME}" == 1 ]] && legacy_args+=(--overwrite)
+    python "${SCRIPT_DIR}/render_prediction_legacy_aggregate.py" \
+        "${legacy_args[@]}" 2>&1 | tee "${LOG_ROOT}/render_legacy_aggregate.log"
+fi
+
 cat > "${OUT_ROOT}/COMPLETE.env" <<EOF
 STATUS=complete
 METHOD=prediction_conditioned_xgradcam
 CAM_ROOT=${CAM_ROOT}
 RENDER_ROOT=${RENDER_ROOT}
+LEGACY_AGGREGATE_ROOT=${LEGACY_AGGREGATE_ROOT}
+LEGACY_AGGREGATION=${LEGACY_AGGREGATION}
+LEGACY_STYLES=${LEGACY_STYLES}
 MODELS=${MODEL_CSV}
 LAYERS=${LAYERS}
 EOF

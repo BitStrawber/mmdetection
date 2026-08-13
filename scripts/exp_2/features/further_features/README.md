@@ -200,14 +200,18 @@ raw CAM magnitude is affected by classifier, BN and logit scale, so shared-scale
 color intensity is supporting evidence only. Primary quantitative evidence
 should use scale-invariant spatial metrics.
 
-An additional compact old-style view is written to `image_aggregate/`. It
+The default paper-facing Fixed-GT visualization is written to `image_aggregate/`.
+It
 combines the separate fixed-GT CAMs belonging to the same image and writes
 exactly one PNG for every image, model, layer and normalization strategy. The
 default aggregation is pixelwise `max`; `sum` and `mean` are also supported via
 `FIXED_GT_IMAGE_AGGREGATION`. The one saved view defaults to `pure` and can be
 changed to `overlay` or `with_gt` with `FIXED_GT_IMAGE_AGGREGATE_VIEW`. This
 compact output is useful for comparison with older top-k prediction aggregation
-scripts, while per-instance fixed-GT CAM remains the primary controlled result.
+scripts, while raw per-instance fixed-GT CAM remains the primary controlled
+result. The default pipeline still computes per-instance spatial metrics, but
+does not write high-volume per-annotation PNGs. Set `SAVE_INSTANCE_VIEWS=1`
+only when those diagnostic views are specifically needed.
 It also writes final cross-model panels to
 `image_aggregate/panels/STRATEGY/LAYER/image_*.png`. Each panel fixes the
 strategy, source image and layer, then places the input image followed by the
@@ -220,6 +224,11 @@ res5`.
 The same aggregate has a paper-oriented matrix at
 `image_aggregate/panels_5x4/STRATEGY/image_*.png`: rows are `res2-res5` and
 columns are `Input | ImageNet | RealUW | Synthetic5 | ImageNet+DFUI`.
+When the one-image aggregate PNGs already exist, run
+`compose_fixed_gt_image_aggregate_panels.sh` to create or refresh only these
+matrices. It reads the existing aggregate PNGs and the raw CAM index for the
+source image plus all GT boxes; it does not re-extract CAMs or rerender any
+per-annotation views.
 
 For a direct reproduction of the three legacy prediction-CAM scripts, the
 prediction branch also writes `legacy_image_aggregate/`. It aggregates the

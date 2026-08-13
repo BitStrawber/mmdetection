@@ -52,6 +52,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--tile-width', type=int, default=480)
     parser.add_argument('--tile-height', type=int, default=360)
     parser.add_argument('--panel-limit', type=int, default=0)
+    parser.add_argument(
+        '--skip-instance-images', action='store_true',
+        help=(
+            'Keep instance-level raw-CAM metrics but do not write per-GT '
+            'PNG views or per-GT panels. Use image-level aggregation for '
+            'paper-facing one-result-per-image visualizations.'),
+    )
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -222,16 +229,18 @@ def main() -> None:
                 }
                 label = f'{category_name} | ann {annotation_id}'
                 for strategy, (low, high) in strategies.items():
-                    _, heat, overlay, with_gt = render_one(
-                        cam, image, bbox, label, low, high,
-                        args.gamma, args.overlay_alpha)
-                    paths = output_paths(
-                        out_dir, strategy, model, image_id, annotation_id, layer)
-                    save_rgb(paths['pure'], heat, args.png_compress_level)
-                    save_rgb(paths['overlay'], overlay, args.png_compress_level)
-                    save_rgb(paths['with_gt'], with_gt, args.png_compress_level)
-                    panel_inputs[(strategy, image_id, annotation_id, layer, model)] = (
-                        paths['with_gt'])
+                    if not args.skip_instance_images:
+                        _, heat, overlay, with_gt = render_one(
+                            cam, image, bbox, label, low, high,
+                            args.gamma, args.overlay_alpha)
+                        paths = output_paths(
+                            out_dir, strategy, model, image_id, annotation_id, layer)
+                        save_rgb(paths['pure'], heat, args.png_compress_level)
+                        save_rgb(paths['overlay'], overlay, args.png_compress_level)
+                        save_rgb(paths['with_gt'], with_gt, args.png_compress_level)
+                        panel_inputs[(
+                            strategy, image_id, annotation_id, layer, model)] = (
+                                paths['with_gt'])
                     normalization_rows.append({
                         'strategy': strategy,
                         'model': model,
@@ -284,37 +293,40 @@ def main() -> None:
 
     panel_count = 0
     panel_5x4_count = 0
-    panel_keys = sorted(complete_keys)
-    if args.panel_limit > 0:
-        panel_keys = panel_keys[:args.panel_limit]
-    for strategy in (independent_strategy, reference_strategy):
-        for image_id, annotation_id in panel_keys:
-            reference = by_key[(image_id, annotation_id)][args.reference_model]
-            original = load_rgb(reference['image_path'])
-            original_with_gt = draw_box(
-                original,
-                reference['bbox_xyxy_original'],
-                f'{reference["category_name"]} | ann {annotation_id}')
-            grid_rows = []
-            for layer in layers:
-                layer_row = [labeled_tile(
-                    original_with_gt, f'Input + fixed GT | {layer}',
-                    args.tile_width, args.tile_height)]
-                for model in models:
-                    rendered = load_rgb(panel_inputs[
-                        (strategy, image_id, annotation_id, layer, model)])
-                    layer_row.append(labeled_tile(
-                        rendered, model,
-                        args.tile_width, args.tile_height))
-                grid_rows.append(layer_row)
-            panel = compose_grid(grid_rows)
-            panel_path = (
-                out_dir / 'panels_5x4' / strategy /
-                f'image_{image_id:08d}_ann_{annotation_id:08d}.png')
-            panel_path.parent.mkdir(parents=True, exist_ok=True)
-            panel.save(panel_path, format='PNG', compress_level=args.png_compress_level)
-            panel_count += 1
-            panel_5x4_count += 1
+    if not args.skip_instance_images:
+        panel_keys = sorted(complete_keys)
+        if args.panel_limit > 0:
+            panel_keys = panel_keys[:args.panel_limit]
+        for strategy in (independent_strategy, reference_strategy):
+            for image_id, annotation_id in panel_keys:
+                reference = by_key[(image_id, annotation_id)][args.reference_model]
+                original = load_rgb(reference['image_path'])
+                original_with_gt = draw_box(
+                    original,
+                    reference['bbox_xyxy_original'],
+                    f'{reference["category_name"]} | ann {annotation_id}')
+                grid_rows = []
+                for layer in layers:
+                    layer_row = [labeled_tile(
+                        original_with_gt, f'Input + fixed GT | {layer}',
+                        args.tile_width, args.tile_height)]
+                    for model in models:
+                        rendered = load_rgb(panel_inputs[
+                            (strategy, image_id, annotation_id, layer, model)])
+                        layer_row.append(labeled_tile(
+                            rendered, model,
+                            args.tile_width, args.tile_height))
+                    grid_rows.append(layer_row)
+                panel = compose_grid(grid_rows)
+                panel_path = (
+                    out_dir / 'panels_5x4' / strategy /
+                    f'image_{image_id:08d}_ann_{annotation_id:08d}.png')
+                panel_path.parent.mkdir(parents=True, exist_ok=True)
+                panel.save(
+                    panel_path, format='PNG',
+                    compress_level=args.png_compress_level)
+                panel_count += 1
+                panel_5x4_count += 1
 
     atomic_write_json(out_dir / 'render_summary.json', {
         'cam_root': str(cam_root),
@@ -336,6 +348,7 @@ def main() -> None:
         'gamma_for_display_only': args.gamma,
         'panels': panel_count,
         'panels_5x4': panel_5x4_count,
+        'instance_images_written': not args.skip_instance_images,
         'panel_layout': (
             'Rows=res2,res3,res4,res5; columns=input-with-fixed-GT plus '
             'the selected detector models.'),

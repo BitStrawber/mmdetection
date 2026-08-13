@@ -121,6 +121,7 @@ if [[ "${RUN_FIXED_GT_CAM}" == 1 ]]; then
         RUN_SAMPLE=0 \
         RUN_EXTRACT="${RUN_FIXED_GT_EXTRACT:-1}" \
         RUN_RENDER="${RUN_FIXED_GT_RENDER:-1}" \
+        SAVE_INSTANCE_VIEWS="${FIXED_GT_SAVE_INSTANCE_VIEWS:-0}" \
         RUN_PLOTS="${RUN_FIXED_GT_PLOTS:-1}" \
         RUN_IMAGE_AGGREGATE="${RUN_FIXED_GT_IMAGE_AGGREGATE:-1}" \
         IMAGE_AGGREGATE_ROOT="${OUT_ROOT}/fixed_gt/image_aggregate" \

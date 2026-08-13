@@ -30,6 +30,7 @@ PARALLEL_MODELS="${PARALLEL_MODELS:-1}"
 RUN_SAMPLE="${RUN_SAMPLE:-1}"
 RUN_EXTRACT="${RUN_EXTRACT:-1}"
 RUN_RENDER="${RUN_RENDER:-1}"
+SAVE_INSTANCE_VIEWS="${SAVE_INSTANCE_VIEWS:-0}"
 RUN_PLOTS="${RUN_PLOTS:-1}"
 RUN_IMAGE_AGGREGATE="${RUN_IMAGE_AGGREGATE:-1}"
 RESUME="${RESUME:-1}"
@@ -102,6 +103,7 @@ echo "Normalization outputs:   independent + ImageNet-reference"
 echo "Percentiles:             ${LOW_PERCENTILE}, ${HIGH_PERCENTILE}"
 echo "Devices:                 ${DEVICE_ARRAY[*]}"
 echo "Parallel models:         ${PARALLEL_MODELS}"
+echo "Save per-instance PNG:   ${SAVE_INSTANCE_VIEWS}"
 echo "Output:                  ${OUT_ROOT}"
 echo "============================================================"
 
@@ -207,6 +209,7 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         --panel-limit "${PANEL_LIMIT}"
     )
     [[ "${RESUME}" == 1 ]] && render_args+=(--overwrite)
+    [[ "${SAVE_INSTANCE_VIEWS}" == 0 ]] && render_args+=(--skip-instance-images)
     python "${SCRIPT_DIR}/render_fixed_gt_xgradcam.py" \
         "${render_args[@]}" \
         2>&1 | tee "${LOG_ROOT}/04_render.log"

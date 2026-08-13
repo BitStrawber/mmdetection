@@ -364,6 +364,46 @@ def render_combined_panels(
             flush=True)
 
 
+def render_cross_model_5x4_panels(
+    out_dir: Path, rows: Sequence[dict], models: Sequence[str],
+    layers: Sequence[str], png_compress_level: int,
+) -> None:
+    """Render one 4-row x 5-column panel per image for a shared scale."""
+    for position, row in enumerate(rows):
+        source_path = image_path(row)
+        with Image.open(source_path) as opened:
+            original = opened.convert('RGB')
+        file_stem = f'{position:05d}_{int(row["image_id"])}'
+        grid_rows = []
+        for layer in layers:
+            panel_row = [labeled_panel_tile(original, f'Input | {layer}')]
+            for model in models:
+                rendered_path = (
+                    out_dir / model / 'without_boxes' / layer /
+                    f'{file_stem}.png')
+                if not rendered_path.is_file():
+                    raise FileNotFoundError(rendered_path)
+                with Image.open(rendered_path) as opened:
+                    rendered = opened.convert('RGB')
+                panel_row.append(labeled_panel_tile(rendered, model))
+            grid_rows.append(panel_row)
+
+        width = max(tile.width for panel_row in grid_rows for tile in panel_row)
+        height = max(tile.height for panel_row in grid_rows for tile in panel_row)
+        panel = Image.new(
+            'RGB', (width * len(grid_rows[0]), height * len(grid_rows)),
+            color=(255, 255, 255))
+        for row_index, panel_row in enumerate(grid_rows):
+            for column_index, tile in enumerate(panel_row):
+                panel.paste(tile, (column_index * width, row_index * height))
+        panel_path = out_dir / 'panels_5x4' / f'{file_stem}.png'
+        panel_path.parent.mkdir(parents=True, exist_ok=True)
+        panel.save(panel_path, compress_level=png_compress_level)
+        print(
+            f'[panels-5x4] {position + 1}/{len(rows)} {row["file_name"]}',
+            flush=True)
+
+
 def labeled_panel_tile(
     image: Image.Image, label: str, label_height: int = 28,
 ) -> Image.Image:
@@ -521,6 +561,8 @@ def main() -> None:
                 item['sample_index'], item['layer'], item['model']))
         render_combined_panels(
             out_dir, rows, models, layers, args.png_compress_level)
+        render_cross_model_5x4_panels(
+            out_dir, rows, models, layers, args.png_compress_level)
         render_layer_evolution_panels(
             out_dir, rows, models, layers, args.png_compress_level)
 
@@ -571,6 +613,7 @@ def main() -> None:
             'raw_activation_arrays_saved': not args.skip_raw_activation,
             'model_workers': worker_count,
             'cross_model_panels': 'panels/LAYER/IMAGE.png',
+            'cross_model_5x4_panels': 'panels_5x4/IMAGE.png',
             'layer_evolution_panels': 'panels_by_model/MODEL/IMAGE.png',
             'png_compress_level': args.png_compress_level,
             'warning': 'These are feature activation maps, not Grad-CAM.',
@@ -710,6 +753,8 @@ def main() -> None:
 
     render_layer_evolution_panels(
         out_dir, rows, models, layers, args.png_compress_level)
+    render_cross_model_5x4_panels(
+        out_dir, rows, models, layers, args.png_compress_level)
 
     with (out_dir / 'activation_statistics.tsv').open(
             'w', encoding='utf-8', newline='') as handle:
@@ -760,6 +805,7 @@ def main() -> None:
         'raw_activation_arrays_saved': not args.skip_raw_activation,
         'png_compress_level': args.png_compress_level,
         'cross_model_panels': 'panels/LAYER/IMAGE.png',
+        'cross_model_5x4_panels': 'panels_5x4/IMAGE.png',
         'layer_evolution_panels': 'panels_by_model/MODEL/IMAGE.png',
         'warning': 'These are feature activation maps, not Grad-CAM.',
     })

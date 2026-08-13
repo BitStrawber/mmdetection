@@ -283,6 +283,7 @@ def main() -> None:
         aggregate_rows(metric_rows, ('model', 'layer', 'size_bucket_coco_pixels')))
 
     panel_count = 0
+    panel_5x4_count = 0
     panel_keys = sorted(complete_keys)
     if args.panel_limit > 0:
         panel_keys = panel_keys[:args.panel_limit]
@@ -295,30 +296,25 @@ def main() -> None:
                 reference['bbox_xyxy_original'],
                 f'{reference["category_name"]} | ann {annotation_id}')
             grid_rows = []
-            header = [labeled_tile(
-                original_with_gt, 'Input + fixed GT',
-                args.tile_width, args.tile_height)]
-            for model in models:
-                header.append(labeled_tile(
-                    original_with_gt, model, args.tile_width, args.tile_height))
-            grid_rows.append(header)
             for layer in layers:
                 layer_row = [labeled_tile(
-                    original_with_gt, layer, args.tile_width, args.tile_height)]
+                    original_with_gt, f'Input + fixed GT | {layer}',
+                    args.tile_width, args.tile_height)]
                 for model in models:
                     rendered = load_rgb(panel_inputs[
                         (strategy, image_id, annotation_id, layer, model)])
                     layer_row.append(labeled_tile(
-                        rendered, f'{model} | {layer}',
+                        rendered, model,
                         args.tile_width, args.tile_height))
                 grid_rows.append(layer_row)
             panel = compose_grid(grid_rows)
             panel_path = (
-                out_dir / 'panels' / strategy /
+                out_dir / 'panels_5x4' / strategy /
                 f'image_{image_id:08d}_ann_{annotation_id:08d}.png')
             panel_path.parent.mkdir(parents=True, exist_ok=True)
             panel.save(panel_path, format='PNG', compress_level=args.png_compress_level)
             panel_count += 1
+            panel_5x4_count += 1
 
     atomic_write_json(out_dir / 'render_summary.json', {
         'cam_root': str(cam_root),
@@ -339,6 +335,10 @@ def main() -> None:
         'high_percentile': args.high_percentile,
         'gamma_for_display_only': args.gamma,
         'panels': panel_count,
+        'panels_5x4': panel_5x4_count,
+        'panel_layout': (
+            'Rows=res2,res3,res4,res5; columns=input-with-fixed-GT plus '
+            'the selected detector models.'),
         'metrics_source': 'unnormalized nonnegative raw XGradCAM',
         'primary_metric_note': (
             'Prefer scale-invariant spatial metrics such as energy fraction, '

@@ -236,6 +236,7 @@ def main() -> None:
             f'instances={len(annotation_ids)}', flush=True)
 
     panel_count = 0
+    panel_5x4_count = 0
     panel_by_model_count = 0
     skipped_incomplete_panels = 0
     for strategy in strategies:
@@ -264,6 +265,39 @@ def main() -> None:
                     destination, format='PNG',
                     compress_level=args.png_compress_level)
                 panel_count += 1
+
+    for strategy in strategies:
+        for image_id in sorted(source_images):
+            grid_rows = []
+            complete = True
+            for layer in layers:
+                paths = [
+                    panel_inputs.get((strategy, image_id, layer, model))
+                    for model in models
+                ]
+                if not all(path and path.is_file() for path in paths):
+                    complete = False
+                    break
+                row = [labeled_tile(
+                    load_rgb(source_images[image_id]), f'Input | {layer}',
+                    args.tile_width, args.tile_height)]
+                for model, path in zip(models, paths):
+                    row.append(labeled_tile(
+                        load_rgb(path), model,
+                        args.tile_width, args.tile_height))
+                grid_rows.append(row)
+            if not complete:
+                skipped_incomplete_panels += 1
+                continue
+            panel = compose_grid(grid_rows)
+            destination = (
+                out_dir / 'panels_5x4' / strategy /
+                f'image_{image_id:08d}.png')
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            panel.save(
+                destination, format='PNG',
+                compress_level=args.png_compress_level)
+            panel_5x4_count += 1
 
     for strategy in strategies:
         for image_id in sorted(source_images):
@@ -309,27 +343,31 @@ def main() -> None:
         'skipped_incomplete_images': skipped_incomplete,
         'individual_png': generated,
         'panel_png': panel_count,
+        'panel_5x4_png': panel_5x4_count,
         'panel_by_model_png': panel_by_model_count,
-        'total_png': generated + panel_count + panel_by_model_count,
+        'total_png': generated + panel_count + panel_5x4_count + panel_by_model_count,
         'generated_png': generated,
         'skipped_incomplete_panels': skipped_incomplete_panels,
         'output_contract': (
             'One individual PNG per image, model, layer and strategy, plus '
             'one input-and-model comparison panel per image, layer and strategy, '
+            'one 4x5 input-and-model panel per image and strategy, '
             'plus one input-and-layer panel per image, model and strategy.'),
     })
     atomic_write_json(out_dir / 'COMPLETE.json', {
         'status': 'complete',
         'individual_png': generated,
         'panel_png': panel_count,
+        'panel_5x4_png': panel_5x4_count,
         'panel_by_model_png': panel_by_model_count,
-        'total_png': generated + panel_count + panel_by_model_count,
+        'total_png': generated + panel_count + panel_5x4_count + panel_by_model_count,
         'generated_png': generated,
         'render_summary': str(out_dir / 'render_summary.json'),
     })
     print(f'Fixed-GT image aggregation outputs: {out_dir}')
     print(f'Generated PNG: {generated}')
     print(f'Generated panels: {panel_count}')
+    print(f'Generated 4x5 panels: {panel_5x4_count}')
     print(f'Generated per-model panels: {panel_by_model_count}')
 
 

@@ -244,10 +244,12 @@ def main() -> None:
 
     # One image-level map per model/layer: pixelwise maximum across predictions.
     union_paths: Dict[Tuple[str, int, str, str], Path] = {}
+    union_source_paths: Dict[int, str] = {}
     for key, values in rendered_for_union.items():
         strategy, image_id, model, layer = key
         raw_union = np.maximum.reduce([item[0] for item in values])
         sample_row = values[0][1]
+        union_source_paths[image_id] = str(sample_row['image_path'])
         image = load_rgb(sample_row['image_path'])
         if strategy == 'independent_p1_p99':
             low, high = finite_percentiles(
@@ -279,14 +281,18 @@ def main() -> None:
                 continue
             grid = []
             for layer in layers:
-                grid.append([
-                    labeled_tile(
+                row = [labeled_tile(
+                    load_rgb(union_source_paths[image_id]), f'Input | {layer}',
+                    440, 330)]
+                for model in models:
+                    row.append(labeled_tile(
                         load_rgb(union_paths[(strategy, image_id, model, layer)]),
-                        f'{model} | {layer}', 440, 330)
-                    for model in models
-                ])
+                        model, 440, 330))
+                grid.append(row)
             panel = compose_grid(grid)
-            path = out_dir / 'panels' / strategy / f'image_{image_id:08d}.png'
+            path = (
+                out_dir / 'panels_5x4' / strategy /
+                f'image_{image_id:08d}.png')
             path.parent.mkdir(parents=True, exist_ok=True)
             panel.save(path, format='PNG', compress_level=args.png_compress_level)
             panel_count += 1
@@ -299,6 +305,10 @@ def main() -> None:
         'strategies': strategies,
         'prediction_layer_rows': len(metric_rows),
         'panels': panel_count,
+        'panels_5x4': panel_count,
+        'panel_layout': (
+            'Rows=res2,res3,res4,res5; columns=input plus the selected '
+            'detector models. Prediction unions remain model-specific.'),
         'interpretation': (
             'Prediction boxes/classes are model-specific. This is behavioral/error '
             'analysis and is not a controlled substitute for fixed-GT XGradCAM.'),

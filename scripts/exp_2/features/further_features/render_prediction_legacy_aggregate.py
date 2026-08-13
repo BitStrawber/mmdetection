@@ -165,6 +165,7 @@ def main() -> None:
             f'predictions={len(rows)}', flush=True)
 
     panel_count = 0
+    panel_5x4_count = 0
     panel_by_model_count = 0
     skipped_incomplete_panels = 0
     for style in styles:
@@ -193,6 +194,39 @@ def main() -> None:
                     destination, format='PNG',
                     compress_level=args.png_compress_level)
                 panel_count += 1
+
+    for style in styles:
+        for image_id in sorted(source_images):
+            grid_rows = []
+            complete = True
+            for layer in layers:
+                paths = [
+                    panel_inputs.get((style, image_id, layer, model))
+                    for model in models
+                ]
+                if not all(path and path.is_file() for path in paths):
+                    complete = False
+                    break
+                row = [labeled_tile(
+                    load_rgb(source_images[image_id]), f'Input | {layer}',
+                    args.tile_width, args.tile_height)]
+                for model, path in zip(models, paths):
+                    row.append(labeled_tile(
+                        load_rgb(path), model,
+                        args.tile_width, args.tile_height))
+                grid_rows.append(row)
+            if not complete:
+                skipped_incomplete_panels += 1
+                continue
+            panel = compose_grid(grid_rows)
+            destination = (
+                out_dir / 'panels_5x4' / style /
+                f'image_{image_id:08d}.png')
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            panel.save(
+                destination, format='PNG',
+                compress_level=args.png_compress_level)
+            panel_5x4_count += 1
 
     for style in styles:
         for image_id in sorted(source_images):
@@ -236,13 +270,15 @@ def main() -> None:
         'model_image_groups': len(grouped),
         'individual_png': generated,
         'panel_png': panel_count,
+        'panel_5x4_png': panel_5x4_count,
         'panel_by_model_png': panel_by_model_count,
-        'total_png': generated + panel_count + panel_by_model_count,
+        'total_png': generated + panel_count + panel_5x4_count + panel_by_model_count,
         'generated_png': generated,
         'skipped_incomplete_panels': skipped_incomplete_panels,
         'output_contract': (
             'One individual PNG per style, image, model and layer, plus one '
-            'input-and-model comparison panel per style, image and layer, plus '
+            'input-and-model comparison panel per style, image and layer, one '
+            '4x5 input-and-model panel per style and image, plus '
             'one input-and-layer panel per style, image and model.'),
         'comparability_warning': (
             'Independent min-max improves visual contrast but color magnitude '
@@ -252,14 +288,16 @@ def main() -> None:
         'status': 'complete',
         'individual_png': generated,
         'panel_png': panel_count,
+        'panel_5x4_png': panel_5x4_count,
         'panel_by_model_png': panel_by_model_count,
-        'total_png': generated + panel_count + panel_by_model_count,
+        'total_png': generated + panel_count + panel_5x4_count + panel_by_model_count,
         'generated_png': generated,
         'render_summary': str(out_dir / 'render_summary.json'),
     })
     print(f'Legacy prediction aggregation outputs: {out_dir}')
     print(f'Generated PNG: {generated}')
     print(f'Generated panels: {panel_count}')
+    print(f'Generated 4x5 panels: {panel_5x4_count}')
     print(f'Generated per-model panels: {panel_by_model_count}')
 
 

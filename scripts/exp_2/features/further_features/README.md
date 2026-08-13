@@ -217,6 +217,9 @@ For reading depth evolution within one detector, it additionally writes
 `image_aggregate/panels_by_model/STRATEGY/MODEL/image_*.png`. These panels fix
 the strategy, image and model and use the columns `Input | res2 | res3 | res4 |
 res5`.
+The same aggregate has a paper-oriented matrix at
+`image_aggregate/panels_5x4/STRATEGY/image_*.png`: rows are `res2-res5` and
+columns are `Input | ImageNet | RealUW | Synthetic5 | ImageNet+DFUI`.
 
 For a direct reproduction of the three legacy prediction-CAM scripts, the
 prediction branch also writes `legacy_image_aggregate/`. It aggregates the
@@ -233,6 +236,8 @@ The style, image and layer are therefore held constant inside each panel.
 The companion layer-evolution panel is
 `legacy_image_aggregate/panels_by_model/STYLE/MODEL/image_*.png`, which fixes
 the style, image and model and uses `Input | res2 | res3 | res4 | res5`.
+It also writes the corresponding matrix to
+`legacy_image_aggregate/panels_5x4/STYLE/image_*.png`.
 
 The bare pretrained-backbone branch already uses the same comparison contract:
 each normalization output contains `panels/LAYER/*.png`, where one panel fixes
@@ -242,6 +247,14 @@ is required to obtain these panels. It also emits
 `panels_by_model/MODEL/*.png`, which fixes the normalization strategy, image
 and backbone and compares that backbone's `res2-res5` activations beside the
 input.
+
+Every branch now also writes `panels_5x4/` as the common paper-oriented main
+layout. One panel fixes a strategy and image. Its four rows are `res2-res5`;
+its five columns are `Input | ImageNet | RealUW | Synthetic5 | ImageNet+DFUI`.
+The input is repeated once per layer row. Fixed-GT uses the controlled GT box
+on the input column, prediction panels use a clean common input because each
+model's prediction boxes are intentionally model-specific, and bare-backbone
+panels show the unboxed source image.
 
 ## Quantitative outputs
 

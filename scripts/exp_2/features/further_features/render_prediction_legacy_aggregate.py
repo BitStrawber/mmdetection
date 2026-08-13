@@ -165,6 +165,7 @@ def main() -> None:
             f'predictions={len(rows)}', flush=True)
 
     panel_count = 0
+    panel_by_model_count = 0
     skipped_incomplete_panels = 0
     for style in styles:
         for image_id in sorted(source_images):
@@ -193,6 +194,33 @@ def main() -> None:
                     compress_level=args.png_compress_level)
                 panel_count += 1
 
+    for style in styles:
+        for image_id in sorted(source_images):
+            for model in models:
+                paths = [
+                    panel_inputs.get((style, image_id, layer, model))
+                    for layer in layers
+                ]
+                if not all(path and path.is_file() for path in paths):
+                    skipped_incomplete_panels += 1
+                    continue
+                tiles = [labeled_tile(
+                    load_rgb(source_images[image_id]), 'Input',
+                    args.tile_width, args.tile_height)]
+                for layer, path in zip(layers, paths):
+                    tiles.append(labeled_tile(
+                        load_rgb(path), layer,
+                        args.tile_width, args.tile_height))
+                panel = compose_grid([tiles])
+                destination = (
+                    out_dir / 'panels_by_model' / style /
+                    clean_name(model) / f'image_{image_id:08d}.png')
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                panel.save(
+                    destination, format='PNG',
+                    compress_level=args.png_compress_level)
+                panel_by_model_count += 1
+
     if not inventory:
         raise RuntimeError('No legacy prediction CAM visualizations were rendered')
     write_tsv(out_dir / 'image_inventory.tsv', inventory)
@@ -208,12 +236,14 @@ def main() -> None:
         'model_image_groups': len(grouped),
         'individual_png': generated,
         'panel_png': panel_count,
-        'total_png': generated + panel_count,
+        'panel_by_model_png': panel_by_model_count,
+        'total_png': generated + panel_count + panel_by_model_count,
         'generated_png': generated,
         'skipped_incomplete_panels': skipped_incomplete_panels,
         'output_contract': (
             'One individual PNG per style, image, model and layer, plus one '
-            'input-and-model comparison panel per style, image and layer.'),
+            'input-and-model comparison panel per style, image and layer, plus '
+            'one input-and-layer panel per style, image and model.'),
         'comparability_warning': (
             'Independent min-max improves visual contrast but color magnitude '
             'must not be compared quantitatively across models.'),
@@ -222,13 +252,15 @@ def main() -> None:
         'status': 'complete',
         'individual_png': generated,
         'panel_png': panel_count,
-        'total_png': generated + panel_count,
+        'panel_by_model_png': panel_by_model_count,
+        'total_png': generated + panel_count + panel_by_model_count,
         'generated_png': generated,
         'render_summary': str(out_dir / 'render_summary.json'),
     })
     print(f'Legacy prediction aggregation outputs: {out_dir}')
     print(f'Generated PNG: {generated}')
     print(f'Generated panels: {panel_count}')
+    print(f'Generated per-model panels: {panel_by_model_count}')
 
 
 if __name__ == '__main__':

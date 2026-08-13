@@ -364,6 +364,58 @@ def render_combined_panels(
             flush=True)
 
 
+def labeled_panel_tile(
+    image: Image.Image, label: str, label_height: int = 28,
+) -> Image.Image:
+    canvas = Image.new(
+        'RGB', (image.width, image.height + label_height), (255, 255, 255))
+    canvas.paste(image, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    bounds = draw.textbbox((0, 0), label)
+    text_width = bounds[2] - bounds[0]
+    draw.text(
+        ((image.width - text_width) // 2, image.height + 6),
+        label, fill=(15, 15, 15))
+    return canvas
+
+
+def render_layer_evolution_panels(
+    out_dir: Path, rows: Sequence[dict], models: Sequence[str],
+    layers: Sequence[str], png_compress_level: int,
+) -> None:
+    """Render one input-plus-res2-res5 panel for each image and backbone."""
+    for position, row in enumerate(rows):
+        source_path = image_path(row)
+        with Image.open(source_path) as opened:
+            original = opened.convert('RGB')
+        file_stem = f'{position:05d}_{int(row["image_id"])}'
+        for model in models:
+            tiles = [labeled_panel_tile(original, 'Input')]
+            for layer in layers:
+                rendered_path = (
+                    out_dir / model / 'without_boxes' / layer /
+                    f'{file_stem}.png')
+                if not rendered_path.is_file():
+                    raise FileNotFoundError(rendered_path)
+                with Image.open(rendered_path) as opened:
+                    rendered = opened.convert('RGB')
+                tiles.append(labeled_panel_tile(rendered, layer))
+            panel = Image.new(
+                'RGB', (sum(tile.width for tile in tiles), tiles[0].height),
+                color=(255, 255, 255))
+            left = 0
+            for tile in tiles:
+                panel.paste(tile, (left, 0))
+                left += tile.width
+            panel_path = (
+                out_dir / 'panels_by_model' / model / f'{file_stem}.png')
+            panel_path.parent.mkdir(parents=True, exist_ok=True)
+            panel.save(panel_path, compress_level=png_compress_level)
+        print(
+            f'[layer-panels] {position + 1}/{len(rows)} {row["file_name"]}',
+            flush=True)
+
+
 def main() -> None:
     args = parse_args()
     if not 0 <= args.low_percentile < args.high_percentile <= 100:
@@ -469,6 +521,8 @@ def main() -> None:
                 item['sample_index'], item['layer'], item['model']))
         render_combined_panels(
             out_dir, rows, models, layers, args.png_compress_level)
+        render_layer_evolution_panels(
+            out_dir, rows, models, layers, args.png_compress_level)
 
         with (out_dir / 'activation_statistics.tsv').open(
                 'w', encoding='utf-8', newline='') as handle:
@@ -516,6 +570,8 @@ def main() -> None:
                 'raw activation before normalization'),
             'raw_activation_arrays_saved': not args.skip_raw_activation,
             'model_workers': worker_count,
+            'cross_model_panels': 'panels/LAYER/IMAGE.png',
+            'layer_evolution_panels': 'panels_by_model/MODEL/IMAGE.png',
             'png_compress_level': args.png_compress_level,
             'warning': 'These are feature activation maps, not Grad-CAM.',
         })
@@ -652,6 +708,9 @@ def main() -> None:
                 panel_path, compress_level=args.png_compress_level)
         print(f'[{position + 1}/{len(rows)}] {row["file_name"]}', flush=True)
 
+    render_layer_evolution_panels(
+        out_dir, rows, models, layers, args.png_compress_level)
+
     with (out_dir / 'activation_statistics.tsv').open(
             'w', encoding='utf-8', newline='') as handle:
         writer = csv.DictWriter(handle, fieldnames=list(statistics[0]), delimiter='\t')
@@ -700,6 +759,8 @@ def main() -> None:
         'quantitative_statistics_source': 'raw activation before normalization',
         'raw_activation_arrays_saved': not args.skip_raw_activation,
         'png_compress_level': args.png_compress_level,
+        'cross_model_panels': 'panels/LAYER/IMAGE.png',
+        'layer_evolution_panels': 'panels_by_model/MODEL/IMAGE.png',
         'warning': 'These are feature activation maps, not Grad-CAM.',
     })
     print(f'Feature activation outputs: {out_dir}')

@@ -213,6 +213,10 @@ It also writes final cross-model panels to
 strategy, source image and layer, then places the input image followed by the
 four detector-backbone results in columns. Incomplete model sets are skipped
 and counted in `render_summary.json`.
+For reading depth evolution within one detector, it additionally writes
+`image_aggregate/panels_by_model/STRATEGY/MODEL/image_*.png`. These panels fix
+the strategy, image and model and use the columns `Input | res2 | res3 | res4 |
+res5`.
 
 For a direct reproduction of the three legacy prediction-CAM scripts, the
 prediction branch also writes `legacy_image_aggregate/`. It aggregates the
@@ -226,12 +230,18 @@ Final legacy comparison panels are written to
 `legacy_image_aggregate/panels/STYLE/LAYER/image_*.png`, with the input image
 in the first column and the four detector results in the remaining columns.
 The style, image and layer are therefore held constant inside each panel.
+The companion layer-evolution panel is
+`legacy_image_aggregate/panels_by_model/STYLE/MODEL/image_*.png`, which fixes
+the style, image and model and uses `Input | res2 | res3 | res4 | res5`.
 
 The bare pretrained-backbone branch already uses the same comparison contract:
 each normalization output contains `panels/LAYER/*.png`, where one panel fixes
 the normalization strategy, image and layer and compares the input against all
 four pretrained backbones. No new feature extraction or activation calculation
-is required to obtain these panels.
+is required to obtain these panels. It also emits
+`panels_by_model/MODEL/*.png`, which fixes the normalization strategy, image
+and backbone and compares that backbone's `res2-res5` activations beside the
+input.
 
 ## Quantitative outputs
 

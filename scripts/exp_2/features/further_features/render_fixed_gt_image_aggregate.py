@@ -23,6 +23,7 @@ from cam_common import (  # noqa: E402
     compose_grid,
     draw_box,
     finite_percentiles,
+    jet_rgb,
     labeled_tile,
     load_rgb,
     normalize_with_limits,
@@ -51,6 +52,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument('--gamma', type=float, default=1.0)
+    parser.add_argument(
+        '--colormap', choices=('blue_yellow', 'jet'), default='blue_yellow',
+        help='Display colormap only; raw CAM aggregation and normalization stay unchanged.')
     parser.add_argument('--overlay-alpha', type=float, default=0.48)
     parser.add_argument('--png-compress-level', type=int, default=3)
     parser.add_argument('--tile-width', type=int, default=420)
@@ -77,10 +81,16 @@ def render_view(
     low: float,
     high: float,
     gamma: float,
+    colormap: str,
     overlay_alpha: float,
     view: str,
 ) -> np.ndarray:
-    heat = blue_yellow_rgb(normalize_with_limits(raw, low, high), gamma)
+    normalized = normalize_with_limits(raw, low, high)
+    heat = (
+        blue_yellow_rgb(normalized, gamma)
+        if colormap == 'blue_yellow'
+        else jet_rgb(normalized, gamma)
+    )
     if view == 'pure':
         return heat
     rendered = overlay_heatmap(image, heat, overlay_alpha)
@@ -206,7 +216,8 @@ def main() -> None:
                             destination,
                             render_view(
                                 aggregated[model], image, boxes, low, high,
-                                args.gamma, args.overlay_alpha, args.view),
+                                args.gamma, args.colormap, args.overlay_alpha,
+                                args.view),
                             args.png_compress_level,
                         )
                     normalization_rows.append({
@@ -339,6 +350,7 @@ def main() -> None:
         'reference_model': args.reference_model,
         'aggregation': args.aggregation,
         'view': args.view,
+        'colormap': args.colormap,
         'images': len(image_rows),
         'skipped_incomplete_images': skipped_incomplete,
         'individual_png': generated,

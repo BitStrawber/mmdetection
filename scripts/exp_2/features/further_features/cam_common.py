@@ -197,6 +197,18 @@ def blue_yellow_rgb(normalized: np.ndarray, gamma: float = 1.0) -> np.ndarray:
     return np.clip(rgb, 0, 255).astype(np.uint8)
 
 
+def jet_rgb(normalized: np.ndarray, gamma: float = 1.0) -> np.ndarray:
+    """Map [0, 1] to OpenCV JET after an optional display-only gamma."""
+    value = np.clip(np.asarray(normalized, dtype=np.float32), 0.0, 1.0)
+    if gamma <= 0:
+        raise ValueError('gamma must be positive')
+    if gamma != 1.0:
+        value = np.power(value, gamma)
+    bgr = cv2.applyColorMap(
+        np.uint8(np.clip(value, 0.0, 1.0) * 255.0), cv2.COLORMAP_JET)
+    return cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+
+
 def load_rgb(path: Union[str, Path]) -> np.ndarray:
     with Image.open(existing_file(path)) as image:
         return np.asarray(image.convert('RGB'))

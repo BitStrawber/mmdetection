@@ -44,6 +44,7 @@ RENDER_ROOT="${RENDER_ROOT:-${OUT_ROOT}/rendered}"
 IMAGE_AGGREGATE_ROOT="${IMAGE_AGGREGATE_ROOT:-${OUT_ROOT}/image_aggregate}"
 IMAGE_AGGREGATION="${IMAGE_AGGREGATION:-max}"
 IMAGE_AGGREGATE_VIEW="${IMAGE_AGGREGATE_VIEW:-pure}"
+IMAGE_AGGREGATE_COLORMAP="${IMAGE_AGGREGATE_COLORMAP:-blue_yellow}"
 LOG_ROOT="${LOG_ROOT:-${OUT_ROOT}/logs}"
 
 mkdir -p "${OUT_ROOT}" "${LOG_ROOT}"
@@ -104,6 +105,7 @@ echo "Percentiles:             ${LOW_PERCENTILE}, ${HIGH_PERCENTILE}"
 echo "Devices:                 ${DEVICE_ARRAY[*]}"
 echo "Parallel models:         ${PARALLEL_MODELS}"
 echo "Save per-instance PNG:   ${SAVE_INSTANCE_VIEWS}"
+echo "Aggregate colormap:      ${IMAGE_AGGREGATE_COLORMAP}"
 echo "Output:                  ${OUT_ROOT}"
 echo "============================================================"
 
@@ -224,6 +226,7 @@ if [[ "${RUN_IMAGE_AGGREGATE}" == 1 ]]; then
         --layers "${LAYERS}"
         --aggregation "${IMAGE_AGGREGATION}"
         --view "${IMAGE_AGGREGATE_VIEW}"
+        --colormap "${IMAGE_AGGREGATE_COLORMAP}"
         --low-percentile "${LOW_PERCENTILE}"
         --high-percentile "${HIGH_PERCENTILE}"
         --gamma "${DISPLAY_GAMMA}"
@@ -254,6 +257,7 @@ RENDER_ROOT=${RENDER_ROOT}
 IMAGE_AGGREGATE_ROOT=${IMAGE_AGGREGATE_ROOT}
 IMAGE_AGGREGATION=${IMAGE_AGGREGATION}
 IMAGE_AGGREGATE_VIEW=${IMAGE_AGGREGATE_VIEW}
+IMAGE_AGGREGATE_COLORMAP=${IMAGE_AGGREGATE_COLORMAP}
 REFERENCE_MODEL=${REFERENCE_MODEL}
 MODELS=${MODEL_CSV}
 LAYERS=${LAYERS}

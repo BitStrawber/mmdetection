@@ -212,6 +212,9 @@ scripts, while raw per-instance fixed-GT CAM remains the primary controlled
 result. The default pipeline still computes per-instance spatial metrics, but
 does not write high-volume per-annotation PNGs. Set `SAVE_INSTANCE_VIEWS=1`
 only when those diagnostic views are specifically needed.
+The default `blue_yellow` display palette can be changed to `jet` through
+`FIXED_GT_IMAGE_AGGREGATE_COLORMAP=jet`. This changes color encoding only;
+aggregation, percentile bounds, raw CAM files and spatial metrics are identical.
 It also writes final cross-model panels to
 `image_aggregate/panels/STRATEGY/LAYER/image_*.png`. Each panel fixes the
 strategy, source image and layer, then places the input image followed by the

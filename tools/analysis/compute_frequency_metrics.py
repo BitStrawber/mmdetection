@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
@@ -29,6 +30,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--pretrained-models', required=True)
     parser.add_argument('--detector-models', required=True)
     parser.add_argument('--variants', default=','.join(VARIANTS))
+    parser.add_argument(
+        '--model-workers', type=int, default=1,
+        help='Independent model processes used to read spatial features.')
     parser.add_argument('--out-dir', required=True)
     parser.add_argument('--eps', type=float, default=1e-12)
     parser.add_argument('--overwrite', action='store_true')
@@ -125,6 +129,42 @@ def plot_metric(rows: List[dict], models: List[str], layers: List[str], metric: 
     plt.close(figure)
 
 
+def process_model(task: Mapping[str, object]) -> List[dict]:
+    """Compute all sample/layer/variant metrics for one isolated model."""
+    root = Path(str(task['feature_root']))
+    model = str(task['model'])
+    group = str(task['group'])
+    rows = task['rows']
+    layers = task['layers']
+    variants = task['variants']
+    input_rms = task['input_rms']
+    eps = float(task['eps'])
+    result: List[dict] = []
+    for index, row in enumerate(rows):
+        image_id = int(row['image_id'])
+        width, height = int(row['width']), int(row['height'])
+        for layer in layers:
+            for variant in variants:
+                feature = load_feature(spatial_path(root, model, variant, index, image_id, layer))
+                feature_rms = float(np.sqrt(np.mean(np.square(feature, dtype=np.float64))))
+                activation = np.abs(feature).mean(axis=0)
+                fg_mask = mask_from_boxes(
+                    row.get('boxes_xyxy', []), activation.shape[0], activation.shape[1], height, width)
+                bg_mask = ~fg_mask
+                fg = float(activation[fg_mask].mean()) if fg_mask.any() else float('nan')
+                bg = float(activation[bg_mask].mean()) if bg_mask.any() else float('nan')
+                ratio = fg / max(bg, eps) if np.isfinite(fg) else float('nan')
+                current_input_rms = float(input_rms[(index, variant)])
+                result.append({
+                    'sample_index': index, 'image_id': image_id, 'model': model, 'group': group,
+                    'layer': layer, 'variant': variant, 'input_centered_rms': current_input_rms,
+                    'feature_rms': feature_rms, 'feature_input_norm': feature_rms / max(current_input_rms, eps),
+                    'fg_mean_abs_activation': fg, 'bg_mean_abs_activation': bg,
+                    'fg_bg_ratio': ratio, 'log_fg_bg_ratio': float(np.log(max(ratio, eps))),
+                })
+    return result
+
+
 def main() -> None:
     args = parse_args()
     root = Path(args.feature_root).expanduser().resolve()
@@ -133,33 +173,32 @@ def main() -> None:
     pretrained, detectors = parse_csv(args.pretrained_models), parse_csv(args.detector_models)
     if tuple(variants) != VARIANTS:
         raise ValueError(f'Variants must use the fixed paper order: {",".join(VARIANTS)}')
+    if args.model_workers <= 0:
+        raise ValueError('--model-workers must be positive')
     if set(pretrained) | set(detectors) != set(models) or set(pretrained) & set(detectors):
         raise ValueError('Each --models ID must occur in exactly one analysis group')
     out_dir = ensure_empty_or_create(Path(args.out_dir), args.overwrite)
     input_rms = {(index, variant): centered_rms(input_path(row, variant)) for index, row in enumerate(rows) for variant in variants}
+    tasks = [{
+        'feature_root': str(root), 'model': model,
+        'group': 'pretrained' if model in pretrained else 'detector',
+        'rows': rows, 'layers': layers, 'variants': variants,
+        'input_rms': input_rms, 'eps': args.eps,
+    } for model in models]
     per_sample: List[dict] = []
-    for model in models:
-        group = 'pretrained' if model in pretrained else 'detector'
-        for index, row in enumerate(rows):
-            image_id = int(row['image_id'])
-            width, height = int(row['width']), int(row['height'])
-            for layer in layers:
-                for variant in variants:
-                    feature = load_feature(spatial_path(root, model, variant, index, image_id, layer))
-                    feature_rms = float(np.sqrt(np.mean(np.square(feature, dtype=np.float64))))
-                    activation = np.abs(feature).mean(axis=0)
-                    fg_mask = mask_from_boxes(row.get('boxes_xyxy', []), activation.shape[0], activation.shape[1], height, width)
-                    bg_mask = ~fg_mask
-                    fg = float(activation[fg_mask].mean()) if fg_mask.any() else float('nan')
-                    bg = float(activation[bg_mask].mean()) if bg_mask.any() else float('nan')
-                    ratio = fg / max(bg, args.eps) if np.isfinite(fg) else float('nan')
-                    per_sample.append({
-                        'sample_index': index, 'image_id': image_id, 'model': model, 'group': group,
-                        'layer': layer, 'variant': variant, 'input_centered_rms': input_rms[(index, variant)],
-                        'feature_rms': feature_rms, 'feature_input_norm': feature_rms / max(input_rms[(index, variant)], args.eps),
-                        'fg_mean_abs_activation': fg, 'bg_mean_abs_activation': bg,
-                        'fg_bg_ratio': ratio, 'log_fg_bg_ratio': float(np.log(max(ratio, args.eps))),
-                    })
+    if args.model_workers == 1:
+        for task in tasks:
+            per_sample.extend(process_model(task))
+    else:
+        with ProcessPoolExecutor(max_workers=min(args.model_workers, len(tasks))) as executor:
+            futures = {executor.submit(process_model, task): str(task['model']) for task in tasks}
+            for future in as_completed(futures):
+                model = futures[future]
+                per_sample.extend(future.result())
+                print(f'Frequency metrics completed model={model}', flush=True)
+    per_sample.sort(key=lambda row: (
+        str(row['group']), str(row['model']), int(row['sample_index']),
+        str(row['layer']), VARIANTS.index(str(row['variant']))))
     write_tsv(out_dir / 'frequency_per_sample.tsv', per_sample)
     summary: List[dict] = []
     for group, group_models in (('pretrained', pretrained), ('detector', detectors)):
@@ -180,6 +219,7 @@ def main() -> None:
     write_json(out_dir / 'metadata.json', {
         'feature_root': str(root), 'frequency_manifest': str(Path(args.frequency_manifest).resolve()),
         'variants': list(VARIANTS), 'pretrained_models': pretrained, 'detector_models': detectors,
+        'model_workers': args.model_workers,
         'feature_input_norm': 'RMS(raw CHW feature) / RMS(channel-centered RGB input)',
         'fg_bg_ratio': 'mean(abs(feature), channels) in GT-box union / background complement',
         'log_fg_bg_ratio': 'natural log of FG/BG ratio; zero means equal foreground/background response',

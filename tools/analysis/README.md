@@ -9,7 +9,7 @@ activation-image exports.
 
 | Analysis | Models | Inputs | Main output |
 | --- | --- | --- | --- |
-| Same-layer CKA | 4 pretrained, then 4 RUOD detectors | Clean RUOD images | One heatmap per group, comparing res2-res2 through res5-res5 only |
+| Same-layer CKA | 4 pretrained, then 4 RUOD detectors | Clean RUOD images | One heatmap per group; both use the ImageNet-to-RUOD Cascade backbone as the horizontal reference |
 | Frequency response | 4 pretrained and 4 RUOD detectors | clean, low, mid, high, remove_low, remove_mid, remove_high | Feature RMS/input RMS and log foreground/background-ratio figures |
 | Prediction CAM | 4 RUOD Cascade R-CNN detectors | Clean RUOD images | Prediction-conditioned XGradCAM, max over predictions, JET, per-image normalization, 5 x 4 panels |
 
@@ -24,7 +24,7 @@ Run from `~/xcx/exp_2/mmdetection` after activating
 `LD_PRELOAD`:
 
 ```bash
-OUT_ROOT=/media/HDD2/XCX/exp_2/analysis/ruod100_energy_cam_cka SAMPLES=100 CAM_SAMPLES=30 SEED=2026 FEATURE_DEVICE=cuda:0 CAM_DEVICES=cuda:4,cuda:5,cuda:6,cuda:7 CAM_PARALLEL_MODELS=4 bash tools/analysis/run_ruod_analysis_suite.sh
+OUT_ROOT=/media/HDD2/XCX/exp_2/analysis/ruod100_energy_cam_cka SAMPLES=100 CAM_SAMPLES=30 SEED=2026 FEATURE_GPUS=cuda:2,cuda:3,cuda:6,cuda:7 CPU_WORKERS=16 FREQUENCY_MODEL_WORKERS=4 CAM_DEVICES=cuda:4,cuda:5,cuda:6,cuda:7 CAM_PARALLEL_MODELS=4 bash tools/analysis/run_ruod_analysis_suite.sh
 ```
 
 Default RUOD paths are:
@@ -48,6 +48,13 @@ shared set for Prediction-CAM. For example, `SAMPLES=100 CAM_SAMPLES=30`
 extracts features for all 100 images but renders CAM only for 30 of those 100.
 The CAM subset uses `CAM_SEED=SEED+1009` by default and is saved in
 `OUT_ROOT/cam_sample/selection.json` for reproducibility.
+
+Feature extraction runs in two GPU waves. The four bare pretrained backbones
+are assigned to `FEATURE_GPUS` first, then the four corresponding RUOD Cascade
+backbones reuse the same GPUs. Each worker writes to a private staging directory
+before its completed feature tree is merged into the shared `feature_store`.
+`FREQUENCY_MODEL_WORKERS` parallelizes CPU frequency metrics by model, while
+`CPU_WORKERS` is passed to the FFT/calibration stage's native CPU libraries.
 
 ## Resume selected stages
 
@@ -98,5 +105,6 @@ pixelwise maximum. It is independently min-max normalized per
 spatial-attention visualization, not an absolute activation-strength
 comparison across models.
 
-CKA includes only semantically corresponding layers. Reference self-comparison
-is excluded by default because linear `CKA(X, X) = 1` by definition.
+CKA includes only semantically corresponding layers. Both heatmaps use the
+ImageNet-to-RUOD Cascade backbone as the horizontal reference. Its detector
+self-comparison is excluded because linear `CKA(X, X) = 1` by definition.

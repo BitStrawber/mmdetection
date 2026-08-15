@@ -57,8 +57,6 @@ def main() -> None:
     layers = parse_csv(args.layers)
     if not models or not layers:
         raise ValueError('--models and --layers must not be empty')
-    if args.reference_model not in models:
-        raise ValueError('--reference-model must be included in --models')
     if len(models) != len(set(models)):
         raise ValueError(f'Duplicate model IDs: {models}')
 
@@ -74,7 +72,7 @@ def main() -> None:
         model for model in models
         if args.include_reference or model != args.reference_model]
     if not comparison_models:
-        raise ValueError('No non-self CKA rows remain; omit --include-reference only with >=2 models')
+        raise ValueError('No non-self CKA rows remain')
     for model in comparison_models:
         values = []
         for layer in layers:

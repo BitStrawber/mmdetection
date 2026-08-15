@@ -1,0 +1,72 @@
+{
+  "models": [
+    {
+      "id": "imagenet_dino100e_backbone",
+      "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ResNet50_100e/checkpoint.pth",
+      "state_dict_key": "teacher",
+      "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "realuw_dino100e_backbone",
+      "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-realuw-ssd_fpn_2x_ruod_j7.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/RealUW/DINO_ResNet50_100e/checkpoint.pth",
+      "state_dict_key": "teacher",
+      "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "synthetic5_dino100e_backbone",
+      "kind": "backbone",
+      "config": "work_dirs/tri_pretrain/synthetic5_dino_r50_pre100e_ruod24e_det/cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/Synthetic5Merged_CorrectedWaterGAN/DINO_ResNet50_100e/checkpoint.pth",
+      "state_dict_key": "teacher",
+      "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "imagenet_dino100e_dfui_backbone",
+      "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j10_v2_s2.py",
+      "checkpoint": "work_dirs/j10_dino_official_source_compare/j10_dino_official_dfui_ruod_uiis_easy_f1_lr000375_e48_s1/backbone_only.pth",
+      "state_dict_key": "state_dict",
+      "checkpoint_prefix": "backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "imagenet_dino100e_ruod_cascade",
+      "kind": "detector",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ResNet50_100e/DOWNSTREAM/RUOD_CascadeRCNN/best.pth",
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "realuw_dino100e_ruod_cascade",
+      "kind": "detector",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-realuw-ssd_fpn_2x_ruod_j7.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/RealUW/DINO_ResNet50_100e/DOWNSTREAM/RUOD_CascadeRCNN/best.pth",
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "synthetic5_dino100e_ruod_cascade",
+      "kind": "detector",
+      "config": "work_dirs/tri_pretrain/synthetic5_dino_r50_pre100e_ruod24e_det/cascade-rcnn_r50_dino_fpn_2x_ruod_j4.py",
+      "checkpoint": "work_dirs/tri_pretrain/synthetic5_dino_r50_pre100e_ruod24e_det/best_coco_bbox_mAP_epoch_18.pth",
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "imagenet_dino100e_dfui_ruod_cascade",
+      "kind": "detector",
+      "config": "configs/exp_2/cascade-rcnn_r50_fpn_2x_ruod_j10_v2_s2.py",
+      "checkpoint": "work_dirs/j10_dino_official_source_compare/j10_dino_official_dfui_ruod_uiis_easy_f1_lr000375_e48_s2/best_coco_bbox_mAP_epoch_18.pth",
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    }
+  ]
+}

@@ -54,7 +54,9 @@ are assigned to `FEATURE_GPUS` first, then the four corresponding RUOD Cascade
 backbones reuse the same GPUs. Each worker writes to a private staging directory
 before its completed feature tree is merged into the shared `feature_store`.
 `FREQUENCY_MODEL_WORKERS` parallelizes CPU frequency metrics by model, while
-`CPU_WORKERS` is passed to the FFT/calibration stage's native CPU libraries.
+`CPU_WORKERS` sets the default number of independent FFT/calibration image
+workers. Each such process is restricted to one native BLAS/FFT thread to
+avoid CPU oversubscription.
 
 ## Resume selected stages
 

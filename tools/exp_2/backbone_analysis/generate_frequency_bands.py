@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
@@ -97,6 +98,11 @@ def parse_args() -> argparse.Namespace:
         '--copy-clean', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--png-compress-level', type=int, default=3)
     parser.add_argument('--reconstruction-tolerance', type=float, default=1e-5)
+    parser.add_argument(
+        '--workers', type=int, default=1,
+        help=(
+            'Independent image processes for calibration and band generation. '
+            'All workers share the same already-derived frequency cutoffs.'))
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -226,37 +232,29 @@ def derive_dataset_energy_bands(
     quantiles: Tuple[float, float],
     bins: int,
     color_space: str,
+    workers: int = 1,
 ) -> Tuple[List[Band], List[Mapping[str, float]], Mapping[str, object]]:
     if bins < 32:
         raise ValueError('--energy-bins must be at least 32')
     maximum_frequency = math.sqrt(0.5 ** 2 + 0.5 ** 2)
     edges = np.linspace(0.0, maximum_frequency, bins + 1, dtype=np.float64)
-    normalized_histograms = []
-    for position, row in enumerate(rows, start=1):
-        source = existing_file(str(row['image_path']))
-        with Image.open(source) as opened:
-            resized = resize_keep_ratio(opened.convert('RGB'), resize_limit)
-        image = np.asarray(resized, dtype=np.float32) / 255.0
-        signal = spectrum_signal(image, color_space)
-        padded, _ = reflect_pad(signal, pad_fraction)
-        centered = padded - padded.mean(axis=(0, 1), keepdims=True)
-        window = (
-            np.hanning(centered.shape[0])[:, None] *
-            np.hanning(centered.shape[1])[None, :])
-        windowed = centered * window[:, :, None]
-        spectrum = np.fft.fftshift(
-            np.fft.fft2(windowed, axes=(0, 1)), axes=(0, 1))
-        power = np.sum(np.square(np.abs(spectrum)), axis=2)
-        radius = radial_frequency_cpp(power.shape[0], power.shape[1])
-        histogram, _ = np.histogram(
-            radius.reshape(-1), bins=edges, weights=power.reshape(-1))
-        total = float(histogram.sum())
-        if not math.isfinite(total) or total <= 0:
-            raise ValueError(f'No finite spectral energy for {source}')
-        normalized_histograms.append(histogram.astype(np.float64) / total)
-        print(
-            f'[energy calibration {position}/{len(rows)}] {row["file_name"]}',
-            flush=True)
+    tasks = [
+        (position, row, resize_limit, pad_fraction, color_space, edges)
+        for position, row in enumerate(rows, start=1)
+    ]
+    normalized_histograms = [None] * len(tasks)
+    if workers == 1:
+        for task in tasks:
+            position, file_name, histogram = calibration_histogram(task)
+            normalized_histograms[position - 1] = histogram
+            print(f'[energy calibration {position}/{len(rows)}] {file_name}', flush=True)
+    else:
+        with ProcessPoolExecutor(max_workers=min(workers, len(tasks))) as executor:
+            futures = {executor.submit(calibration_histogram, task): task[0] for task in tasks}
+            for future in as_completed(futures):
+                position, file_name, histogram = future.result()
+                normalized_histograms[position - 1] = histogram
+                print(f'[energy calibration {position}/{len(rows)}] {file_name}', flush=True)
     mean_energy = np.mean(np.stack(normalized_histograms), axis=0)
     mean_energy /= max(float(mean_energy.sum()), 1e-12)
     cumulative = np.cumsum(mean_energy)
@@ -298,6 +296,33 @@ def derive_dataset_energy_bands(
             'normalize each image radial power histogram to unit energy, then mean'),
     }
     return bands, profile, metadata
+
+
+def calibration_histogram(
+    task: Tuple[int, Mapping[str, object], Optional[Tuple[int, int]], float, str, np.ndarray],
+) -> Tuple[int, str, np.ndarray]:
+    position, row, resize_limit, pad_fraction, color_space, edges = task
+    source = existing_file(str(row['image_path']))
+    with Image.open(source) as opened:
+        resized = resize_keep_ratio(opened.convert('RGB'), resize_limit)
+    image = np.asarray(resized, dtype=np.float32) / 255.0
+    signal = spectrum_signal(image, color_space)
+    padded, _ = reflect_pad(signal, pad_fraction)
+    centered = padded - padded.mean(axis=(0, 1), keepdims=True)
+    window = (
+        np.hanning(centered.shape[0])[:, None] *
+        np.hanning(centered.shape[1])[None, :])
+    windowed = centered * window[:, :, None]
+    spectrum = np.fft.fftshift(
+        np.fft.fft2(windowed, axes=(0, 1)), axes=(0, 1))
+    power = np.sum(np.square(np.abs(spectrum)), axis=2)
+    radius = radial_frequency_cpp(power.shape[0], power.shape[1])
+    histogram, _ = np.histogram(
+        radius.reshape(-1), bins=edges, weights=power.reshape(-1))
+    total = float(histogram.sum())
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError(f'No finite spectral energy for {source}')
+    return position, str(row['file_name']), histogram.astype(np.float64) / total
 
 
 def write_rows(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
@@ -491,8 +516,154 @@ def write_qa(path: Path, rows: Sequence[Mapping[str, object]]) -> None:
     write_rows(path, rows)
 
 
-def main() -> None:
+def generate_frequency_sample(task: Mapping[str, object]) -> Mapping[str, object]:
+    """Generate every variant for one sample after global band calibration."""
+    position = int(task['position'])
+    row = task['row']
+    out_dir = Path(str(task['out_dir']))
+    bands = task['bands']
+    method = str(task['method'])
+    resize_limit = task['resize_limit']
+    transition_ratio = float(task['transition_ratio'])
+    pad_fraction = float(task['pad_fraction'])
+    reconstruction = str(task['reconstruction'])
+    model_input_mode = str(task['model_input_mode'])
+    copy_clean = bool(task['copy_clean'])
+    save_raw = bool(task['save_raw'])
+    save_visualizations = bool(task['save_visualizations'])
+    save_band_stop = bool(task['save_band_stop'])
+    compress_level = int(task['png_compress_level'])
+    tolerance = float(task['reconstruction_tolerance'])
+
+    source = existing_file(str(row['image_path']))
+    with Image.open(source) as opened:
+        rgb = resize_keep_ratio(opened.convert('RGB'), resize_limit)
+    image = np.asarray(rgb, dtype=np.float32) / 255.0
+    height, width = image.shape[:2]
+    sample_name = f'{int(row["sample_index"]):05d}_{int(row["image_id"])}'
+    variants: Dict[str, dict] = {}
+
+    clean_path = out_dir / 'images' / 'clean' / f'{sample_name}.png'
+    if copy_clean or resize_limit is not None:
+        save_png(clean_path, image, compress_level)
+    else:
+        clean_path.parent.mkdir(parents=True, exist_ok=True)
+        if clean_path.exists() or clean_path.is_symlink():
+            clean_path.unlink()
+        clean_path.symlink_to(source)
+    variants['clean'] = {
+        'image_path': str(clean_path.absolute()),
+        'representation': (
+            'resized-clean-model-input'
+            if resize_limit is not None else 'clean-model-input'),
+        'height': height,
+        'width': width,
+    }
+
+    if method == 'soft-cpp':
+        raw_bands, masks = decompose_soft(image, bands, transition_ratio, pad_fraction)
+        reconstruction_value = sum(raw_bands.values())
+        reconstruction_error = np.abs(reconstruction_value - image)
+        reconstruction_max = float(reconstruction_error.max())
+        reconstruction_mae = float(reconstruction_error.mean())
+        if reconstruction_max > tolerance:
+            raise RuntimeError(
+                f'{source}: frequency reconstruction max error '
+                f'{reconstruction_max:.8g} exceeds {tolerance:.8g}')
+    else:
+        raw_bands, masks = decompose_legacy(image, bands, reconstruction)
+        reconstruction_max = float('nan')
+        reconstruction_mae = float('nan')
+
+    source_energy = float(np.mean(np.square(image, dtype=np.float64)))
+    source_centered_rms = centered_rms(image)
+    qa_rows = []
+    for band in bands:
+        raw = raw_bands[band.name]
+        if method == 'soft-cpp':
+            model_input, scale, clip_stats = model_band_input(raw, image, model_input_mode)
+        else:
+            model_input = np.clip(raw, 0, 1).astype(np.float32)
+            scale = 1.0
+            clip_stats = {'clip_low_fraction': 0.0, 'clip_high_fraction': 0.0}
+        image_path = out_dir / 'images' / band.name / f'{sample_name}.png'
+        save_png(image_path, model_input, compress_level)
+        raw_path = out_dir / 'arrays' / 'raw' / band.name / f'{sample_name}.npy'
+        if save_raw:
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            np.save(raw_path, raw.astype(np.float32), allow_pickle=False)
+        visual_path = out_dir / 'visualizations' / 'magnitude' / band.name / f'{sample_name}.png'
+        if save_visualizations:
+            save_png(visual_path, magnitude_visualization(raw), compress_level)
+        variants[band.name] = {
+            'image_path': str(image_path.absolute()),
+            'representation': model_input_mode,
+            'frequency_unit': (
+                'cycles_per_pixel' if method == 'soft-cpp' else 'normalized_corner_radius'),
+            'low': band.low,
+            'high': band.high if band.high is not None else 'max',
+            'source_mean': vector(image.mean(axis=(0, 1))),
+            'output_mean': vector(model_input.mean(axis=(0, 1))),
+            'output_std': vector(model_input.std(axis=(0, 1))),
+            'raw_mean': vector(raw.mean(axis=(0, 1))),
+            'raw_std': vector(raw.std(axis=(0, 1))),
+            'raw_centered_rms': centered_rms(raw),
+            'model_input_scale': scale,
+            'mask_mean': float(masks[band.name].mean()),
+            'mask_fraction': float(masks[band.name].mean()),
+            **clip_stats,
+        }
+        if save_raw:
+            variants[band.name]['raw_path'] = str(raw_path.absolute())
+        if save_visualizations:
+            variants[band.name]['visualization_path'] = str(visual_path.absolute())
+        qa_rows.append({
+            'sample_index': int(row['sample_index']), 'image_id': int(row['image_id']),
+            'file_name': row['file_name'], 'height': height, 'width': width,
+            'band': band.name, 'low_cpp': band.low if method == 'soft-cpp' else '',
+            'high_cpp': (
+                band.high if method == 'soft-cpp' and band.high is not None
+                else 'max' if method == 'soft-cpp' else ''),
+            'mask_mean': float(masks[band.name].mean()),
+            'raw_energy': float(np.mean(np.square(raw, dtype=np.float64))),
+            'raw_energy_over_clean': float(
+                np.mean(np.square(raw, dtype=np.float64)) / max(source_energy, 1e-12)),
+            'raw_centered_rms': centered_rms(raw),
+            'clean_centered_rms': source_centered_rms,
+            'model_input_scale': scale,
+            'clip_low_fraction': clip_stats['clip_low_fraction'],
+            'clip_high_fraction': clip_stats['clip_high_fraction'],
+            'reconstruction_mae': reconstruction_mae,
+            'reconstruction_max_abs': reconstruction_max,
+        })
+        if save_band_stop and method == 'soft-cpp':
+            stopped, stopped_stats = model_band_stop_input(raw, image)
+            stopped_name = f'remove_{band.name}'
+            stopped_path = out_dir / 'images' / stopped_name / f'{sample_name}.png'
+            save_png(stopped_path, stopped, compress_level)
+            variants[stopped_name] = {
+                'image_path': str(stopped_path.absolute()),
+                'representation': 'mean-preserved-band-stop',
+                'removed_band': band.name, 'frequency_unit': 'cycles_per_pixel',
+                'low': band.low, 'high': band.high if band.high is not None else 'max',
+                'output_mean': vector(stopped.mean(axis=(0, 1))),
+                'output_std': vector(stopped.std(axis=(0, 1))), **stopped_stats,
+            }
+
+    output = dict(row)
+    output['frequency_input_shape'] = [height, width]
+    output['variants'] = variants
+    return {
+        'position': position, 'file_name': str(row['file_name']), 'output': output,
+        'qa_rows': qa_rows, 'shape_key': f'{height}x{width}',
+        'reconstruction_max': reconstruction_max,
+    }
+
+
+def main_serial() -> None:
     args = parse_args()
+    if args.workers != 1:
+        raise ValueError('main_serial only supports --workers 1')
     if not 0 <= args.png_compress_level <= 9:
         raise ValueError('--png-compress-level must be between 0 and 9')
     if not 0 <= args.transition_ratio < 1:
@@ -520,6 +691,7 @@ def main() -> None:
             parse_energy_quantiles(args.energy_quantiles),
             args.energy_bins,
             args.energy_color_space,
+            workers=1,
         )
         energy_calibration = {
             **energy_calibration,
@@ -731,6 +903,122 @@ def main() -> None:
     print(f'Frequency variants completed: {out_dir}')
     print(f'Manifest: {out_dir / "frequency_manifest.jsonl"}')
     print(f'QA: {out_dir / "frequency_qa.tsv"}')
+
+
+def main_parallel(args: argparse.Namespace) -> None:
+    """Parallel implementation that preserves one globally calibrated filter."""
+    if not 0 <= args.png_compress_level <= 9:
+        raise ValueError('--png-compress-level must be between 0 and 9')
+    if not 0 <= args.transition_ratio < 1:
+        raise ValueError('--transition-ratio must satisfy 0 <= value < 1')
+    if not 0 <= args.pad_fraction < 0.5:
+        raise ValueError('--pad-fraction must satisfy 0 <= value < 0.5')
+    if args.workers <= 0:
+        raise ValueError('--workers must be positive')
+    rows = read_jsonl(args.manifest)
+    validate_sample_order(rows)
+    resize_limit = parse_resize(args.resize)
+    out_dir = ensure_empty_or_create(Path(args.out_dir), args.overwrite)
+    energy_calibration = None
+    if args.band_policy == 'dataset-energy':
+        if args.method != 'soft-cpp':
+            raise ValueError('dataset-energy policy requires --method soft-cpp')
+        if args.bands:
+            raise ValueError('--bands must be empty with dataset-energy policy')
+        calibration_path = existing_file(args.calibration_manifest or args.manifest)
+        calibration_rows = read_jsonl(calibration_path)
+        validate_sample_order(calibration_rows)
+        bands, energy_profile, energy_calibration = derive_dataset_energy_bands(
+            calibration_rows, resize_limit, args.pad_fraction,
+            parse_energy_quantiles(args.energy_quantiles), args.energy_bins,
+            args.energy_color_space, workers=args.workers)
+        energy_calibration = {**energy_calibration, 'manifest': str(calibration_path)}
+        write_rows(out_dir / 'dataset_energy_profile.tsv', energy_profile)
+        write_json(out_dir / 'dataset_energy_calibration.json', energy_calibration)
+    else:
+        bands = parse_bands(args.bands, args.method)
+
+    task_base = {
+        'out_dir': str(out_dir), 'bands': bands, 'method': args.method,
+        'resize_limit': resize_limit, 'transition_ratio': args.transition_ratio,
+        'pad_fraction': args.pad_fraction, 'reconstruction': args.reconstruction,
+        'model_input_mode': args.model_input_mode, 'copy_clean': args.copy_clean,
+        'save_raw': args.save_raw, 'save_visualizations': args.save_visualizations,
+        'save_band_stop': args.save_band_stop,
+        'png_compress_level': args.png_compress_level,
+        'reconstruction_tolerance': args.reconstruction_tolerance,
+    }
+    tasks = [{**task_base, 'position': position, 'row': row}
+             for position, row in enumerate(rows, start=1)]
+    results = [None] * len(tasks)
+    with ProcessPoolExecutor(max_workers=min(args.workers, len(tasks))) as executor:
+        futures = {executor.submit(generate_frequency_sample, task): task['position']
+                   for task in tasks}
+        for future in as_completed(futures):
+            result = future.result()
+            position = int(result['position'])
+            results[position - 1] = result
+            print(f'[{position}/{len(rows)}] {result["file_name"]}', flush=True)
+
+    output_rows = []
+    qa_rows = []
+    shape_counts: Dict[str, int] = {}
+    maximum_reconstruction_error = 0.0
+    for result in results:
+        assert result is not None
+        output_rows.append(result['output'])
+        qa_rows.extend(result['qa_rows'])
+        shape_key = str(result['shape_key'])
+        shape_counts[shape_key] = shape_counts.get(shape_key, 0) + 1
+        reconstruction_max = float(result['reconstruction_max'])
+        if math.isfinite(reconstruction_max):
+            maximum_reconstruction_error = max(maximum_reconstruction_error, reconstruction_max)
+    write_jsonl(out_dir / 'frequency_manifest.jsonl', output_rows)
+    write_qa(out_dir / 'frequency_qa.tsv', qa_rows)
+    write_json(out_dir / 'filter_config.json', {
+        'schema_version': 3,
+        'source_manifest': str(existing_file(args.manifest)),
+        'method': args.method, 'band_policy': args.band_policy,
+        'dataset_energy_calibration': energy_calibration,
+        'frequency_unit': (
+            'cycles_per_pixel' if args.method == 'soft-cpp'
+            else 'fftshift radial distance normalized by corner Nyquist'),
+        'bands': [
+            {
+                'name': band.name, 'low': band.low,
+                'high': band.high if band.high is not None else 'max',
+                'low_wavelength_pixels': (
+                    1.0 / band.low if band.low > 0 and args.method == 'soft-cpp' else None),
+                'high_wavelength_pixels': (
+                    1.0 / band.high if band.high and args.method == 'soft-cpp' else None),
+            }
+            for band in bands
+        ],
+        'transition_ratio': args.transition_ratio, 'resize': args.resize,
+        'resize_interpolation': 'Pillow bilinear', 'pad_fraction': args.pad_fraction,
+        'padding_mode': 'reflect', 'model_input_mode': args.model_input_mode,
+        'raw_arrays': (
+            'signed unclipped float32 before model-input mapping'
+            if args.method == 'soft-cpp' else 'legacy reconstructed and clipped float32'),
+        'model_png_quantization': 'clip [0,1], round to uint8',
+        'visualization': 'per-image 1st-99th percentile of abs(centered raw band)',
+        'save_raw': args.save_raw, 'save_band_stop': args.save_band_stop,
+        'save_visualizations': args.save_visualizations,
+        'reconstruction_tolerance': args.reconstruction_tolerance,
+        'maximum_reconstruction_error': maximum_reconstruction_error,
+        'shape_counts': shape_counts, 'workers': args.workers,
+    })
+    print(f'Frequency variants completed: {out_dir}')
+    print(f'Manifest: {out_dir / "frequency_manifest.jsonl"}')
+    print(f'QA: {out_dir / "frequency_qa.tsv"}')
+
+
+def main() -> None:
+    args = parse_args()
+    if args.workers == 1:
+        main_serial()
+    else:
+        main_parallel(args)
 
 
 if __name__ == '__main__':

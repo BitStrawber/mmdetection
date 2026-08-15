@@ -41,6 +41,7 @@ CAM_PARALLEL_MODELS="${CAM_PARALLEL_MODELS:-1}"
 CAM_SCORE_THRESHOLD="${CAM_SCORE_THRESHOLD:-0.05}"
 CAM_MAX_PREDICTIONS="${CAM_MAX_PREDICTIONS:-30}"
 CPU_WORKERS="${CPU_WORKERS:-16}"
+FREQUENCY_BAND_WORKERS="${FREQUENCY_BAND_WORKERS:-${CPU_WORKERS}}"
 FREQUENCY_MODEL_WORKERS="${FREQUENCY_MODEL_WORKERS:-4}"
 RUN_SAMPLE="${RUN_SAMPLE:-1}"
 RUN_BANDS="${RUN_BANDS:-1}"
@@ -68,7 +69,7 @@ echo "CAM samples / seed:     ${CAM_SAMPLES} / ${CAM_SEED}"
 echo "Frequency policy:       dataset-energy (RGB, q=1/3,2/3)"
 echo "Feature models:         ${ALL_MODELS}"
 echo "Feature GPUs:           ${FEATURE_GPUS} (four models per wave)"
-echo "CPU workers:            ${CPU_WORKERS}; frequency model workers: ${FREQUENCY_MODEL_WORKERS}"
+echo "Frequency band workers: ${FREQUENCY_BAND_WORKERS}; metric workers: ${FREQUENCY_MODEL_WORKERS}"
 echo "CAM aggregation/style:  prediction max / JET / per-image min-max"
 echo "============================================================"
 
@@ -80,10 +81,10 @@ fi
 require_file "${SAMPLE_ROOT}/manifest.jsonl"
 
 if [[ "${RUN_BANDS}" == 1 ]]; then
-    band_args=(-m tools.exp_2.backbone_analysis.generate_frequency_bands --manifest "${SAMPLE_ROOT}/manifest.jsonl" --out-dir "${FREQUENCY_ROOT}" --method soft-cpp --band-policy dataset-energy --energy-quantiles 1/3,2/3 --energy-color-space rgb --model-input-mode natural-energy --save-band-stop --copy-clean --png-compress-level 3)
+    band_args=(-m tools.exp_2.backbone_analysis.generate_frequency_bands --manifest "${SAMPLE_ROOT}/manifest.jsonl" --out-dir "${FREQUENCY_ROOT}" --method soft-cpp --band-policy dataset-energy --energy-quantiles 1/3,2/3 --energy-color-space rgb --model-input-mode natural-energy --save-band-stop --copy-clean --png-compress-level 3 --workers "${FREQUENCY_BAND_WORKERS}")
     [[ -n "${ENERGY_CALIBRATION_MANIFEST}" ]] && band_args+=(--calibration-manifest "${ENERGY_CALIBRATION_MANIFEST}")
     [[ "${OVERWRITE}" == 1 ]] && band_args+=(--overwrite)
-    env OMP_NUM_THREADS="${CPU_WORKERS}" MKL_NUM_THREADS="${CPU_WORKERS}" OPENBLAS_NUM_THREADS="${CPU_WORKERS}" python "${band_args[@]}" 2>&1 | tee "${LOG_ROOT}/02_frequency_bands.log"
+    env OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python "${band_args[@]}" 2>&1 | tee "${LOG_ROOT}/02_frequency_bands.log"
 fi
 require_file "${FREQUENCY_ROOT}/frequency_manifest.jsonl"
 

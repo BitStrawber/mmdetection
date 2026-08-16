@@ -143,14 +143,24 @@ def rebase_existing_per_sample(path: Path, eps: float) -> List[dict]:
         int(row['sample_index']): parse_float(row['input_centered_rms'])
         for row in source_rows if row['variant'] == 'clean'
     }
+    clean_feature_rms = {
+        (row['model'], int(row['sample_index']), row['layer']): parse_float(row['feature_rms'])
+        for row in source_rows if row['variant'] == 'clean'
+    }
     rebased = []
     for row in source_rows:
         sample_index = int(row['sample_index'])
         if sample_index not in clean_rms:
             raise ValueError(f'Missing clean RMS for sample_index={sample_index}')
+        feature_key = (row['model'], sample_index, row['layer'])
+        if feature_key not in clean_feature_rms:
+            raise ValueError(
+                f'Missing clean feature RMS for model={row["model"]}, '
+                f'sample_index={sample_index}, layer={row["layer"]}')
         feature_rms = parse_float(row['feature_rms'])
         variant_rms = parse_float(row['input_centered_rms'])
         clean_value = clean_rms[sample_index]
+        clean_feature_value = clean_feature_rms[feature_key]
         rebased.append({
             'sample_index': sample_index,
             'image_id': int(row['image_id']),
@@ -159,7 +169,8 @@ def rebase_existing_per_sample(path: Path, eps: float) -> List[dict]:
             'variant_input_centered_rms': variant_rms,
             'clean_input_centered_rms': clean_value,
             'feature_rms': feature_rms,
-            'feature_clean_norm': feature_rms / max(clean_value, eps),
+            'clean_feature_rms': clean_feature_value,
+            'feature_norm_over_clean': feature_rms / max(clean_feature_value, eps),
             'fg_mean_abs_activation': parse_float(row['fg_mean_abs_activation']),
             'bg_mean_abs_activation': parse_float(row['bg_mean_abs_activation']),
             'fg_bg_ratio': parse_float(row['fg_bg_ratio']),
@@ -218,8 +229,13 @@ def process_model(task: Mapping[str, object]) -> List[dict]:
         image_id = int(row['image_id'])
         width, height = int(row['width']), int(row['height'])
         for layer in layers:
+            clean_feature = load_feature(
+                spatial_path(root, model, 'clean', index, image_id, layer))
+            clean_feature_rms = float(np.sqrt(
+                np.mean(np.square(clean_feature, dtype=np.float64))))
             for variant in variants:
-                feature = load_feature(spatial_path(root, model, variant, index, image_id, layer))
+                feature = clean_feature if variant == 'clean' else load_feature(
+                    spatial_path(root, model, variant, index, image_id, layer))
                 feature_rms = float(np.sqrt(np.mean(np.square(feature, dtype=np.float64))))
                 activation = np.abs(feature).mean(axis=0)
                 fg_mask = mask_from_boxes(
@@ -236,7 +252,8 @@ def process_model(task: Mapping[str, object]) -> List[dict]:
                     'variant_input_centered_rms': variant_input_rms,
                     'clean_input_centered_rms': clean_input_rms,
                     'feature_rms': feature_rms,
-                    'feature_clean_norm': feature_rms / max(clean_input_rms, eps),
+                    'clean_feature_rms': clean_feature_rms,
+                    'feature_norm_over_clean': feature_rms / max(clean_feature_rms, eps),
                     'fg_mean_abs_activation': fg, 'bg_mean_abs_activation': bg,
                     'fg_bg_ratio': ratio, 'log_fg_bg_ratio': float(np.log(max(ratio, eps))),
                 })
@@ -293,12 +310,12 @@ def main() -> None:
             for layer in layers:
                 for variant in variants:
                     selected = [row for row in per_sample if row['model'] == model and row['layer'] == layer and row['variant'] == variant]
-                    for metric in ('feature_clean_norm', 'fg_bg_ratio', 'log_fg_bg_ratio'):
+                    for metric in ('feature_norm_over_clean', 'fg_bg_ratio', 'log_fg_bg_ratio'):
                         summary.append({'group': group, 'model': model, 'layer': layer, 'variant': variant, 'metric': metric, **summarize(row[metric] for row in selected)})
     write_tsv(out_dir / 'frequency_summary.tsv', summary)
     for group, group_models in (('pretrained', pretrained), ('detector', detectors)):
         for metric, ylabel, title, name in (
-            ('feature_clean_norm', 'Feature RMS / clean-image RMS', f'{group}: clean-normalized feature response', 'feature_clean_norm'),
+            ('feature_norm_over_clean', 'Feature RMS / clean-feature RMS', f'{group}: feature response relative to clean', 'feature_norm_over_clean'),
             ('log_fg_bg_ratio', 'log(FG/BG response ratio)', f'{group}: foreground/background response', 'fg_bg_ratio'),
         ):
             selected = [row for row in summary if row['group'] == group and row['metric'] == metric]
@@ -315,13 +332,14 @@ def main() -> None:
         'variants': list(VARIANTS), 'pretrained_models': pretrained, 'detector_models': detectors,
         'model_workers': args.model_workers,
         'reuse_per_sample': str(Path(args.reuse_per_sample).resolve()) if args.reuse_per_sample else '',
-        'feature_clean_norm': (
-            'RMS(raw CHW feature) / RMS(channel-centered clean RGB input from the same sample)'),
+        'feature_norm_over_clean': (
+            'RMS(raw CHW feature for a variant) / RMS(raw CHW feature for clean, '
+            'matched by model, sample, and layer)'),
         'variant_input_centered_rms': 'RMS of the current clean/band-stop/band input, retained for QA only',
         'fg_bg_ratio': 'mean(abs(feature), channels) in GT-box union / background complement',
         'log_fg_bg_ratio': 'natural log of FG/BG ratio; zero means equal foreground/background response',
         'pretrained_reference_model': reference_model,
-        'visual_outputs': ['feature_clean_norm_pretrained', 'feature_clean_norm_detector', 'fg_bg_ratio_pretrained', 'fg_bg_ratio_detector'],
+        'visual_outputs': ['feature_norm_over_clean_pretrained', 'feature_norm_over_clean_detector', 'fg_bg_ratio_pretrained', 'fg_bg_ratio_detector'],
     })
     print(f'Frequency metrics and figures: {out_dir}')
 

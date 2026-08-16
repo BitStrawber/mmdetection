@@ -10,7 +10,7 @@ activation-image exports.
 | Analysis | Models | Inputs | Main output |
 | --- | --- | --- | --- |
 | Same-layer CKA | 4 pretrained, then 4 RUOD detectors | Clean RUOD images | One heatmap per group; both use the ImageNet-to-RUOD Cascade backbone as the horizontal reference |
-| Frequency response | 4 pretrained and 4 RUOD detectors | clean, low, mid, high, remove_low, remove_mid, remove_high | Feature RMS/input RMS and log foreground/background-ratio figures |
+| Frequency response | 4 pretrained and 4 RUOD detectors | clean, low, mid, high, remove_low, remove_mid, remove_high | Feature RMS/clean-image RMS and log foreground/background-ratio figures |
 | Prediction CAM | 4 RUOD Cascade R-CNN detectors | Clean RUOD images | Prediction-conditioned XGradCAM, max over predictions, JET, per-image normalization, 5 x 4 panels |
 
 `models.features.example.json` provides all eight models for feature
@@ -81,8 +81,8 @@ OUT_ROOT/
     pretrained/same_layer_cka.{png,pdf,tsv}
     detector/same_layer_cka.{png,pdf,tsv}
   frequency/
-    feature_input_norm_pretrained.{png,pdf}
-    feature_input_norm_detector.{png,pdf}
+    feature_clean_norm_pretrained.{png,pdf}
+    feature_clean_norm_detector.{png,pdf}
     fg_bg_ratio_pretrained.{png,pdf}
     fg_bg_ratio_detector.{png,pdf}
     frequency_per_sample.tsv
@@ -95,11 +95,12 @@ OUT_ROOT/
 
 ## Definitions and constraints
 
-`feature_input_norm` is RMS(raw CHW feature) divided by RMS(channel-centered
-RGB input). FG/BG is the mean absolute channel activation in the union of
+`feature_clean_norm` is RMS(raw CHW feature) divided by the RMS of the
+channel-centered clean RGB input from the same RUOD sample. This keeps one
+denominator fixed across clean, band-pass, and band-stop variants. FG/BG is the mean absolute channel activation in the union of
 RUOD GT boxes divided by the background complement. The frequency figures are
-split into pretrained and detector groups so all four model colors remain
-clearly distinguishable.
+split into pretrained and detector groups. Pretrained plots append the
+ImageNet-to-RUOD Cascade backbone as a distinct reference curve.
 
 Prediction-CAM aggregates a model's valid predicted-box CAMs using the
 pixelwise maximum. It is independently min-max normalized per

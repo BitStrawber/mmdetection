@@ -25,8 +25,11 @@ OUT_ROOT="${OUT_ROOT:-/media/HDD2/XCX/exp_2/analysis/${RUN_NAME}}"
 LOG_ROOT="${LOG_ROOT:-${OUT_ROOT}/logs}"
 SAMPLE_ROOT="${SAMPLE_ROOT:-${OUT_ROOT}/sample}"
 CAM_SAMPLE_ROOT="${CAM_SAMPLE_ROOT:-${OUT_ROOT}/cam_sample}"
+CAM_OUTPUT_ROOT="${CAM_OUTPUT_ROOT:-${OUT_ROOT}/cam_prediction}"
 FREQUENCY_ROOT="${FREQUENCY_ROOT:-${OUT_ROOT}/frequency_inputs}"
 FEATURE_ROOT="${FEATURE_ROOT:-${OUT_ROOT}/feature_store}"
+FREQUENCY_ANALYSIS_ROOT="${FREQUENCY_ANALYSIS_ROOT:-${OUT_ROOT}/frequency}"
+FREQUENCY_REUSE_PER_SAMPLE="${FREQUENCY_REUSE_PER_SAMPLE:-}"
 
 PRETRAINED_MODELS="${PRETRAINED_MODELS:-imagenet_dino100e_backbone,realuw_dino100e_backbone,synthetic5_dino100e_backbone,imagenet_dino100e_dfui_backbone}"
 DETECTOR_MODELS="${DETECTOR_MODELS:-imagenet_dino100e_ruod_cascade,realuw_dino100e_ruod_cascade,synthetic5_dino100e_ruod_cascade,imagenet_dino100e_dfui_ruod_cascade}"
@@ -70,7 +73,9 @@ echo "Frequency policy:       dataset-energy (RGB, q=1/3,2/3)"
 echo "Feature models:         ${ALL_MODELS}"
 echo "Feature GPUs:           ${FEATURE_GPUS} (four models per wave)"
 echo "Frequency band workers: ${FREQUENCY_BAND_WORKERS}; metric workers: ${FREQUENCY_MODEL_WORKERS}"
+echo "Frequency analysis root: ${FREQUENCY_ANALYSIS_ROOT}"
 echo "CAM aggregation/style:  prediction max / JET / per-image min-max"
+echo "CAM output root:        ${CAM_OUTPUT_ROOT}"
 echo "============================================================"
 
 if [[ "${RUN_SAMPLE}" == 1 ]]; then
@@ -158,7 +163,8 @@ if [[ "${RUN_CKA}" == 1 ]]; then
 fi
 
 if [[ "${RUN_FREQUENCY}" == 1 ]]; then
-    frequency_args=(-m tools.analysis.compute_frequency_metrics --feature-root "${FEATURE_ROOT}" --frequency-manifest "${FREQUENCY_ROOT}/frequency_manifest.jsonl" --models "${ALL_MODELS}" --layers "${LAYERS}" --pretrained-models "${PRETRAINED_MODELS}" --detector-models "${DETECTOR_MODELS}" --variants "${FEATURE_VARIANTS}" --model-workers "${FREQUENCY_MODEL_WORKERS}" --out-dir "${OUT_ROOT}/frequency")
+    frequency_args=(-m tools.analysis.compute_frequency_metrics --feature-root "${FEATURE_ROOT}" --frequency-manifest "${FREQUENCY_ROOT}/frequency_manifest.jsonl" --models "${ALL_MODELS}" --layers "${LAYERS}" --pretrained-models "${PRETRAINED_MODELS}" --detector-models "${DETECTOR_MODELS}" --variants "${FEATURE_VARIANTS}" --model-workers "${FREQUENCY_MODEL_WORKERS}" --out-dir "${FREQUENCY_ANALYSIS_ROOT}")
+    [[ -n "${FREQUENCY_REUSE_PER_SAMPLE}" ]] && frequency_args+=(--reuse-per-sample "${FREQUENCY_REUSE_PER_SAMPLE}")
     [[ "${OVERWRITE}" == 1 ]] && frequency_args+=(--overwrite)
     env OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python "${frequency_args[@]}" 2>&1 | tee "${LOG_ROOT}/05_frequency_metrics.log"
 fi
@@ -176,7 +182,7 @@ if [[ "${RUN_CAM}" == 1 ]]; then
         fi
         active_cam_sample_root="${CAM_SAMPLE_ROOT}"
     fi
-    env RUOD_ROOT="${RUOD_ROOT}" RUOD_ANN="${RUOD_ANN}" CAM_MODELS_CONFIG="${CAM_MODELS_CONFIG}" SAMPLE_ROOT="${active_cam_sample_root}" CAM_OUT_ROOT="${OUT_ROOT}/cam_prediction" LAYERS="${LAYERS}" CAM_DEVICES="${CAM_DEVICES}" CAM_PARALLEL_MODELS="${CAM_PARALLEL_MODELS}" CAM_SCORE_THRESHOLD="${CAM_SCORE_THRESHOLD}" CAM_MAX_PREDICTIONS="${CAM_MAX_PREDICTIONS}" bash "${SCRIPT_DIR}/run_prediction_cam.sh" 2>&1 | tee "${LOG_ROOT}/06_prediction_cam.log"
+    env RUOD_ROOT="${RUOD_ROOT}" RUOD_ANN="${RUOD_ANN}" CAM_MODELS_CONFIG="${CAM_MODELS_CONFIG}" SAMPLE_ROOT="${active_cam_sample_root}" CAM_OUT_ROOT="${CAM_OUTPUT_ROOT}" LAYERS="${LAYERS}" CAM_DEVICES="${CAM_DEVICES}" CAM_PARALLEL_MODELS="${CAM_PARALLEL_MODELS}" CAM_SCORE_THRESHOLD="${CAM_SCORE_THRESHOLD}" CAM_MAX_PREDICTIONS="${CAM_MAX_PREDICTIONS}" bash "${SCRIPT_DIR}/run_prediction_cam.sh" 2>&1 | tee "${LOG_ROOT}/06_prediction_cam.log"
 fi
 
 cat > "${OUT_ROOT}/COMPLETE.env" <<EOF
@@ -187,8 +193,8 @@ CAM_SAMPLE_ROOT=${CAM_SAMPLE_ROOT}
 FREQUENCY_ROOT=${FREQUENCY_ROOT}
 FEATURE_ROOT=${FEATURE_ROOT}
 CKA_ROOT=${OUT_ROOT}/cka
-FREQUENCY_ANALYSIS_ROOT=${OUT_ROOT}/frequency
-CAM_ROOT=${OUT_ROOT}/cam_prediction/jet_per_image_max
+FREQUENCY_ANALYSIS_ROOT=${FREQUENCY_ANALYSIS_ROOT}
+CAM_ROOT=${CAM_OUTPUT_ROOT}/jet_per_image_max
 SAMPLES=${SAMPLES}
 CAM_SAMPLES=${CAM_SAMPLES}
 CKA_REFERENCE_MODEL=${CKA_REFERENCE_MODEL}

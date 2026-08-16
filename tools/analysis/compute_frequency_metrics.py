@@ -110,7 +110,7 @@ def plot_metric(rows: List[dict], models: List[str], layers: List[str], metric: 
     for axis, layer in zip(axes.flat, layers):
         for model in models:
             lookup = {row['variant']: row for row in rows if row['model'] == model and row['layer'] == layer}
-            values = [float(lookup[variant][metric]) for variant in VARIANTS]
+            values = [float(lookup[variant]['mean']) for variant in VARIANTS]
             errors = [float(lookup[variant]['sem']) for variant in VARIANTS]
             x = np.arange(len(VARIANTS))
             axis.plot(x, values, color=palette[model], marker=markers[model], linewidth=2.0, markersize=5, label=model)

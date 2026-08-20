@@ -69,6 +69,39 @@ OUT_ROOT=/media/HDD2/XCX/exp_2/analysis/ruod20_energy_cam_cka RUN_SAMPLE=0 RUN_B
 
 Set `OVERWRITE=1` only when regenerating the selected stage's output.
 
+## Detector prediction overlays
+
+`visualize_detector_predictions.py` renders scored detector predictions over a
+shared RUOD manifest. It writes both a uniform yellow-box version and a
+detector-specific color version from the same inference pass. Box width and
+label font size are adaptive to each source image's short side, with clamped
+defaults that avoid oversized labels on small images and unreadable labels on
+large images. `run_detector_prediction_visualization.sh` runs one detector per
+requested GPU and composes one 2 x 2 detector-comparison panel per image for
+each color mode.
+
+```bash
+SAMPLE_ROOT=/media/HDD2/XCX/exp_2/analysis/ruod100_energy_cam30_parallel_20260816_010422/sample \
+OUT_ROOT=/media/HDD2/XCX/exp_2/analysis/ruod100_detector_predictions \
+DEVICES=cuda:2,cuda:3,cuda:6,cuda:7 \
+PARALLEL_MODELS=4 \
+SCORE_THRESHOLD=0.30 \
+MAX_DETECTIONS=30 \
+bash tools/analysis/run_detector_prediction_visualization.sh
+```
+
+The main output paths are:
+
+```text
+OUT_ROOT/
+  uniform/images/<model>/image_XXXXXXXX.png
+  uniform/panels_2x2/image_XXXXXXXX.png
+  model/images/<model>/image_XXXXXXXX.png
+  model/panels_2x2/image_XXXXXXXX.png
+  metadata/<model>.jsonl
+  COMPLETE.json
+```
+
 ## Output layout
 
 ```text

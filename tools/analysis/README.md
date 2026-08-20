@@ -102,6 +102,37 @@ OUT_ROOT/
   COMPLETE.json
 ```
 
+## Paper-only figure redraws
+
+The original CKA and frequency scripts remain the provenance-producing
+computations.  The two rendering-only scripts below create a separate,
+compact paper presentation from the existing TSV summaries.  They do not
+recompute features and do not overwrite the original analysis directory.
+
+```bash
+RUN_NAME=ruod100_energy_cam30_parallel_20260816_010422
+OUT_ROOT=/media/HDD2/XCX/exp_2/analysis/$RUN_NAME
+PAPER_ROOT=$OUT_ROOT/paper_figures_v2
+
+python -m tools.analysis.render_paper_frequency_figures \
+  --summary-tsv "$OUT_ROOT/frequency_clean_feature_reference/frequency_summary.tsv" \
+  --group pretrained \
+  --models imagenet_dino100e_backbone,realuw_dino100e_backbone,synthetic5_dino100e_backbone,imagenet_dino100e_dfui_backbone \
+  --reference-model imagenet_dino100e_ruod_cascade \
+  --out-dir "$PAPER_ROOT/frequency_pretrained"
+
+python -m tools.analysis.render_paper_same_layer_cka \
+  --cka-tsv "$OUT_ROOT/cka/pretrained/same_layer_cka.tsv" \
+  --out-dir "$PAPER_ROOT/cka_pretrained"
+```
+
+`render_paper_frequency_figures.py` uses a compact 2 x 2 layer layout,
+short frequency labels (`Clean`, `Low`, `Mid`, `High`, `-Low`, `-Mid`,
+`-High`), restrained uncertainty ribbons, and an optional muted dashed
+reference curve.  `render_paper_same_layer_cka.py` uses abbreviated model
+labels and deliberately rejects self-comparison rows, since a diagonal
+linear-CKA value of one is mathematically guaranteed rather than evidence.
+
 ## Output layout
 
 ```text

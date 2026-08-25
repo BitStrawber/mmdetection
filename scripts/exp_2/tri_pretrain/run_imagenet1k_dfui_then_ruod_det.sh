@@ -26,16 +26,16 @@ BACKBONE_ROOT="${BACKBONE_ROOT:-$OUTPUT_ROOT/backbones}"
 LOG_ROOT="${LOG_ROOT:-$OUTPUT_ROOT/logs}"
 PRETRAIN_DIR="${PRETRAIN_DIR:-$OUTPUT_ROOT/converted}"
 
-# R50 uses the two exact, previously validated J10 stage-one experiments.
-# The source configs are located dynamically because their final filename is
-# experiment-specific, while the run-directory contract is stable.
+# R50 uses the two exact, previously validated J10 stage-one configurations.
+# Keep the original run-directory locations as a fallback for older fcp-style
+# checkouts; fuping defaults to the versioned copies below.
 J10_ROOT="${J10_ROOT:-work_dirs/j10_dino_official_source_compare}"
 R50_DFUI_RUOD_J10_DIR="${R50_DFUI_RUOD_J10_DIR:-$J10_ROOT/j10_dino_official_dfui_ruod_easy_f1_lr000375_e48_s1}"
 R50_DFUI_RUOD_UIIS_J10_DIR="${R50_DFUI_RUOD_UIIS_J10_DIR:-$J10_ROOT/j10_dino_official_dfui_ruod_uiis_easy_f1_lr000375_e48_s1}"
-# A fuping run can point directly at copies of the exact J10 configs.  When
-# unset, retain fcp's run-directory lookup convention.
-R50_DFUI_RUOD_CONFIG="${R50_DFUI_RUOD_CONFIG:-}"
-R50_DFUI_RUOD_UIIS_CONFIG="${R50_DFUI_RUOD_UIIS_CONFIG:-}"
+# Versioned copies of the exact J10 configurations make the pipeline
+# self-contained on fuping.  Callers can still replace them explicitly.
+R50_DFUI_RUOD_CONFIG="${R50_DFUI_RUOD_CONFIG:-configs/exp_2/dfui_imagenet1k_stage_configs/r50_dfui_ruod/cascade-rcnn_r50_dino-official_fpn_2x_dfui_ruod_easy_j10_scheme_c_s1.py}"
+R50_DFUI_RUOD_UIIS_CONFIG="${R50_DFUI_RUOD_UIIS_CONFIG:-configs/exp_2/dfui_imagenet1k_stage_configs/r50_dfui_ruod_uiis/cascade-rcnn_r50_dino-official_fpn_2x_dfui_ruod_uiis_easy_j10_scheme_c_s1.py}"
 # ViT-S starts from the standard controlled-100K Cascade configuration; its
 # DFUI stage is extended to 48 epochs below, with proportional LR milestones.
 VITS_DFUI_CONFIG="${VITS_DFUI_CONFIG:-configs/exp_2/tri_pretrain/cascade-rcnn_vit-small_dino_fpn_24e_ruod_control100k.py}"

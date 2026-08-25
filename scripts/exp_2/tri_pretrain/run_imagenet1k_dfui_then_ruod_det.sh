@@ -26,6 +26,17 @@ BACKBONE_ROOT="${BACKBONE_ROOT:-$OUTPUT_ROOT/backbones}"
 LOG_ROOT="${LOG_ROOT:-$OUTPUT_ROOT/logs}"
 PRETRAIN_DIR="${PRETRAIN_DIR:-$OUTPUT_ROOT/converted}"
 
+# Python multiprocessing uses an AF_UNIX socket below TMPDIR to transfer tensor
+# storage between data-loader workers. Linux limits these socket paths to about
+# 108 bytes, so do not inherit a deeply nested experiment-specific TMPDIR.
+TMPDIR="${TMPDIR:-/media/SSD1/tmp}"
+if [ "${#TMPDIR}" -gt 40 ]; then
+  echo "TMPDIR is too long for multiprocessing sockets; using /media/SSD1/tmp"
+  TMPDIR=/media/SSD1/tmp
+fi
+mkdir -p "$TMPDIR"
+export TMPDIR
+
 # R50 uses the two exact, previously validated J10 stage-one configurations.
 # Keep the original run-directory locations as a fallback for older fcp-style
 # checkouts; fuping defaults to the versioned copies below.

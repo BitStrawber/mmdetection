@@ -12,6 +12,9 @@ cd "$REPO_ROOT"
 R50_GPUS="${R50_GPUS:-4,5}"
 VITS_GPUS="${VITS_GPUS:-6,7}"
 BASE_PORT="${BASE_PORT:-29680}"
+MODEL_PREFIX="${MODEL_PREFIX:-imagenet1k}"
+VARIANTS="${VARIANTS:-dfui_ruod,dfui_ruod_uiis}"
+IFS=',' read -r -a VARIANT_LIST <<< "$VARIANTS"
 
 DATA_ROOT="${DATA_ROOT:-/media/HDD0/XCX/exp_2_data/exp_2}"
 DFUI_RUOD_ROOT="${DFUI_RUOD_ROOT:-$DATA_ROOT/DFUI_RUOD_EASY}"
@@ -328,7 +331,7 @@ run_architecture_pipeline() {
     convert_teacher "$raw" "$init" "$expected_arch" "$prepend"
 
     local variant root
-    for variant in dfui_ruod dfui_ruod_uiis; do
+    for variant in "${VARIANT_LIST[@]}"; do
       local dfui_config
       if [ "$variant" = "dfui_ruod" ]; then
         root="$DFUI_RUOD_ROOT"
@@ -341,7 +344,7 @@ run_architecture_pipeline() {
         else
           dfui_config="$VITS_DFUI_CONFIG"
         fi
-      else
+      elif [ "$variant" = "dfui_ruod_uiis" ]; then
         root="$DFUI_RUOD_UIIS_ROOT"
         if [ "$architecture" = "resnet50" ]; then
           if [ -n "$R50_DFUI_RUOD_UIIS_CONFIG" ]; then
@@ -352,6 +355,8 @@ run_architecture_pipeline() {
         else
           dfui_config="$VITS_DFUI_CONFIG"
         fi
+      else
+        die "Unsupported VARIANTS entry: $variant (expected dfui_ruod or dfui_ruod_uiis)"
       fi
       [ -s "$dfui_config" ] || die "DFUI config missing: $dfui_config"
       for required in \
@@ -361,7 +366,7 @@ run_architecture_pipeline() {
         [ -e "$required" ] || die "DFUI dataset requirement missing: $required"
       done
 
-      local dfui_name="imagenet1k_${architecture}_${variant}_det48e"
+      local dfui_name="${MODEL_PREFIX}_${architecture}_${variant}_det48e"
       local dfui_work="$WORK_ROOT/$dfui_name"
       local -a dfui_opts=()
       while IFS= read -r item; do dfui_opts+=("$item"); done < <(common_options "$init" "$DFUI_CLASSES" "$DFUI_EPOCHS")
@@ -401,7 +406,7 @@ run_architecture_pipeline() {
         [ -e "$required" ] || die "RUOD dataset requirement missing: $required"
       done
 
-      local ruod_name="imagenet1k_${architecture}_${variant}_backbone_ruod24e_det"
+      local ruod_name="${MODEL_PREFIX}_${architecture}_${variant}_backbone_ruod24e_det"
       local ruod_work="$WORK_ROOT/$ruod_name"
       local -a ruod_opts=()
       while IFS= read -r item; do ruod_opts+=("$item"); done < <(common_options "$exported" "" "$RUOD_EPOCHS")
@@ -433,9 +438,14 @@ echo "============================================================"
 echo "ImageNet-1K -> DFUI detection -> RUOD detection pipeline"
 echo "R50 GPUs:  $R50_GPUS"
 echo "ViT-S GPUs:$VITS_GPUS"
+echo "Model prefix: $MODEL_PREFIX"
+echo "Variants: $VARIANTS"
 echo "DFUI data: $DFUI_RUOD_ROOT ; $DFUI_RUOD_UIIS_ROOT"
 echo "R50 J10 configs: $R50_DFUI_RUOD_J10_DIR ; $R50_DFUI_RUOD_UIIS_J10_DIR"
 echo "DFUI epochs: $DFUI_EPOCHS ; RUOD epochs: $RUOD_EPOCHS"
+echo "Raw R50 checkpoint:  $IMAGENET1K_R50_RAW"
+echo "Raw ViT-S checkpoint:$IMAGENET1K_VITS_RAW"
+sha256sum "$IMAGENET1K_R50_RAW" "$IMAGENET1K_VITS_RAW"
 echo "Pipeline log: $PIPELINE_LOG"
 echo "============================================================"
 

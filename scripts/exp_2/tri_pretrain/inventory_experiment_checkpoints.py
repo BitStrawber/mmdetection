@@ -79,7 +79,32 @@ def config_digest(path: Path | None) -> str:
     return sha256(path) if path else ""
 
 
-def collect(root: Path, host: str, with_sha256: bool) -> list[dict[str, object]]:
+def checkpoint_metadata(path: Path) -> dict[str, str]:
+    """Return the provenance fields embedded by MMEngine/MMDetection checkpoints."""
+    try:
+        import torch
+
+        checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+        meta = checkpoint.get("meta", {}) if isinstance(checkpoint, dict) else {}
+        cfg = meta.get("cfg", "") if isinstance(meta, dict) else ""
+        cfg_text = str(cfg)
+        load_from = re.search(r"(?:^|\n)load_from\s*=\s*['\"]([^'\"]+)", cfg_text)
+        work_dir = re.search(r"(?:^|\n)work_dir\s*=\s*['\"]([^'\"]+)", cfg_text)
+        return {
+            "checkpoint_meta_load_from": load_from.group(1) if load_from else "",
+            "checkpoint_meta_work_dir": work_dir.group(1) if work_dir else "",
+        }
+    except Exception as error:  # Inventory must still complete for legacy checkpoints.
+        return {
+            "checkpoint_meta_load_from": "",
+            "checkpoint_meta_work_dir": "",
+            "checkpoint_meta_error": f"{type(error).__name__}: {error}",
+        }
+
+
+def collect(
+    root: Path, host: str, with_sha256: bool, with_checkpoint_metadata: bool
+) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for checkpoint in sorted(root.rglob(CHECKPOINT_GLOB)):
         if not checkpoint.is_file():
@@ -89,8 +114,7 @@ def collect(root: Path, host: str, with_sha256: bool) -> list[dict[str, object]]
         log = nearest_log(parent)
         match = METRIC_RE.search(checkpoint.name)
         stat = checkpoint.stat()
-        rows.append(
-            {
+        row: dict[str, object] = {
                 "host": host,
                 "task": infer_task(checkpoint.name + " " + str(parent)),
                 "experiment_key_candidate": infer_experiment(parent),
@@ -104,9 +128,11 @@ def collect(root: Path, host: str, with_sha256: bool) -> list[dict[str, object]]
                 "sha256": sha256(checkpoint) if with_sha256 else "",
                 "config": str(config) if config else "",
                 "config_sha256": config_digest(config) if with_sha256 else "",
-                "latest_log": str(log) if log else "",
-            }
-        )
+            "latest_log": str(log) if log else "",
+        }
+        if with_checkpoint_metadata:
+            row.update(checkpoint_metadata(checkpoint))
+        rows.append(row)
     return rows
 
 
@@ -116,6 +142,11 @@ def main() -> None:
     parser.add_argument("--root", action="append", required=True, type=Path, help="A work-dir root to scan. Repeatable.")
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--with-sha256", action="store_true", help="Hash checkpoint/config files; slower but required before upload.")
+    parser.add_argument(
+        "--with-checkpoint-metadata",
+        action="store_true",
+        help="Read embedded MMEngine metadata to verify the actual load_from provenance.",
+    )
     args = parser.parse_args()
 
     rows: list[dict[str, object]] = []
@@ -123,7 +154,14 @@ def main() -> None:
         if not root.is_dir():
             print(f"WARNING: skipped missing root: {root}")
             continue
-        rows.extend(collect(root.resolve(), args.host, args.with_sha256))
+        rows.extend(
+            collect(
+                root.resolve(),
+                args.host,
+                args.with_sha256,
+                args.with_checkpoint_metadata,
+            )
+        )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     fields = [
@@ -131,6 +169,10 @@ def main() -> None:
         "checkpoint_name", "metric", "epoch", "size_bytes", "modified_utc", "sha256",
         "config", "config_sha256", "latest_log",
     ]
+    if args.with_checkpoint_metadata:
+        fields.extend(
+            ["checkpoint_meta_load_from", "checkpoint_meta_work_dir", "checkpoint_meta_error"]
+        )
     tsv_path = args.out_dir / f"checkpoint_inventory_{args.host}.tsv"
     with tsv_path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")

@@ -89,15 +89,25 @@ def checkpoint_metadata(path: Path) -> dict[str, str]:
         cfg = meta.get("cfg", "") if isinstance(meta, dict) else ""
         cfg_text = str(cfg)
         load_from = re.search(r"(?:^|\n)load_from\s*=\s*['\"]([^'\"]+)", cfg_text)
+        init_checkpoint = re.search(r"checkpoint\s*=\s*['\"]([^'\"]+)", cfg_text)
         work_dir = re.search(r"(?:^|\n)work_dir\s*=\s*['\"]([^'\"]+)", cfg_text)
+        message_hub = checkpoint.get("message_hub", {}) if isinstance(checkpoint, dict) else {}
+        runtime_info = (
+            message_hub.get("runtime_info", {}) if isinstance(message_hub, dict) else {}
+        )
+        best_score = runtime_info.get("best_score", "") if isinstance(runtime_info, dict) else ""
         return {
             "checkpoint_meta_load_from": load_from.group(1) if load_from else "",
+            "checkpoint_meta_init_checkpoint": init_checkpoint.group(1) if init_checkpoint else "",
             "checkpoint_meta_work_dir": work_dir.group(1) if work_dir else "",
+            "checkpoint_meta_best_score": str(best_score),
         }
     except Exception as error:  # Inventory must still complete for legacy checkpoints.
         return {
             "checkpoint_meta_load_from": "",
+            "checkpoint_meta_init_checkpoint": "",
             "checkpoint_meta_work_dir": "",
+            "checkpoint_meta_best_score": "",
             "checkpoint_meta_error": f"{type(error).__name__}: {error}",
         }
 
@@ -171,7 +181,13 @@ def main() -> None:
     ]
     if args.with_checkpoint_metadata:
         fields.extend(
-            ["checkpoint_meta_load_from", "checkpoint_meta_work_dir", "checkpoint_meta_error"]
+            [
+                "checkpoint_meta_load_from",
+                "checkpoint_meta_init_checkpoint",
+                "checkpoint_meta_work_dir",
+                "checkpoint_meta_best_score",
+                "checkpoint_meta_error",
+            ]
         )
     tsv_path = args.out_dir / f"checkpoint_inventory_{args.host}.tsv"
     with tsv_path.open("w", newline="", encoding="utf-8") as handle:

@@ -233,12 +233,27 @@ run_dino_resnet50() {
     local name="${DINO_NAME:-j7_realuw_dino_resnet50}"
     local work_dir="$WORK_ROOT/$name"
     local log_file="$LOG_DIR/${name}_s1.log"
-    local data_path="$REALUW_IMAGEFOLDER/train"
+    local data_path="${DINO_DATA_PATH:-$REALUW_IMAGEFOLDER/train}"
+    local dino_entry="$DINO_DIR/main_dino.py"
+    local -a index_args=()
 
     if [ ! -f "$DINO_DIR/main_dino.py" ]; then
         echo "Error: DINO main_dino.py not found: $DINO_DIR/main_dino.py"
         echo "Set DINO_DIR=/path/to/facebookresearch/dino"
         exit 1
+    fi
+    if [ -n "${DINO_INDEX_MANIFEST:-}" ]; then
+        local index_wrapper="${DINO_INDEX_WRAPPER:-$REPO_ROOT/tools/exp_2/run_dino_with_index.py}"
+        if [ ! -f "$index_wrapper" ]; then
+            echo "Error: indexed DINO wrapper not found: $index_wrapper"
+            exit 1
+        fi
+        if [ ! -f "$DINO_INDEX_MANIFEST" ]; then
+            echo "Error: DINO index manifest not found: $DINO_INDEX_MANIFEST"
+            exit 1
+        fi
+        dino_entry="$index_wrapper"
+        index_args=(--dino-main "$DINO_DIR/main_dino.py" --index-manifest "$DINO_INDEX_MANIFEST")
     fi
 
     mkdir -p "$work_dir"
@@ -251,6 +266,7 @@ run_dino_resnet50() {
     echo "gpu_ids: $GPU_IDS"
     echo "num_gpus: $NUM_GPUS"
     echo "data_path: $data_path"
+    echo "index_manifest: ${DINO_INDEX_MANIFEST:-none}"
     echo "========================================="
 
     wait_for_gpu_group "$GPU_IDS" "$name S1"
@@ -260,7 +276,8 @@ run_dino_resnet50() {
         --use_env \
         --nproc_per_node="$NUM_GPUS" \
         --master_port="$PORT" \
-        "$DINO_DIR/main_dino.py" \
+        "$dino_entry" \
+        "${index_args[@]}" \
         --arch "${DINO_ARCH:-resnet50}" \
         --optimizer "${DINO_OPTIMIZER:-sgd}" \
         --lr "${DINO_LR:-0.03}" \

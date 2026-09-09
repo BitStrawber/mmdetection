@@ -36,19 +36,32 @@ expected_images() {
 
 validate_subset() {
   local source="$1" scale="$2" expected="$3" root="$SUBSET_ROOT/$source/$scale"
-  python - "$root/subset_manifest.json" "$root/imagefolder/train" "$source" "$scale" "$expected" <<'PY'
+  python - "$root/subset_manifest.json" "$source" "$scale" "$expected" <<'PY'
 import json, sys
 from pathlib import Path
 manifest_path = Path(sys.argv[1])
-root = Path(sys.argv[2])
-source, scale, expected = sys.argv[3:]
+source, scale, expected = sys.argv[2:]
 payload = json.loads(manifest_path.read_text())
-if payload['source'] != source or payload['label'] != scale or payload['image_count'] != int(expected):
+if (payload.get('schema_version') != 2 or payload.get('storage_mode') != 'index_only' or
+        payload['source'] != source or payload['label'] != scale or
+        payload['image_count'] != int(expected)):
     raise SystemExit(f'manifest mismatch: {manifest_path}')
-files = [p for p in root.rglob('*') if p.is_file() or p.is_symlink()]
-if len(files) != int(expected):
-    raise SystemExit(f'{root}: expected {expected} linked images, found {len(files)}')
-print(f'validated {source}/{scale}: {len(files)} images; selection={payload["selection_sha256"]}')
+base = Path(payload['base_index_file'])
+remaining = Path(payload['remaining_index_file'])
+base_count = sum(1 for line in base.open(encoding='utf-8') if line.strip())
+remaining_count = sum(1 for line in remaining.open(encoding='utf-8') if line.strip())
+if base_count != payload['base_count'] or remaining_count < payload['additional_count']:
+    raise SystemExit(f'index length mismatch: {manifest_path}')
+if not Path(payload['source_root']).is_dir():
+    raise SystemExit(f"source root missing: {payload['source_root']}")
+print(f'validated {source}/{scale}: {payload["image_count"]} indexed images; selection={payload["selection_sha256"]}')
+PY
+}
+
+manifest_source_root() {
+  python - "$1" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding='utf-8'))['source_root'])
 PY
 }
 
@@ -67,9 +80,10 @@ PY
 
 run_one() {
   local scale="$1" source="$2" backbone="$3" exp_id="$4" config="$5" arch="$6" port="$7"
-  local count name root checkpoint
+  local count name root checkpoint source_root
   count="$(expected_images "$scale")"
   root="$SUBSET_ROOT/$source/$scale"
+  source_root="$(manifest_source_root "$root/subset_manifest.json")"
   name="scale${scale}_${source}_dino_${backbone}_100e"
   checkpoint="$WORK_ROOT/$name/checkpoint.pth"
   validate_subset "$source" "$scale" "$count"
@@ -80,11 +94,12 @@ run_one() {
   fi
   echo "================================================================"
   echo "START $name"
-  echo "data_path=$root/imagefolder/train  images=$count  gpus=$GPU_IDS"
+  echo "data_path=$source_root (indexed)  images=$count  gpus=$GPU_IDS"
   env EXP_ID="$exp_id" TASK_CONFIG="$config" DINO_NAME="$name" \
     DINO_EPOCHS="$DINO_EPOCHS" DINO_BATCH_SIZE_PER_GPU="$DINO_BATCH_SIZE_PER_GPU" \
     DINO_NUM_WORKERS="$DINO_NUM_WORKERS" DINO_SAVECKP_FREQ="$DINO_SAVECKP_FREQ" \
-    DINO_INIT_CHECKPOINT= REALUW_SSL_ROOT="$root" BUILD_REALUW_SSL=0 \
+    DINO_INIT_CHECKPOINT= DINO_DATA_PATH="$source_root" \
+    DINO_INDEX_MANIFEST="$root/subset_manifest.json" BUILD_REALUW_SSL=0 \
     GPU_IDS="$GPU_IDS" PORT="$port" WORK_ROOT="$WORK_ROOT" LOG_DIR="$LOG_ROOT" \
     WAIT_FOR_GPUS=1 bash "$RUNNER"
   validate_checkpoint "$checkpoint" "$arch"

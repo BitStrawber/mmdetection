@@ -4,8 +4,9 @@ This workflow evaluates three DINO source pools (`imagenet`, `realuw`, and
 `synthetic5`) at 100K, 300K, 500K, 800K, and 1M images.  It is deliberately
 split across hosts:
 
-1. **fuping:** create nested ImageFolder subsets and run 100-epoch Facebook
-   DINO pretraining for ResNet-50 and ViT-S.
+1. **fuping:** create compact nested path indexes and run 100-epoch Facebook
+   DINO pretraining for ResNet-50 and ViT-S directly from the original SSD1
+   image pools.
 2. **Manual transfer:** copy the two raw `checkpoint.pth` files for one source
    and scale to the `fcp` transfer root.
 3. **fcp:** convert teacher backbones, run direct RUOD Cascade R-CNN and
@@ -15,9 +16,11 @@ split across hosts:
 ## Dataset construction on fuping
 
 The builder requires the original training pool and the already-used immutable
-100K ImageFolder root.  It uses the 100K relative paths exactly, then appends a
-deterministic shuffled ordering of unused source images.  Output directories
-use symbolic links by default, rather than copying image bytes.
+100K ImageFolder root. It uses the 100K relative paths exactly, then appends a
+deterministic shuffled ordering of unused source images. It stores only two
+text indexes per source: `base_100k.txt` and `remaining_permutation.txt`.
+Each scale manifest records a prefix length and SHA256 selection digest. No
+image bytes, symlinks, hardlinks, or duplicate ImageFolder trees are created.
 
 ```bash
 python tools/exp_2/build_nested_dino_subsets.py \
@@ -31,9 +34,15 @@ python tools/exp_2/build_nested_dino_subsets.py \
   --seed 20260831
 ```
 
-Before committing storage or compute, append `--dry-run`.  The source and its
-existing 100K root must have matching ImageFolder-relative file paths.  This
+Before committing metadata or compute, append `--dry-run`. The source and its
+existing 100K root must have matching ImageFolder-relative file paths. This
 intentionally fails rather than silently creating a different 100K base.
+
+The DINO runner invokes `tools/exp_2/run_dino_with_index.py` when an index
+manifest is supplied. That adapter replaces only `torchvision.datasets.ImageFolder`
+for the current process; Facebook DINO's model, multi-crop augmentation, loss,
+optimizer, EMA teacher, and schedule remain unchanged. The original image files
+are read directly from the SSD1 source root.
 
 ## Pretraining on fuping
 

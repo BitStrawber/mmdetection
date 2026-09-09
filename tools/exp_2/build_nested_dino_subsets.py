@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Build nested ImageFolder subsets for controlled DINO scale experiments.
+"""Build compact nested indexes for controlled DINO scale experiments.
 
-The initial 100K split is treated as immutable.  Each larger split contains
-every item in that split plus a deterministic sample from the remaining source
-pool.  Outputs are symlink ImageFolders by default, so no image bytes are
-duplicated on the pretraining host.
+The original source ImageFolders remain the only image storage. For each
+source, the builder writes one immutable 100K path list and one deterministic
+permutation of the remaining paths. The 300K/500K/800K/1M manifests only refer
+to prefixes of those two lists, so no images or ImageFolder trees are copied.
 """
 
 from __future__ import annotations
@@ -12,10 +12,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import random
-import shutil
-import sys
 from pathlib import Path
 
 
@@ -48,7 +45,7 @@ def validate_base(source_root: Path, base_root: Path) -> list[str]:
     base = image_paths(base_root)
     if len(base) != 100_000:
         raise RuntimeError(
-            f"the immutable 100K root must contain exactly 100000 images, "
+            "the immutable 100K root must contain exactly 100000 images, "
             f"found {len(base)}: {base_root}")
     missing = [relative for relative in base if not (source_root / relative).is_file()]
     if missing:
@@ -59,7 +56,7 @@ def validate_base(source_root: Path, base_root: Path) -> list[str]:
     return base
 
 
-def manifest_digest(paths: list[str]) -> str:
+def digest_paths(paths: list[str]) -> str:
     digest = hashlib.sha256()
     for path in paths:
         digest.update(path.encode("utf-8"))
@@ -67,27 +64,22 @@ def manifest_digest(paths: list[str]) -> str:
     return digest.hexdigest()
 
 
-def materialize(source_root: Path, destination: Path, paths: list[str], mode: str) -> None:
-    for relative in paths:
-        source = source_root / relative
-        target = destination / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if target.exists() or target.is_symlink():
-            if mode == "symlink" and target.is_symlink() and target.resolve() == source.resolve():
-                continue
-            if mode == "hardlink" and target.samefile(source):
-                continue
-            raise RuntimeError(f"refuse to overwrite existing output: {target}")
-        if mode == "symlink":
-            target.symlink_to(source)
-        elif mode == "hardlink":
-            os.link(source, target)
-        else:
-            shutil.copy2(source, target)
+def write_lines(path: Path, paths: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("".join(f"{item}\n" for item in paths), encoding="utf-8")
+
+
+def write_immutable_index(path: Path, paths: list[str], name: str) -> None:
+    if path.exists():
+        current = path.read_text(encoding="utf-8").splitlines()
+        if current != paths:
+            raise RuntimeError(f"{name}: existing index differs: {path}")
+        return
+    write_lines(path, paths)
 
 
 def build_source(name: str, source_root: Path, base_root: Path, output_root: Path,
-                 seed: int, mode: str, dry_run: bool) -> None:
+                 seed: int, dry_run: bool) -> None:
     pool = image_paths(source_root)
     pool_set = set(pool)
     base = validate_base(source_root, base_root)
@@ -97,51 +89,52 @@ def build_source(name: str, source_root: Path, base_root: Path, output_root: Pat
     if not set(base).issubset(pool_set):
         raise RuntimeError(f"{name}: 100K split contains images absent from source pool")
 
-    remaining = [relative for relative in pool if relative not in set(base)]
-    rng = random.Random(f"nested-dino-v1:{seed}:{name}")
+    base_set = set(base)
+    remaining = [relative for relative in pool if relative not in base_set]
+    rng = random.Random(f"nested-dino-v2:{seed}:{name}")
     rng.shuffle(remaining)
-    selected = list(base)
-    previous_count = 0
 
-    for label, target_count in SIZES:
-        need = target_count - previous_count
-        if need < 0:
-            raise AssertionError("sizes must increase")
-        if target_count == 100_000:
-            selected = list(base)
-        else:
-            selected.extend(remaining[previous_count - 100_000:target_count - 100_000])
-        if len(selected) != target_count:
-            raise AssertionError(f"{name}/{label}: selection size mismatch")
+    source_output = output_root / name
+    index_root = source_output / "indexes"
+    base_index = index_root / "base_100k.txt"
+    remaining_index = index_root / "remaining_permutation.txt"
+    if not dry_run:
+        write_immutable_index(base_index, base, name)
+        write_immutable_index(remaining_index, remaining, name)
 
-        subset_root = output_root / name / label
-        imagefolder = subset_root / "imagefolder" / "train"
+    for position, (label, target_count) in enumerate(SIZES):
+        extra_count = target_count - len(base)
+        selected = base + remaining[:extra_count]
+        subset_root = source_output / label
         metadata = subset_root / "subset_manifest.json"
         payload = {
-            "schema_version": 1,
+            "schema_version": 2,
+            "storage_mode": "index_only",
             "source": name,
             "source_root": str(source_root),
             "immutable_100k_root": str(base_root),
+            "base_index_file": str(base_index),
+            "remaining_index_file": str(remaining_index),
             "label": label,
             "image_count": target_count,
+            "base_count": len(base),
+            "additional_count": extra_count,
             "seed": seed,
-            "link_mode": mode,
-            "nested_parent": None if label == "100k" else SIZES[SIZES.index((label, target_count)) - 1][0],
-            "selection_sha256": manifest_digest(selected),
-            "relative_paths": selected,
+            "nested_parent": None if position == 0 else SIZES[position - 1][0],
+            "selection_sha256": digest_paths(selected),
+            "source_pool_sha256": digest_paths(pool),
         }
         if metadata.exists():
             current = json.loads(metadata.read_text(encoding="utf-8"))
-            if current.get("selection_sha256") != payload["selection_sha256"]:
+            if current != payload:
                 raise RuntimeError(f"{name}/{label}: existing manifest differs: {metadata}")
         elif not dry_run:
             subset_root.mkdir(parents=True, exist_ok=True)
             metadata.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
-        print(f"{name:12s} {label:4s} images={target_count:7d} root={imagefolder}")
-        if not dry_run:
-            materialize(source_root, imagefolder, selected, mode)
-        previous_count = target_count
+        print(
+            f"{name:12s} {label:4s} images={target_count:7d} "
+            f"base={len(base):7d} additional={extra_count:7d} manifest={metadata}")
 
 
 def main() -> None:
@@ -152,7 +145,6 @@ def main() -> None:
                         metavar="NAME=EXISTING_100K_IMAGEFOLDER_TRAIN_ROOT")
     parser.add_argument("--out-root", required=True, type=Path)
     parser.add_argument("--seed", type=int, default=20260831)
-    parser.add_argument("--link-mode", choices=("symlink", "hardlink", "copy"), default="symlink")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -162,7 +154,7 @@ def main() -> None:
         raise SystemExit("--source and --base-100k must provide exactly the same names")
     for name in sorted(sources):
         build_source(name, sources[name], bases[name], args.out_root.expanduser().resolve(),
-                     args.seed, args.link_mode, args.dry_run)
+                     args.seed, args.dry_run)
 
 
 if __name__ == "__main__":

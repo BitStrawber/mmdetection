@@ -90,3 +90,26 @@ ViT-S, GPUs 6,7: same sequence
 Set `DFUI_FOLLOWUPS=ruod` when only the historical DFUI-to-RUOD protocol is
 needed.  The default `ruod,mask` produces the complete detection and instance
 segmentation transfer set for both DFUI branches.
+
+## Full-source DFUI-to-RUOD detection transfer on fcp
+
+`run_full_realuw_then_synthetic5_dfui_ruod_det.sh` runs the historical
+DFUI+RUOD+UIIS detector stage for 48 epochs and then the standard RUOD detector
+stage for 24 epochs. It uses the transferred full-source DINO checkpoints by
+default. The chains are independent: GPUs `4,5` process RealUW R50 followed by
+corrected Synthetic5 R50, while GPUs `6,7` process RealUW ViT-S followed by
+corrected Synthetic5 ViT-S. This lets one architecture begin its Synthetic5
+run without waiting for the other architecture's RealUW run to complete.
+
+Run a no-training validation first:
+
+```bash
+CHECK_ONLY=1 bash scripts/exp_2/tri_pretrain/run_full_realuw_then_synthetic5_dfui_ruod_det.sh
+```
+
+Then start the two chains:
+
+```bash
+nohup bash scripts/exp_2/tri_pretrain/run_full_realuw_then_synthetic5_dfui_ruod_det.sh \
+  > /media/SSD1/XCX/exp_2/dfui_training_runs/full_transfer_launcher.log 2>&1 &
+```

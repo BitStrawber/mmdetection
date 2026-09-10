@@ -16,6 +16,8 @@ MODEL_PREFIX="${MODEL_PREFIX:-imagenet1k}"
 PRETRAIN_PREFIX="${PRETRAIN_PREFIX:-imagenet1k}"
 VARIANTS="${VARIANTS:-dfui_ruod,dfui_ruod_uiis}"
 IFS=',' read -r -a VARIANT_LIST <<< "$VARIANTS"
+ARCHITECTURES="${ARCHITECTURES:-resnet50,vits}"
+IFS=',' read -r -a ARCHITECTURE_LIST <<< "$ARCHITECTURES"
 
 DATA_ROOT="${DATA_ROOT:-/media/HDD0/XCX/exp_2_data/exp_2}"
 DFUI_RUOD_ROOT="${DFUI_RUOD_ROOT:-$DATA_ROOT/DFUI_RUOD_EASY}"
@@ -442,12 +444,23 @@ echo "ViT-S GPUs:$VITS_GPUS"
 echo "Model prefix: $MODEL_PREFIX"
 echo "Pretrain prefix: $PRETRAIN_PREFIX"
 echo "Variants: $VARIANTS"
+echo "Architectures: $ARCHITECTURES"
 echo "DFUI data: $DFUI_RUOD_ROOT ; $DFUI_RUOD_UIIS_ROOT"
 echo "R50 J10 configs: $R50_DFUI_RUOD_J10_DIR ; $R50_DFUI_RUOD_UIIS_J10_DIR"
 echo "DFUI epochs: $DFUI_EPOCHS ; RUOD epochs: $RUOD_EPOCHS"
-echo "Raw R50 checkpoint:  $IMAGENET1K_R50_RAW"
-echo "Raw ViT-S checkpoint:$IMAGENET1K_VITS_RAW"
-sha256sum "$IMAGENET1K_R50_RAW" "$IMAGENET1K_VITS_RAW"
+for architecture in "${ARCHITECTURE_LIST[@]}"; do
+  case "$architecture" in
+    resnet50)
+      echo "Raw R50 checkpoint:  $IMAGENET1K_R50_RAW"
+      sha256sum "$IMAGENET1K_R50_RAW"
+      ;;
+    vits)
+      echo "Raw ViT-S checkpoint:$IMAGENET1K_VITS_RAW"
+      sha256sum "$IMAGENET1K_VITS_RAW"
+      ;;
+    *) die "Unsupported ARCHITECTURES entry: $architecture (expected resnet50 or vits)" ;;
+  esac
+done
 echo "Pipeline log: $PIPELINE_LOG"
 echo "============================================================"
 
@@ -483,20 +496,39 @@ if [ "$CHECK_ONLY" = "1" ]; then
     "$RUOD_ROOT/val"; do
     [ -e "$required" ] || die "Dataset requirement missing: $required"
   done
-  convert_teacher "$IMAGENET1K_R50_RAW" "$IMAGENET1K_R50_INIT" resnet50 ""
-  convert_teacher "$IMAGENET1K_VITS_RAW" "$IMAGENET1K_VITS_INIT" vit_small "backbone."
+  for architecture in "${ARCHITECTURE_LIST[@]}"; do
+    case "$architecture" in
+      resnet50)
+        convert_teacher "$IMAGENET1K_R50_RAW" "$IMAGENET1K_R50_INIT" resnet50 ""
+        ;;
+      vits)
+        convert_teacher "$IMAGENET1K_VITS_RAW" "$IMAGENET1K_VITS_INIT" vit_small "backbone."
+        ;;
+      *) die "Unsupported ARCHITECTURES entry: $architecture (expected resnet50 or vits)" ;;
+    esac
+  done
   echo "CHECK_ONLY=1: source checkpoints, configs, and conversion passed."
   exit 0
 fi
 
-run_architecture_pipeline resnet50 "$R50_GPUS" "$BASE_PORT" &
-pid_r50=$!
-run_architecture_pipeline vits "$VITS_GPUS" "$((BASE_PORT + 200))" &
-pid_vits=$!
-
 status=0
-wait "$pid_r50" || status=1
-wait "$pid_vits" || status=1
+pids=()
+for architecture in "${ARCHITECTURE_LIST[@]}"; do
+  case "$architecture" in
+    resnet50)
+      run_architecture_pipeline resnet50 "$R50_GPUS" "$BASE_PORT" &
+      pids+=("$!")
+      ;;
+    vits)
+      run_architecture_pipeline vits "$VITS_GPUS" "$((BASE_PORT + 200))" &
+      pids+=("$!")
+      ;;
+    *) die "Unsupported ARCHITECTURES entry: $architecture (expected resnet50 or vits)" ;;
+  esac
+done
+for pid in "${pids[@]}"; do
+  wait "$pid" || status=1
+done
 [ "$status" -eq 0 ] || die "At least one architecture pipeline failed."
 
 echo "[$(timestamp)] COMPLETE"

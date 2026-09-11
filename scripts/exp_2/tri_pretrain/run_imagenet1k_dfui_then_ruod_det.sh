@@ -251,6 +251,8 @@ run_train() {
         resume_args=(--resume)
     fi
     mkdir -p "$work_dir"
+    # Check again at every stage boundary, not only when the architecture chain starts.
+    wait_for_group "$group" "$label training"
     echo "[$(timestamp)] START $label"
     echo "  config=$config"
     echo "  work_dir=$work_dir"
@@ -273,6 +275,7 @@ run_test() {
     shift 5
     local -a options=("$@")
     [ "$RUN_TEST" = "1" ] || return 0
+    wait_for_group "$group" "$label test"
     CUDA_VISIBLE_DEVICES="$group" PORT="$port" \
       bash tools/dist_test.sh "$config" "$checkpoint" "$(gpu_count "$group")" \
         --cfg-options "${options[@]}" \

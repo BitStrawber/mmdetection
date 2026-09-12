@@ -60,6 +60,13 @@ Every job uses the current Facebook DINO runner, 100 epochs, the fixed DINO
 recipes, and the complete `GPU_IDS` group.  Therefore no larger-scale job
 starts before all smaller-scale jobs finish.
 
+The nested launcher waits for each GPU to have no more than `9000 MiB` used
+memory and no more than 5% utilization for one check. This default
+allows an 8 GiB low-utilization memory guard while preserving approximately 3
+GiB of headroom for the measured 13 GiB DINO workload on 24 GiB RTX 3090 GPUs.
+Override `GPU_MAX_MEM_MB`, `GPU_MAX_UTIL`, `GPU_IDLE_CHECKS`, or
+`GPU_WAIT_INTERVAL` in the launch environment when running without that guard.
+
 ## Manual transfer convention
 
 For `SOURCE=realuw`, `SCALE=300k`, place raw checkpoints on fcp as:

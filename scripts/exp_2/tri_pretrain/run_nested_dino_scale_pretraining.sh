@@ -23,6 +23,13 @@ DINO_NUM_WORKERS="${DINO_NUM_WORKERS:-10}"
 DINO_SAVECKP_FREQ="${DINO_SAVECKP_FREQ:-50}"
 SKIP_COMPLETED="${SKIP_COMPLETED:-1}"
 CHECK_ONLY="${CHECK_ONLY:-0}"
+# Allow an optional low-utilization memory guard; all thresholds remain
+# overridable for fully idle GPU runs.
+WAIT_FOR_GPUS="${WAIT_FOR_GPUS:-1}"
+GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-9000}"
+GPU_MAX_UTIL="${GPU_MAX_UTIL:-5}"
+GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-1}"
+GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-30}"
 
 mkdir -p "$WORK_ROOT" "$LOG_ROOT"
 PIPELINE_LOG="${PIPELINE_LOG:-$LOG_ROOT/pipeline_$(date +%Y%m%d_%H%M%S).log}"
@@ -95,13 +102,16 @@ run_one() {
   echo "================================================================"
   echo "START $name"
   echo "data_path=$source_root (indexed)  images=$count  gpus=$GPU_IDS"
+  echo "gpu_start_rule=memory.used<=${GPU_MAX_MEM_MB}MB util<=${GPU_MAX_UTIL}% checks=${GPU_IDLE_CHECKS} interval=${GPU_WAIT_INTERVAL}s"
   env EXP_ID="$exp_id" TASK_CONFIG="$config" DINO_NAME="$name" \
     DINO_EPOCHS="$DINO_EPOCHS" DINO_BATCH_SIZE_PER_GPU="$DINO_BATCH_SIZE_PER_GPU" \
     DINO_NUM_WORKERS="$DINO_NUM_WORKERS" DINO_SAVECKP_FREQ="$DINO_SAVECKP_FREQ" \
     DINO_INIT_CHECKPOINT= DINO_DATA_PATH="$source_root" \
     DINO_INDEX_MANIFEST="$root/subset_manifest.json" BUILD_REALUW_SSL=0 \
     GPU_IDS="$GPU_IDS" PORT="$port" WORK_ROOT="$WORK_ROOT" LOG_DIR="$LOG_ROOT" \
-    WAIT_FOR_GPUS=1 bash "$RUNNER"
+    WAIT_FOR_GPUS="$WAIT_FOR_GPUS" GPU_MAX_MEM_MB="$GPU_MAX_MEM_MB" \
+    GPU_MAX_UTIL="$GPU_MAX_UTIL" GPU_IDLE_CHECKS="$GPU_IDLE_CHECKS" \
+    GPU_WAIT_INTERVAL="$GPU_WAIT_INTERVAL" bash "$RUNNER"
   validate_checkpoint "$checkpoint" "$arch"
 }
 

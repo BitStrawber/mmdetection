@@ -142,6 +142,23 @@ if ckpt.get('epoch') != 100 or getattr(args, 'arch', None) != expected_arch or n
 PY
 }
 
+archive_incomplete_checkpoints() {
+  local work_dir="$1" name="$2" archive_dir
+  local -a checkpoints=()
+
+  shopt -s nullglob
+  checkpoints=("$work_dir"/checkpoint*.pth)
+  shopt -u nullglob
+  [ "${#checkpoints[@]}" -gt 0 ] || return 0
+
+  archive_dir="$work_dir/incomplete_checkpoints_$(date +%Y%m%d_%H%M%S)"
+  mkdir -p "$archive_dir"
+  printf 'Restarting incomplete stage %s from scratch; archive prior checkpoint(s):\n' "$name"
+  printf '  %s\n' "${checkpoints[@]}"
+  mv -- "${checkpoints[@]}" "$archive_dir/"
+  echo "Archived incomplete checkpoint(s): $archive_dir"
+}
+
 run_one() {
   local scale="$1" source="$2" backbone="$3" exp_id="$4" config="$5" arch="$6" port="$7"
   local count name root checkpoint source_root
@@ -152,9 +169,11 @@ run_one() {
   checkpoint="$WORK_ROOT/$name/checkpoint.pth"
   validate_subset "$source" "$scale" "$count"
   if [ "$SKIP_COMPLETED" = "1" ] && [ -s "$checkpoint" ]; then
-    validate_checkpoint "$checkpoint" "$arch"
-    echo "REUSE completed: $name"
-    return
+    if validate_checkpoint "$checkpoint" "$arch"; then
+      echo "REUSE completed: $name"
+      return
+    fi
+    archive_incomplete_checkpoints "$WORK_ROOT/$name" "$name"
   fi
   echo "================================================================"
   echo "START $name"

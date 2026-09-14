@@ -35,9 +35,67 @@ GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-3000}"
 GPU_MAX_UTIL="${GPU_MAX_UTIL:-10}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-2}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-30}"
+VITS_TRAIN_OCCUPY_MB="${VITS_TRAIN_OCCUPY_MB:-800}"
+VITS_TRAIN_OCCUPY_DELAY_SEC="${VITS_TRAIN_OCCUPY_DELAY_SEC:-30}"
 # Optional cooperative signal for a yielding GPU-memory occupier. The signal
 # remains present through the actual training command and is cleared on exit.
 GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-}"
+declare -a VITS_HOLDER_PIDS=()
+
+start_vits_training_holders() {
+    local label="$1"
+    local holder_dir="$LOG_DIR/${label}_vits_gpu_holder"
+    local gpu pid
+
+    [ "$VITS_TRAIN_OCCUPY_MB" -gt 0 ] || return 0
+    mkdir -p "$holder_dir"
+    echo "Starting ViT-S training holders: ${VITS_TRAIN_OCCUPY_MB} MiB per GPU."
+
+    local gpu_array=()
+    IFS=',' read -r -a gpu_array <<< "$GPU_IDS"
+    for gpu in "${gpu_array[@]}"; do
+        gpu="${gpu//[[:space:]]/}"
+        [ -n "$gpu" ] || continue
+        VITS_TRAIN_OCCUPY_MB="$VITS_TRAIN_OCCUPY_MB" CUDA_VISIBLE_DEVICES="$gpu" \
+        nohup python -c '
+import os
+import signal
+import time
+import torch
+
+target_mb = int(os.environ["VITS_TRAIN_OCCUPY_MB"])
+tensor = torch.empty(target_mb * 1024 * 1024 // 4, dtype=torch.float32, device="cuda")
+tensor.zero_()
+print(f"ViT-S training holder ready: {target_mb} MiB", flush=True)
+
+def stop_handler(signum, frame):
+    del tensor
+    torch.cuda.empty_cache()
+    raise SystemExit(0)
+
+signal.signal(signal.SIGTERM, stop_handler)
+signal.signal(signal.SIGINT, stop_handler)
+while True:
+    time.sleep(60)
+' > "$holder_dir/gpu_${gpu}.log" 2>&1 &
+        pid=$!
+        VITS_HOLDER_PIDS+=("$pid")
+        echo "$pid" > "$holder_dir/gpu_${gpu}.pid"
+    done
+}
+
+stop_vits_training_holders() {
+    local pid
+    [ "${#VITS_HOLDER_PIDS[@]}" -gt 0 ] || return 0
+    echo "Stopping ViT-S training holders: ${VITS_HOLDER_PIDS[*]}"
+    for pid in "${VITS_HOLDER_PIDS[@]}"; do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    for pid in "${VITS_HOLDER_PIDS[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+    VITS_HOLDER_PIDS=()
+}
 
 request_gpu_yield() {
     local label="$1"
@@ -56,9 +114,14 @@ clear_gpu_yield_request() {
     rm -f -- "$GPU_YIELD_REQUEST_FILE"
 }
 
-trap clear_gpu_yield_request EXIT
-trap 'clear_gpu_yield_request; exit 130' INT
-trap 'clear_gpu_yield_request; exit 143' TERM
+cleanup_pretraining_resources() {
+    stop_vits_training_holders
+    clear_gpu_yield_request
+}
+
+trap cleanup_pretraining_resources EXIT
+trap 'cleanup_pretraining_resources; exit 130' INT
+trap 'cleanup_pretraining_resources; exit 143' TERM
 
 if [ -z "${MMPRETRAIN_DIR:-}" ]; then
     if [ -f "$REPO_ROOT/third_party/mmpretrain/tools/train.py" ]; then
@@ -299,33 +362,48 @@ run_dino_resnet50() {
 
     wait_for_gpu_group "$GPU_IDS" "$name S1"
 
-    CUDA_VISIBLE_DEVICES="$GPU_IDS" PYTHONPATH="$DINO_DIR:${PYTHONPATH:-}" \
-    python -m torch.distributed.launch \
-        --use_env \
-        --nproc_per_node="$NUM_GPUS" \
-        --master_port="$PORT" \
-        "$dino_entry" \
-        "${index_args[@]}" \
-        --arch "${DINO_ARCH:-resnet50}" \
-        --optimizer "${DINO_OPTIMIZER:-sgd}" \
-        --lr "${DINO_LR:-0.03}" \
-        --weight_decay "${DINO_WEIGHT_DECAY:-1e-4}" \
-        --weight_decay_end "${DINO_WEIGHT_DECAY_END:-1e-4}" \
-        --warmup_epochs "${DINO_WARMUP_EPOCHS:-10}" \
-        --min_lr "${DINO_MIN_LR:-1e-6}" \
-        --momentum_teacher "${DINO_MOMENTUM_TEACHER:-0.996}" \
-        --freeze_last_layer "${DINO_FREEZE_LAST_LAYER:-1}" \
-        --global_crops_scale ${DINO_GLOBAL_CROPS_SCALE:-0.14 1} \
-        --local_crops_number "${DINO_LOCAL_CROPS_NUMBER:-8}" \
-        --local_crops_scale ${DINO_LOCAL_CROPS_SCALE:-0.05 0.14} \
-        --epochs "${DINO_EPOCHS:-100}" \
-        --batch_size_per_gpu "${DINO_BATCH_SIZE_PER_GPU:-64}" \
-        --num_workers "${DINO_NUM_WORKERS:-10}" \
-        --saveckp_freq "${DINO_SAVECKP_FREQ:-50}" \
-        --init_checkpoint "${DINO_INIT_CHECKPOINT:-}" \
-        --data_path "$data_path" \
-        --output_dir "$work_dir" \
-        2>&1 | tee "$log_file"
+    launch_dino() {
+        CUDA_VISIBLE_DEVICES="$GPU_IDS" PYTHONPATH="$DINO_DIR:${PYTHONPATH:-}" \
+        python -m torch.distributed.launch \
+            --use_env \
+            --nproc_per_node="$NUM_GPUS" \
+            --master_port="$PORT" \
+            "$dino_entry" \
+            "${index_args[@]}" \
+            --arch "${DINO_ARCH:-resnet50}" \
+            --optimizer "${DINO_OPTIMIZER:-sgd}" \
+            --lr "${DINO_LR:-0.03}" \
+            --weight_decay "${DINO_WEIGHT_DECAY:-1e-4}" \
+            --weight_decay_end "${DINO_WEIGHT_DECAY_END:-1e-4}" \
+            --warmup_epochs "${DINO_WARMUP_EPOCHS:-10}" \
+            --min_lr "${DINO_MIN_LR:-1e-6}" \
+            --momentum_teacher "${DINO_MOMENTUM_TEACHER:-0.996}" \
+            --freeze_last_layer "${DINO_FREEZE_LAST_LAYER:-1}" \
+            --global_crops_scale ${DINO_GLOBAL_CROPS_SCALE:-0.14 1} \
+            --local_crops_number "${DINO_LOCAL_CROPS_NUMBER:-8}" \
+            --local_crops_scale ${DINO_LOCAL_CROPS_SCALE:-0.05 0.14} \
+            --epochs "${DINO_EPOCHS:-100}" \
+            --batch_size_per_gpu "${DINO_BATCH_SIZE_PER_GPU:-64}" \
+            --num_workers "${DINO_NUM_WORKERS:-10}" \
+            --saveckp_freq "${DINO_SAVECKP_FREQ:-50}" \
+            --init_checkpoint "${DINO_INIT_CHECKPOINT:-}" \
+            --data_path "$data_path" \
+            --output_dir "$work_dir" \
+            2>&1 | tee "$log_file"
+    }
+
+    if [ "$EXP_ID" = "j14" ] && [ "$VITS_TRAIN_OCCUPY_MB" -gt 0 ]; then
+        launch_dino &
+        local dino_pid=$!
+        sleep "$VITS_TRAIN_OCCUPY_DELAY_SEC"
+        if kill -0 "$dino_pid" 2>/dev/null; then
+            start_vits_training_holders "$name"
+        fi
+        wait "$dino_pid"
+        stop_vits_training_holders
+    else
+        launch_dino
+    fi
 }
 
 run_spark_resnet50() {

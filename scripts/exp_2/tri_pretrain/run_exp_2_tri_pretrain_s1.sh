@@ -35,12 +35,70 @@ GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-3000}"
 GPU_MAX_UTIL="${GPU_MAX_UTIL:-10}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-2}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-30}"
+R50_TRAIN_OCCUPY_MB="${R50_TRAIN_OCCUPY_MB:-600}"
+R50_TRAIN_OCCUPY_DELAY_SEC="${R50_TRAIN_OCCUPY_DELAY_SEC:-30}"
 VITS_TRAIN_OCCUPY_MB="${VITS_TRAIN_OCCUPY_MB:-800}"
 VITS_TRAIN_OCCUPY_DELAY_SEC="${VITS_TRAIN_OCCUPY_DELAY_SEC:-30}"
 # Optional cooperative signal for a yielding GPU-memory occupier. The signal
 # remains present through the actual training command and is cleared on exit.
 GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-}"
+declare -a R50_HOLDER_PIDS=()
 declare -a VITS_HOLDER_PIDS=()
+
+start_r50_training_holders() {
+    local label="$1"
+    local holder_dir="$LOG_DIR/${label}_r50_gpu_holder"
+    local gpu pid
+
+    [ "$R50_TRAIN_OCCUPY_MB" -gt 0 ] || return 0
+    mkdir -p "$holder_dir"
+    echo "Starting ResNet-50 training holders: ${R50_TRAIN_OCCUPY_MB} MiB per GPU."
+
+    local gpu_array=()
+    IFS=',' read -r -a gpu_array <<< "$GPU_IDS"
+    for gpu in "${gpu_array[@]}"; do
+        gpu="${gpu//[[:space:]]/}"
+        [ -n "$gpu" ] || continue
+        R50_TRAIN_OCCUPY_MB="$R50_TRAIN_OCCUPY_MB" CUDA_VISIBLE_DEVICES="$gpu" \
+        nohup python -c '
+import os
+import signal
+import time
+import torch
+
+target_mb = int(os.environ["R50_TRAIN_OCCUPY_MB"])
+tensor = torch.empty(target_mb * 1024 * 1024 // 4, dtype=torch.float32, device="cuda")
+tensor.zero_()
+print(f"ResNet-50 training holder ready: {target_mb} MiB", flush=True)
+
+def stop_handler(signum, frame):
+    del tensor
+    torch.cuda.empty_cache()
+    raise SystemExit(0)
+
+signal.signal(signal.SIGTERM, stop_handler)
+signal.signal(signal.SIGINT, stop_handler)
+while True:
+    time.sleep(60)
+' > "$holder_dir/gpu_${gpu}.log" 2>&1 &
+        pid=$!
+        R50_HOLDER_PIDS+=("$pid")
+        echo "$pid" > "$holder_dir/gpu_${gpu}.pid"
+    done
+}
+
+stop_r50_training_holders() {
+    local pid
+    [ "${#R50_HOLDER_PIDS[@]}" -gt 0 ] || return 0
+    echo "Stopping ResNet-50 training holders: ${R50_HOLDER_PIDS[*]}"
+    for pid in "${R50_HOLDER_PIDS[@]}"; do
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    for pid in "${R50_HOLDER_PIDS[@]}"; do
+        wait "$pid" 2>/dev/null || true
+    done
+    R50_HOLDER_PIDS=()
+}
 
 start_vits_training_holders() {
     local label="$1"
@@ -115,6 +173,7 @@ clear_gpu_yield_request() {
 }
 
 cleanup_pretraining_resources() {
+    stop_r50_training_holders
     stop_vits_training_holders
     clear_gpu_yield_request
 }
@@ -392,7 +451,16 @@ run_dino_resnet50() {
             2>&1 | tee "$log_file"
     }
 
-    if [ "$EXP_ID" = "j14" ] && [ "$VITS_TRAIN_OCCUPY_MB" -gt 0 ]; then
+    if [ "$EXP_ID" = "j7" ] && [ "$R50_TRAIN_OCCUPY_MB" -gt 0 ]; then
+        launch_dino &
+        local dino_pid=$!
+        sleep "$R50_TRAIN_OCCUPY_DELAY_SEC"
+        if kill -0 "$dino_pid" 2>/dev/null; then
+            start_r50_training_holders "$name"
+        fi
+        wait "$dino_pid"
+        stop_r50_training_holders
+    elif [ "$EXP_ID" = "j14" ] && [ "$VITS_TRAIN_OCCUPY_MB" -gt 0 ]; then
         launch_dino &
         local dino_pid=$!
         sleep "$VITS_TRAIN_OCCUPY_DELAY_SEC"

@@ -30,15 +30,69 @@ GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-10500}"
 GPU_MAX_UTIL="${GPU_MAX_UTIL:-100}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-1}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-2}"
-# When configured, child launchers create this cooperative request before their
-# GPU-idle check and remove it after their DINO process exits.
-GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-}"
+# The parent pipeline owns the idle-period reservation controller.  Child
+# launchers create this request before their GPU-idle check and remove it after
+# their DINO process exits, giving training priority over the reservation.
+GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-$LOG_ROOT/gpu_yield_request}"
+IDLE_GPU_OCCUPIER_ENABLED="${IDLE_GPU_OCCUPIER_ENABLED:-1}"
+IDLE_GPU_OCCUPY_MB="${IDLE_GPU_OCCUPY_MB:-13312}"
+IDLE_GPU_RESERVE_MB="${IDLE_GPU_RESERVE_MB:-2048}"
+IDLE_GPU_CHECK_INTERVAL="${IDLE_GPU_CHECK_INTERVAL:-2}"
+IDLE_GPU_IDLE_CHECKS="${IDLE_GPU_IDLE_CHECKS:-1}"
+IDLE_GPU_OCCUPIER="${IDLE_GPU_OCCUPIER:-scripts/exp_2/tri_pretrain/run_gpu_yielding_occupier.sh}"
+IDLE_GPU_OCCUPIER_PID=""
 
 mkdir -p "$WORK_ROOT" "$LOG_ROOT"
 PIPELINE_LOG="${PIPELINE_LOG:-$LOG_ROOT/pipeline_$(date +%Y%m%d_%H%M%S).log}"
 exec > >(tee -a "$PIPELINE_LOG") 2>&1
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+stop_idle_gpu_occupier() {
+  if [[ -n "$IDLE_GPU_OCCUPIER_PID" ]] && kill -0 "$IDLE_GPU_OCCUPIER_PID" 2>/dev/null; then
+    echo "Stopping idle GPU occupier (PID $IDLE_GPU_OCCUPIER_PID)."
+    kill -TERM "$IDLE_GPU_OCCUPIER_PID" 2>/dev/null || true
+    wait "$IDLE_GPU_OCCUPIER_PID" 2>/dev/null || true
+  fi
+  IDLE_GPU_OCCUPIER_PID=""
+}
+
+cleanup_pipeline_resources() {
+  rm -f "$GPU_YIELD_REQUEST_FILE"
+  stop_idle_gpu_occupier
+}
+
+start_idle_gpu_occupier() {
+  [[ "$IDLE_GPU_OCCUPIER_ENABLED" == "1" ]] || {
+    echo "Idle GPU occupier disabled."
+    return
+  }
+
+  [[ -f "$IDLE_GPU_OCCUPIER" ]] || die "missing idle GPU occupier: $IDLE_GPU_OCCUPIER"
+  rm -f "$GPU_YIELD_REQUEST_FILE"
+  local occupier_log_dir="$LOG_ROOT/idle_gpu_occupier"
+  mkdir -p "$occupier_log_dir"
+
+  echo "Starting pipeline-managed idle GPU occupier: GPUs=$GPU_IDS occupy=${IDLE_GPU_OCCUPY_MB}MiB reserve=${IDLE_GPU_RESERVE_MB}MiB."
+  env \
+    OCCUPY_MB="$IDLE_GPU_OCCUPY_MB" \
+    RESERVE_MB="$IDLE_GPU_RESERVE_MB" \
+    CHECK_INTERVAL="$IDLE_GPU_CHECK_INTERVAL" \
+    IDLE_CHECKS="$IDLE_GPU_IDLE_CHECKS" \
+    TRAIN_USERS="$(id -un)" \
+    YIELD_ON_ANY_USER_COMPUTE=1 \
+    TRAIN_MATCH='run_dino_with_index.py|main_dino.py|torchrun' \
+    GPU_YIELD_REQUEST_FILE="$GPU_YIELD_REQUEST_FILE" \
+    LOG_DIR="$occupier_log_dir" \
+    bash "$IDLE_GPU_OCCUPIER" "$GPU_IDS" &
+  IDLE_GPU_OCCUPIER_PID=$!
+  echo "$IDLE_GPU_OCCUPIER_PID" > "$occupier_log_dir/controller.pid"
+  echo "Idle GPU occupier PID=$IDLE_GPU_OCCUPIER_PID log=$occupier_log_dir/controller.log"
+}
+
+trap cleanup_pipeline_resources EXIT
+trap 'cleanup_pipeline_resources; exit 130' INT
+trap 'cleanup_pipeline_resources; exit 143' TERM
 
 expected_images() {
   case "$1" in 100k) echo 100000;; 300k) echo 300000;; 500k) echo 500000;; 800k) echo 800000;; 1m) echo 1000000;; *) die "unknown scale: $1";; esac
@@ -132,6 +186,8 @@ for scale in "${scale_list[@]}"; do
   done
 done
 if [ "$CHECK_ONLY" = "1" ]; then echo "CHECK_ONLY=1 passed. log=$PIPELINE_LOG"; exit 0; fi
+
+start_idle_gpu_occupier
 
 for scale in "${scale_list[@]}"; do
   echo "################ SCALE $scale: all sources, then next scale ################"

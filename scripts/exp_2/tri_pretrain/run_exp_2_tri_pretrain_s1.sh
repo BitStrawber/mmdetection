@@ -35,6 +35,28 @@ GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-3000}"
 GPU_MAX_UTIL="${GPU_MAX_UTIL:-10}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-2}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-30}"
+# Optional cooperative signal for a yielding GPU-memory occupier. The signal
+# remains present through the actual training command and is cleared on exit.
+GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-}"
+
+request_gpu_yield() {
+    local label="$1"
+    [ -n "$GPU_YIELD_REQUEST_FILE" ] || return 0
+    mkdir -p "$(dirname "$GPU_YIELD_REQUEST_FILE")"
+    {
+        printf 'pid=%s\n' "$$"
+        printf 'label=%s\n' "$label"
+        printf 'started=%s\n' "$(date '+%F %T')"
+    } > "$GPU_YIELD_REQUEST_FILE"
+    echo "GPU yielding occupier requested: $GPU_YIELD_REQUEST_FILE"
+}
+
+clear_gpu_yield_request() {
+    [ -n "$GPU_YIELD_REQUEST_FILE" ] || return 0
+    rm -f -- "$GPU_YIELD_REQUEST_FILE"
+}
+
+trap clear_gpu_yield_request EXIT INT TERM
 
 if [ -z "${MMPRETRAIN_DIR:-}" ]; then
     if [ -f "$REPO_ROOT/third_party/mmpretrain/tools/train.py" ]; then
@@ -116,6 +138,10 @@ wait_msg() {
 wait_for_gpu_group() {
     local gpu_ids="$1"
     local label="$2"
+
+    # Signal before the memory-idle gate. This prevents an occupier from
+    # keeping memory allocated while this launcher is waiting to begin.
+    request_gpu_yield "$label"
 
     if [ "$WAIT_FOR_GPUS" != "1" ]; then
         wait_msg "WAIT_FOR_GPUS=$WAIT_FOR_GPUS, skip GPU idle waiting for $label."

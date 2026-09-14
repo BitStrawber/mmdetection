@@ -30,6 +30,9 @@ GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-9000}"
 GPU_MAX_UTIL="${GPU_MAX_UTIL:-5}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-1}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-30}"
+# When configured, child launchers create this cooperative request before their
+# GPU-idle check and remove it after their DINO process exits.
+GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-}"
 
 mkdir -p "$WORK_ROOT" "$LOG_ROOT"
 PIPELINE_LOG="${PIPELINE_LOG:-$LOG_ROOT/pipeline_$(date +%Y%m%d_%H%M%S).log}"
@@ -111,7 +114,8 @@ run_one() {
     GPU_IDS="$GPU_IDS" PORT="$port" WORK_ROOT="$WORK_ROOT" LOG_DIR="$LOG_ROOT" \
     WAIT_FOR_GPUS="$WAIT_FOR_GPUS" GPU_MAX_MEM_MB="$GPU_MAX_MEM_MB" \
     GPU_MAX_UTIL="$GPU_MAX_UTIL" GPU_IDLE_CHECKS="$GPU_IDLE_CHECKS" \
-    GPU_WAIT_INTERVAL="$GPU_WAIT_INTERVAL" bash "$RUNNER"
+    GPU_WAIT_INTERVAL="$GPU_WAIT_INTERVAL" \
+    GPU_YIELD_REQUEST_FILE="$GPU_YIELD_REQUEST_FILE" bash "$RUNNER"
   validate_checkpoint "$checkpoint" "$arch"
 }
 

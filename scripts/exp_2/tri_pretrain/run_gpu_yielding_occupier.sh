@@ -23,11 +23,15 @@ TRAIN_USERS="${TRAIN_USERS:-$(id -un)}"
 # Set to 1 to yield to any CUDA compute process owned by TRAIN_USERS, even if
 # its command does not match TRAIN_MATCH. The occupier's own worker is excluded.
 YIELD_ON_ANY_USER_COMPUTE="${YIELD_ON_ANY_USER_COMPUTE:-0}"
+# Optional cooperative request file created by run_exp_2_tri_pretrain_s1.sh
+# before it evaluates its GPU-idle gate.
+GPU_YIELD_REQUEST_FILE="${GPU_YIELD_REQUEST_FILE:-}"
 
 mkdir -p "$LOG_DIR"
 
 declare -A WORKER_PIDS=()
 declare -A IDLE_COUNTS=()
+REQUEST_ACTIVE=0
 
 log() {
   printf '[%s] %s\n' "$(date '+%F %T')" "$*" | tee -a "$LOG_DIR/controller.log"
@@ -139,9 +143,28 @@ log "Yielding GPU occupier started. GPUs=$GPU_IDS occupy=${OCCUPY_MB}MiB reserve
 log "Training priority regex: $TRAIN_MATCH"
 log "Training users allowed to request release: $TRAIN_USERS"
 log "Yield to any eligible user CUDA process: $YIELD_ON_ANY_USER_COMPUTE"
+log "Cooperative request file: ${GPU_YIELD_REQUEST_FILE:-disabled}"
 log "Logs: $LOG_DIR"
 
 while true; do
+  if [[ -n "$GPU_YIELD_REQUEST_FILE" && -e "$GPU_YIELD_REQUEST_FILE" ]]; then
+    if [[ "$REQUEST_ACTIVE" != "1" ]]; then
+      log "Cooperative training request detected; release all managed GPUs and keep monitoring."
+      REQUEST_ACTIVE=1
+    fi
+    for gpu in "${GPU_LIST[@]}"; do
+      IDLE_COUNTS[$gpu]=0
+      stop_worker "$gpu"
+    done
+    sleep "$CHECK_INTERVAL"
+    continue
+  fi
+
+  if [[ "$REQUEST_ACTIVE" == "1" ]]; then
+    log "Cooperative training request cleared; resume normal GPU monitoring."
+    REQUEST_ACTIVE=0
+  fi
+
   for gpu in "${GPU_LIST[@]}"; do
     free_mb="$(gpu_free_mb "$gpu")"
     free_mb="${free_mb:-0}"

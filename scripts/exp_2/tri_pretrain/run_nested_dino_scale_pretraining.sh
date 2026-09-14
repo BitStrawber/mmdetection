@@ -27,7 +27,7 @@ CHECK_ONLY="${CHECK_ONLY:-0}"
 # overridable for fully idle GPU runs.
 WAIT_FOR_GPUS="${WAIT_FOR_GPUS:-1}"
 GPU_MAX_MEM_MB="${GPU_MAX_MEM_MB:-10500}"
-GPU_MAX_UTIL="${GPU_MAX_UTIL:-5}"
+GPU_MAX_UTIL="${GPU_MAX_UTIL:-100}"
 GPU_IDLE_CHECKS="${GPU_IDLE_CHECKS:-1}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-2}"
 # When configured, child launchers create this cooperative request before their

@@ -56,7 +56,9 @@ clear_gpu_yield_request() {
     rm -f -- "$GPU_YIELD_REQUEST_FILE"
 }
 
-trap clear_gpu_yield_request EXIT INT TERM
+trap clear_gpu_yield_request EXIT
+trap 'clear_gpu_yield_request; exit 130' INT
+trap 'clear_gpu_yield_request; exit 143' TERM
 
 if [ -z "${MMPRETRAIN_DIR:-}" ]; then
     if [ -f "$REPO_ROOT/third_party/mmpretrain/tools/train.py" ]; then

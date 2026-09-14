@@ -17,6 +17,9 @@ LOG_DIR="${LOG_DIR:-logs/gpu_yielding_occupier_$(date +%Y%m%d_%H%M%S)}"
 # A process whose command line matches this expression gets priority over the
 # occupier. Override this when protecting a different training entry point.
 TRAIN_MATCH="${TRAIN_MATCH:-main_dino.py|run_dino_with_index.py|tools/train.py|torchrun}"
+# Comma-separated account names that may cause the occupier to yield. By
+# default it protects only jobs started by the account running this controller.
+TRAIN_USERS="${TRAIN_USERS:-$(id -un)}"
 
 mkdir -p "$LOG_DIR"
 
@@ -54,13 +57,14 @@ trap cleanup EXIT INT TERM
 
 is_training_on_gpu() {
   local gpu="$1"
-  local pid command
+  local pid command process_user
 
   while IFS= read -r pid; do
     [[ -z "$pid" ]] && continue
     command="$(ps -ww -p "$pid" -o args= 2>/dev/null || true)"
+    process_user="$(ps -ww -p "$pid" -o user= 2>/dev/null | awk '{print $1}')"
     [[ -z "$command" ]] && continue
-    if [[ "$command" =~ $TRAIN_MATCH ]]; then
+    if [[ ",$TRAIN_USERS," == *",$process_user,"* ]] && [[ "$command" =~ $TRAIN_MATCH ]]; then
       return 0
     fi
   done < <(
@@ -126,6 +130,7 @@ done
 
 log "Yielding GPU occupier started. GPUs=$GPU_IDS occupy=${OCCUPY_MB}MiB reserve=${RESERVE_MB}MiB interval=${CHECK_INTERVAL}s idle_checks=${IDLE_CHECKS}."
 log "Training priority regex: $TRAIN_MATCH"
+log "Training users allowed to request release: $TRAIN_USERS"
 log "Logs: $LOG_DIR"
 
 while true; do

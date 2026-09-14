@@ -20,6 +20,9 @@ TRAIN_MATCH="${TRAIN_MATCH:-main_dino.py|run_dino_with_index.py|tools/train.py|t
 # Comma-separated account names that may cause the occupier to yield. By
 # default it protects only jobs started by the account running this controller.
 TRAIN_USERS="${TRAIN_USERS:-$(id -un)}"
+# Set to 1 to yield to any CUDA compute process owned by TRAIN_USERS, even if
+# its command does not match TRAIN_MATCH. The occupier's own worker is excluded.
+YIELD_ON_ANY_USER_COMPUTE="${YIELD_ON_ANY_USER_COMPUTE:-0}"
 
 mkdir -p "$LOG_DIR"
 
@@ -57,15 +60,19 @@ trap cleanup EXIT INT TERM
 
 is_training_on_gpu() {
   local gpu="$1"
-  local pid command process_user
+  local pid command process_user worker_pid
+  worker_pid="${WORKER_PIDS[$gpu]:-}"
 
   while IFS= read -r pid; do
     [[ -z "$pid" ]] && continue
+    [[ "$pid" == "$worker_pid" ]] && continue
     command="$(ps -ww -p "$pid" -o args= 2>/dev/null || true)"
     process_user="$(ps -ww -p "$pid" -o user= 2>/dev/null | awk '{print $1}')"
     [[ -z "$command" ]] && continue
-    if [[ ",$TRAIN_USERS," == *",$process_user,"* ]] && [[ "$command" =~ $TRAIN_MATCH ]]; then
-      return 0
+    if [[ ",$TRAIN_USERS," == *",$process_user,"* ]]; then
+      if [[ "$YIELD_ON_ANY_USER_COMPUTE" == "1" ]] || [[ "$command" =~ $TRAIN_MATCH ]]; then
+        return 0
+      fi
     fi
   done < <(
     nvidia-smi --id="$gpu" \
@@ -131,6 +138,7 @@ done
 log "Yielding GPU occupier started. GPUs=$GPU_IDS occupy=${OCCUPY_MB}MiB reserve=${RESERVE_MB}MiB interval=${CHECK_INTERVAL}s idle_checks=${IDLE_CHECKS}."
 log "Training priority regex: $TRAIN_MATCH"
 log "Training users allowed to request release: $TRAIN_USERS"
+log "Yield to any eligible user CUDA process: $YIELD_ON_ANY_USER_COMPUTE"
 log "Logs: $LOG_DIR"
 
 while true; do

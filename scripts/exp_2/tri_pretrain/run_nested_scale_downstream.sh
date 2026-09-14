@@ -85,7 +85,9 @@ PY
 
 run_train() {
   local name="$1" config="$2" init="$3" root="$4" kind="$5" group="$6" port="$7" epochs="$8"
-  local work="$WORK_ROOT/$name" marker="$work/.complete" best save_best train_images val_images
+  local work marker best save_best train_images val_images
+  work="$WORK_ROOT/$name"
+  marker="$work/.complete"
   best="$(best_checkpoint "$work" || true)"
   if [ "$SKIP_COMPLETED" = 1 ] && [ -f "$marker" ] && [ -n "$best" ]; then echo "REUSE $name: $best"; return; fi
   mkdir -p "$work"

@@ -98,6 +98,21 @@ Set `DFUI_FOLLOWUPS=ruod` when only the historical DFUI-to-RUOD protocol is
 needed.  The default `ruod,mask` produces the complete detection and instance
 segmentation transfer set for both DFUI branches.
 
+## DFUI detector-to-UIIS10K mask transfer
+
+`run_pretrained_dfui_then_uiis_mask.sh` is a source-agnostic entrypoint for a
+completed DINO-100e ResNet-50 / ViT-S checkpoint pair. It performs only this
+sequence on independent two-GPU groups: DFUI Cascade R-CNN for 48 epochs,
+exports the best detector backbone, then initializes and evaluates a 24-epoch
+UIIS10K Mask R-CNN run. It intentionally loads only `backbone.*` tensors from
+the detector checkpoint; FPN, RPN, bounding-box, and mask heads are initialized
+by the UIIS10K Mask R-CNN configuration.
+
+By default it uses the clean `dfui_ruod` mixture. To use the intermediate
+mixture that contains UIIS Easy images, explicitly set
+`VARIANTS=dfui_ruod_uiis ALLOW_TARGET_DOMAIN_UIIS=1` after checking that it does
+not overlap with the UIIS10K held-out split.
+
 ## Full-source DFUI-to-RUOD detection transfer on fcp
 
 `run_full_realuw_then_synthetic5_dfui_ruod_det.sh` runs the historical

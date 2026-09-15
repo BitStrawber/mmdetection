@@ -71,14 +71,15 @@ convert() {
 best_checkpoint() { find "$1" -maxdepth 1 -type f -name 'best_*.pth' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-; }
 
 prepare_dfui_detector_config() {
-  local source_config="$1" output_config="$2"
-  python - "$source_config" "$output_config" <<'PY'
+  local source_config="$1" output_config="$2" use_vits_schedule="$3"
+  python - "$source_config" "$output_config" "$use_vits_schedule" <<'PY'
 import sys
 from pathlib import Path
 
 from mmengine.config import Config
 
-source, output = map(Path, sys.argv[1:])
+source, output = map(Path, sys.argv[1:3])
+use_vits_schedule = sys.argv[3] == '1'
 cfg = Config.fromfile(source)
 bbox_heads = cfg.model.roi_head.bbox_head
 if not isinstance(bbox_heads, (list, tuple)) or len(bbox_heads) != 3:
@@ -87,6 +88,11 @@ if not isinstance(bbox_heads, (list, tuple)) or len(bbox_heads) != 3:
         f'{type(bbox_heads).__name__}: {bbox_heads!r}')
 for stage in bbox_heads:
     stage['num_classes'] = 11
+if use_vits_schedule:
+    schedulers = cfg.param_scheduler
+    if not isinstance(schedulers, (list, tuple)) or len(schedulers) < 2:
+        raise SystemExit('Expected at least two ViT-S parameter schedulers')
+    schedulers[1]['milestones'] = [32, 44]
 cfg.dump(output)
 print(f'Wrote DFUI 11-class Cascade config: {output}')
 PY
@@ -108,7 +114,7 @@ PY
 
 run_train() {
   local name="$1" config="$2" init="$3" root="$4" kind="$5" group="$6" port="$7" epochs="$8"
-  local work marker best save_best train_images val_images train_config
+  local work marker best save_best train_images val_images train_config use_vits_schedule=0
   work="$WORK_ROOT/$name"
   marker="$work/.complete"
   best="$(best_checkpoint "$work" || true)"
@@ -117,7 +123,8 @@ run_train() {
   train_config="$config"
   if [[ "$name" == *dfui_* ]]; then
     train_config="$work/dfui_11class_config.py"
-    prepare_dfui_detector_config "$config" "$train_config"
+    [[ "$name" == *vits* ]] && use_vits_schedule=1
+    prepare_dfui_detector_config "$config" "$train_config" "$use_vits_schedule"
   fi
   if [ "$kind" = "det" ]; then save_best='coco/bbox_mAP'; else save_best='coco/segm_mAP'; fi
   if [[ "$name" == *dfui_* ]]; then
@@ -135,7 +142,6 @@ run_train() {
     val_evaluator.ann_file="$root/annotations/instances_val.json" test_evaluator.ann_file="$root/annotations/instances_val.json")
   if [[ "$name" == *dfui_* ]]; then
     opts+=(train_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" val_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" test_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')")
-    [[ "$name" == *vits* ]] && opts+=(param_scheduler.1.milestones='[32,44]')
   fi
   CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/$name.log"
   best="$(best_checkpoint "$work" || true)"; [ -n "$best" ] || die "no best checkpoint: $name"; touch "$marker"

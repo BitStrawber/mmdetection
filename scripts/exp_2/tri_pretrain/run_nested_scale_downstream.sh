@@ -69,6 +69,29 @@ convert() {
 }
 
 best_checkpoint() { find "$1" -maxdepth 1 -type f -name 'best_*.pth' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-; }
+
+prepare_dfui_detector_config() {
+  local source_config="$1" output_config="$2"
+  python - "$source_config" "$output_config" <<'PY'
+import sys
+from pathlib import Path
+
+from mmengine.config import Config
+
+source, output = map(Path, sys.argv[1:])
+cfg = Config.fromfile(source)
+bbox_heads = cfg.model.roi_head.bbox_head
+if not isinstance(bbox_heads, (list, tuple)) or len(bbox_heads) != 3:
+    raise SystemExit(
+        'Expected a three-stage Cascade R-CNN bbox_head list, got '
+        f'{type(bbox_heads).__name__}: {bbox_heads!r}')
+for stage in bbox_heads:
+    stage['num_classes'] = 11
+cfg.dump(output)
+print(f'Wrote DFUI 11-class Cascade config: {output}')
+PY
+}
+
 export_backbone() {
   local source="$1" output="$2"
   [ -s "$output" ] && return
@@ -85,12 +108,17 @@ PY
 
 run_train() {
   local name="$1" config="$2" init="$3" root="$4" kind="$5" group="$6" port="$7" epochs="$8"
-  local work marker best save_best train_images val_images
+  local work marker best save_best train_images val_images train_config
   work="$WORK_ROOT/$name"
   marker="$work/.complete"
   best="$(best_checkpoint "$work" || true)"
   if [ "$SKIP_COMPLETED" = 1 ] && [ -f "$marker" ] && [ -n "$best" ]; then echo "REUSE $name: $best"; return; fi
   mkdir -p "$work"
+  train_config="$config"
+  if [[ "$name" == *dfui_* ]]; then
+    train_config="$work/dfui_11class_config.py"
+    prepare_dfui_detector_config "$config" "$train_config"
+  fi
   if [ "$kind" = "det" ]; then save_best='coco/bbox_mAP'; else save_best='coco/segm_mAP'; fi
   if [[ "$name" == *dfui_* ]]; then
     # Both DFUI mixtures store all train and validation images under images/.
@@ -98,7 +126,7 @@ run_train() {
   else
     train_images="$root/train/"; val_images="$root/val/"
   fi
-  echo "START $name  config=$config  init=$init  data=$root  gpus=$group"
+  echo "START $name  config=$train_config  init=$init  data=$root  gpus=$group"
   local opts=(load_from=None model.backbone.init_cfg.type=Pretrained model.backbone.init_cfg.checkpoint="$init"
     train_cfg.max_epochs="$epochs" default_hooks.checkpoint.save_best="$save_best" default_hooks.checkpoint.max_keep_ckpts="$MAX_KEEP_CKPTS"
     train_dataloader.dataset.data_root="$root/" train_dataloader.dataset.ann_file="$root/annotations/instances_train.json" train_dataloader.dataset.data_prefix.img="$train_images"
@@ -106,13 +134,12 @@ run_train() {
     test_dataloader.dataset.data_root="$root/" test_dataloader.dataset.ann_file="$root/annotations/instances_val.json" test_dataloader.dataset.data_prefix.img="$val_images"
     val_evaluator.ann_file="$root/annotations/instances_val.json" test_evaluator.ann_file="$root/annotations/instances_val.json")
   if [[ "$name" == *dfui_* ]]; then
-    opts+=(model.roi_head.bbox_head.0.num_classes=11 model.roi_head.bbox_head.1.num_classes=11 model.roi_head.bbox_head.2.num_classes=11)
     opts+=(train_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" val_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" test_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')")
     [[ "$name" == *vits* ]] && opts+=(param_scheduler.1.milestones='[32,44]')
   fi
-  CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$config" "$(gpu_count "$group")" --work-dir "$work" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/$name.log"
+  CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/$name.log"
   best="$(best_checkpoint "$work" || true)"; [ -n "$best" ] || die "no best checkpoint: $name"; touch "$marker"
-  if [ "$RUN_TEST" = 1 ]; then CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$config" "$best" "$(gpu_count "$group")" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/${name}_test.log"; fi
+  if [ "$RUN_TEST" = 1 ]; then CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$train_config" "$best" "$(gpu_count "$group")" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/${name}_test.log"; fi
 }
 
 run_arch() {

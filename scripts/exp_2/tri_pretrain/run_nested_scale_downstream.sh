@@ -114,20 +114,23 @@ PY
 
 run_train() {
   local name="$1" config="$2" init="$3" root="$4" kind="$5" group="$6" port="$7" epochs="$8"
-  local work marker best save_best train_images val_images train_config use_vits_schedule=0
+  local work marker best save_best train_images val_images train_config use_vits_schedule=0 is_dfui_detector=0
   work="$WORK_ROOT/$name"
   marker="$work/.complete"
   best="$(best_checkpoint "$work" || true)"
   if [ "$SKIP_COMPLETED" = 1 ] && [ -f "$marker" ] && [ -n "$best" ]; then echo "REUSE $name: $best"; return; fi
   mkdir -p "$work"
+  if [ "$kind" = "det" ] && [[ "$name" == *dfui_* ]]; then
+    is_dfui_detector=1
+  fi
   train_config="$config"
-  if [[ "$name" == *dfui_* ]]; then
+  if [ "$is_dfui_detector" = 1 ]; then
     train_config="$work/dfui_11class_config.py"
     [[ "$name" == *vits* ]] && use_vits_schedule=1
     prepare_dfui_detector_config "$config" "$train_config" "$use_vits_schedule"
   fi
   if [ "$kind" = "det" ]; then save_best='coco/bbox_mAP'; else save_best='coco/segm_mAP'; fi
-  if [[ "$name" == *dfui_* ]]; then
+  if [ "$is_dfui_detector" = 1 ]; then
     # Both DFUI mixtures store all train and validation images under images/.
     train_images="$root/images/"; val_images="$root/images/"
   else
@@ -140,7 +143,7 @@ run_train() {
     val_dataloader.dataset.data_root="$root/" val_dataloader.dataset.ann_file="$root/annotations/instances_val.json" val_dataloader.dataset.data_prefix.img="$val_images"
     test_dataloader.dataset.data_root="$root/" test_dataloader.dataset.ann_file="$root/annotations/instances_val.json" test_dataloader.dataset.data_prefix.img="$val_images"
     val_evaluator.ann_file="$root/annotations/instances_val.json" test_evaluator.ann_file="$root/annotations/instances_val.json")
-  if [[ "$name" == *dfui_* ]]; then
+  if [ "$is_dfui_detector" = 1 ]; then
     opts+=(train_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" val_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" test_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')")
   fi
   CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/$name.log"

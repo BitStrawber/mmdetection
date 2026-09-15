@@ -32,6 +32,7 @@ R50_DFUI_RUOD_UIIS_CONFIG="${R50_DFUI_RUOD_UIIS_CONFIG:-configs/exp_2/dfui_image
 VITS_DFUI_CONFIG="${VITS_DFUI_CONFIG:-configs/exp_2/tri_pretrain/cascade-rcnn_vit-small_dino_fpn_24e_ruod_control100k.py}"
 RUN_DIRECT="${RUN_DIRECT:-1}"
 RUN_DFUI="${RUN_DFUI:-1}"
+VARIANTS="${VARIANTS:-dfui_ruod,dfui_ruod_uiis}"
 DFUI_FOLLOWUPS="${DFUI_FOLLOWUPS:-ruod,mask}"
 DFUI_EPOCHS="${DFUI_EPOCHS:-48}"
 MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"
@@ -157,7 +158,14 @@ run_arch() {
   local prefix="scale${SCALE}_${SOURCE}_${arch}"
   if [ "$RUN_DIRECT" = 1 ]; then run_train "${prefix}_direct_ruod24e_det" "$det" "$init" "$RUOD_ROOT" det "$group" "$port" 24; run_train "${prefix}_direct_uiis24e_mask" "$mask" "$init" "$UIIS_ROOT" mask "$group" "$((port+1))" 24; fi
   [ "$RUN_DFUI" = 1 ] || return
-  for branch in dfui_ruod dfui_ruod_uiis; do
+  local -a branches=()
+  IFS=',' read -r -a branches <<< "$VARIANTS"
+  for branch in "${branches[@]}"; do
+    branch="${branch//[[:space:]]/}"
+    case "$branch" in
+      dfui_ruod|dfui_ruod_uiis) ;;
+      *) die "unsupported DFUI variant: $branch (expected dfui_ruod and/or dfui_ruod_uiis)" ;;
+    esac
     local root config dfui_name dfui_work dfui_best adapted
     if [ "$branch" = dfui_ruod ]; then root="$DFUI_RUOD_ROOT"; config="$dfui_base"; else root="$DFUI_RUOD_UIIS_ROOT"; config="${R50_DFUI_RUOD_UIIS_CONFIG}"; [ "$arch" = vits ] && config="$VITS_DFUI_CONFIG"; fi
     dfui_name="${prefix}_${branch}_cascade48e"; run_train "$dfui_name" "$config" "$init" "$root" det "$group" "$((port+10))" "$DFUI_EPOCHS"
@@ -171,7 +179,7 @@ run_arch() {
 for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$R50_MASK_CONFIG" "$VITS_DET_CONFIG" "$VITS_MASK_CONFIG" "$R50_DFUI_RUOD_CONFIG" "$R50_DFUI_RUOD_UIIS_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
 for root in "$RUOD_ROOT" "$UIIS_ROOT" "$DFUI_RUOD_ROOT" "$DFUI_RUOD_UIIS_ROOT"; do [ -f "$root/annotations/instances_train.json" ] && [ -f "$root/annotations/instances_val.json" ] || die "invalid dataset: $root"; done
 validate_raw "$R50_RAW" resnet50; validate_raw "$VITS_RAW" vit_small
-echo "source=$SOURCE scale=$SCALE raw_root=$RAW_ROOT followups=$DFUI_FOLLOWUPS log=$PIPELINE_LOG"
+echo "source=$SOURCE scale=$SCALE raw_root=$RAW_ROOT variants=$VARIANTS followups=$DFUI_FOLLOWUPS log=$PIPELINE_LOG"
 if [ "$CHECK_ONLY" = 1 ]; then echo "CHECK_ONLY=1 passed"; exit 0; fi
 run_arch resnet50 "$R50_GPUS" "$BASE_PORT" & p1=$!
 run_arch vits "$VITS_GPUS" "$((BASE_PORT+200))" & p2=$!

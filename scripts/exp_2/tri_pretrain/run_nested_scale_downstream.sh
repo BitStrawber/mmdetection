@@ -15,6 +15,8 @@ VITS_RAW="${VITS_RAW:-$RAW_ROOT/scale${SCALE}_${SOURCE}_dino_vits_100e/checkpoin
 R50_GPUS="${R50_GPUS:-4,5}"
 VITS_GPUS="${VITS_GPUS:-6,7}"
 BASE_PORT="${BASE_PORT:-30300}"
+ARCHITECTURES="${ARCHITECTURES:-resnet50,vits}"
+PARALLEL_ARCHITECTURES="${PARALLEL_ARCHITECTURES:-1}"
 WORK_ROOT="${WORK_ROOT:-work_dirs/nested_scale_downstream}"
 BACKBONE_ROOT="${BACKBONE_ROOT:-work_dirs/nested_scale_downstream_backbones}"
 CONVERTED_ROOT="${CONVERTED_ROOT:-work_dirs/nested_scale_downstream_converted}"
@@ -31,6 +33,7 @@ R50_DFUI_RUOD_CONFIG="${R50_DFUI_RUOD_CONFIG:-configs/exp_2/dfui_imagenet1k_stag
 R50_DFUI_RUOD_UIIS_CONFIG="${R50_DFUI_RUOD_UIIS_CONFIG:-configs/exp_2/dfui_imagenet1k_stage_configs/r50_dfui_ruod_uiis/cascade-rcnn_r50_dino-official_fpn_2x_dfui_ruod_uiis_easy_j10_scheme_c_s1.py}"
 VITS_DFUI_CONFIG="${VITS_DFUI_CONFIG:-configs/exp_2/tri_pretrain/cascade-rcnn_vit-small_dino_fpn_24e_ruod_control100k.py}"
 RUN_DIRECT="${RUN_DIRECT:-1}"
+DIRECT_TASKS="${DIRECT_TASKS:-ruod,uiis}"
 RUN_DFUI="${RUN_DFUI:-1}"
 # Unless explicitly requested as an ablation, DFUI means the complete
 # DFUI + RUOD Easy + UIIS Easy mixture.
@@ -152,15 +155,19 @@ run_train() {
     opts+=(train_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" val_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" test_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')")
   fi
   CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/$name.log"
-  best="$(best_checkpoint "$work" || true)"; [ -n "$best" ] || die "no best checkpoint: $name"; touch "$marker"
+  best="$(best_checkpoint "$work" || true)"; [ -n "$best" ] || die "no best checkpoint: $name"
   if [ "$RUN_TEST" = 1 ]; then CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$train_config" "$best" "$(gpu_count "$group")" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/${name}_test.log"; fi
+  touch "$marker"
 }
 
 run_arch() {
   local arch="$1" group="$2" port="$3" raw init det mask dfui_base
   if [ "$arch" = resnet50 ]; then raw="$R50_RAW"; init="$CONVERTED_ROOT/scale${SCALE}_${SOURCE}_r50_teacher.pth"; det="$R50_DET_CONFIG"; mask="$R50_MASK_CONFIG"; dfui_base="$R50_DFUI_RUOD_CONFIG"; convert "$raw" "$init" resnet50 ''; else raw="$VITS_RAW"; init="$CONVERTED_ROOT/scale${SCALE}_${SOURCE}_vits_teacher.pth"; det="$VITS_DET_CONFIG"; mask="$VITS_MASK_CONFIG"; dfui_base="$VITS_DFUI_CONFIG"; convert "$raw" "$init" vit_small backbone.; fi
   local prefix="scale${SCALE}_${SOURCE}_${arch}"
-  if [ "$RUN_DIRECT" = 1 ]; then run_train "${prefix}_direct_ruod24e_det" "$det" "$init" "$RUOD_ROOT" det "$group" "$port" 24; run_train "${prefix}_direct_uiis24e_mask" "$mask" "$init" "$UIIS_ROOT" mask "$group" "$((port+1))" 24; fi
+  if [ "$RUN_DIRECT" = 1 ]; then
+    [[ ",$DIRECT_TASKS," == *,ruod,* ]] && run_train "${prefix}_direct_ruod24e_det" "$det" "$init" "$RUOD_ROOT" det "$group" "$port" 24
+    [[ ",$DIRECT_TASKS," == *,uiis,* ]] && run_train "${prefix}_direct_uiis24e_mask" "$mask" "$init" "$UIIS_ROOT" mask "$group" "$((port+1))" 24
+  fi
   [ "$RUN_DFUI" = 1 ] || return
   local -a branches=()
   IFS=',' read -r -a branches <<< "$VARIANTS"
@@ -183,9 +190,34 @@ run_arch() {
 for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$R50_MASK_CONFIG" "$VITS_DET_CONFIG" "$VITS_MASK_CONFIG" "$R50_DFUI_RUOD_CONFIG" "$R50_DFUI_RUOD_UIIS_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
 for root in "$RUOD_ROOT" "$UIIS_ROOT" "$DFUI_RUOD_ROOT" "$DFUI_RUOD_UIIS_ROOT"; do [ -f "$root/annotations/instances_train.json" ] && [ -f "$root/annotations/instances_val.json" ] || die "invalid dataset: $root"; done
 validate_raw "$R50_RAW" resnet50; validate_raw "$VITS_RAW" vit_small
-echo "source=$SOURCE scale=$SCALE raw_root=$RAW_ROOT variants=$VARIANTS followups=$DFUI_FOLLOWUPS log=$PIPELINE_LOG"
+IFS=',' read -r -a ARCHITECTURE_LIST <<< "$ARCHITECTURES"
+[ "${#ARCHITECTURE_LIST[@]}" -gt 0 ] || die "ARCHITECTURES must contain resnet50 and/or vits"
+for arch in "${ARCHITECTURE_LIST[@]}"; do
+  arch="${arch//[[:space:]]/}"
+  case "$arch" in resnet50|vits) ;; *) die "unsupported architecture: $arch" ;; esac
+done
+case "$PARALLEL_ARCHITECTURES" in 0|1) ;; *) die "PARALLEL_ARCHITECTURES must be 0 or 1" ;; esac
+echo "source=$SOURCE scale=$SCALE raw_root=$RAW_ROOT architectures=$ARCHITECTURES parallel_architectures=$PARALLEL_ARCHITECTURES direct_tasks=$DIRECT_TASKS variants=$VARIANTS followups=$DFUI_FOLLOWUPS log=$PIPELINE_LOG"
 if [ "$CHECK_ONLY" = 1 ]; then echo "CHECK_ONLY=1 passed"; exit 0; fi
-run_arch resnet50 "$R50_GPUS" "$BASE_PORT" & p1=$!
-run_arch vits "$VITS_GPUS" "$((BASE_PORT+200))" & p2=$!
-wait "$p1"; wait "$p2"
+if [ "$PARALLEL_ARCHITECTURES" = 1 ]; then
+  pids=()
+  for arch in "${ARCHITECTURE_LIST[@]}"; do
+    arch="${arch//[[:space:]]/}"
+    if [ "$arch" = resnet50 ]; then
+      run_arch resnet50 "$R50_GPUS" "$BASE_PORT" & pids+=("$!")
+    else
+      run_arch vits "$VITS_GPUS" "$((BASE_PORT+200))" & pids+=("$!")
+    fi
+  done
+  for pid in "${pids[@]}"; do wait "$pid"; done
+else
+  for arch in "${ARCHITECTURE_LIST[@]}"; do
+    arch="${arch//[[:space:]]/}"
+    if [ "$arch" = resnet50 ]; then
+      run_arch resnet50 "$R50_GPUS" "$BASE_PORT"
+    else
+      run_arch vits "$VITS_GPUS" "$((BASE_PORT+200))"
+    fi
+  done
+fi
 echo "COMPLETE source=$SOURCE scale=$SCALE"

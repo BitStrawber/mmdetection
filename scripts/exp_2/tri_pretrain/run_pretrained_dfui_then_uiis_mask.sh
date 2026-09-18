@@ -18,7 +18,8 @@ VITS_RAW="${VITS_RAW:?set VITS_RAW to a completed DINO ViT-S checkpoint.pth}"
 # checkpoint or downstream configuration.
 SOURCE_LABEL="${SOURCE_LABEL:-$MODEL_PREFIX}"
 SCALE_LABEL="${SCALE_LABEL:-full}"
-VARIANTS="${VARIANTS:-dfui_ruod}"
+# Default to the complete DFUI + RUOD Easy + UIIS Easy intermediate dataset.
+VARIANTS="${VARIANTS:-dfui_ruod_uiis}"
 DFUI_FOLLOWUPS="${DFUI_FOLLOWUPS:-mask}"
 ALLOW_TARGET_DOMAIN_UIIS="${ALLOW_TARGET_DOMAIN_UIIS:-0}"
 

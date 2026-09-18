@@ -32,7 +32,9 @@ R50_DFUI_RUOD_UIIS_CONFIG="${R50_DFUI_RUOD_UIIS_CONFIG:-configs/exp_2/dfui_image
 VITS_DFUI_CONFIG="${VITS_DFUI_CONFIG:-configs/exp_2/tri_pretrain/cascade-rcnn_vit-small_dino_fpn_24e_ruod_control100k.py}"
 RUN_DIRECT="${RUN_DIRECT:-1}"
 RUN_DFUI="${RUN_DFUI:-1}"
-VARIANTS="${VARIANTS:-dfui_ruod,dfui_ruod_uiis}"
+# Unless explicitly requested as an ablation, DFUI means the complete
+# DFUI + RUOD Easy + UIIS Easy mixture.
+VARIANTS="${VARIANTS:-dfui_ruod_uiis}"
 DFUI_FOLLOWUPS="${DFUI_FOLLOWUPS:-ruod,mask}"
 DFUI_EPOCHS="${DFUI_EPOCHS:-48}"
 MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"

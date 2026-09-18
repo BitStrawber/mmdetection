@@ -14,7 +14,7 @@ VITS_GPUS="${VITS_GPUS:-6,7}"
 BASE_PORT="${BASE_PORT:-29680}"
 MODEL_PREFIX="${MODEL_PREFIX:-imagenet100k}"
 PRETRAIN_PREFIX="${PRETRAIN_PREFIX:-imagenet100k}"
-VARIANTS="${VARIANTS:-dfui_ruod,dfui_ruod_uiis}"
+VARIANTS="${VARIANTS:-dfui_ruod_uiis}"
 IFS=',' read -r -a VARIANT_LIST <<< "$VARIANTS"
 
 HF_ROOT="${HF_ROOT:-/media/SSD1/XCX/exp_2/BitStrawber_Output}"

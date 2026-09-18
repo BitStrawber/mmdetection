@@ -35,7 +35,9 @@ RUN_DFUI="${RUN_DFUI:-1}"
 # Unless explicitly requested as an ablation, DFUI means the complete
 # DFUI + RUOD Easy + UIIS Easy mixture.
 VARIANTS="${VARIANTS:-dfui_ruod_uiis}"
-DFUI_FOLLOWUPS="${DFUI_FOLLOWUPS:-ruod,mask}"
+# The standard DFUI experiment is a 48e intermediate detector adaptation
+# followed by a 24e RUOD detector transfer.  Mask transfer is opt-in.
+DFUI_FOLLOWUPS="${DFUI_FOLLOWUPS:-ruod}"
 DFUI_EPOCHS="${DFUI_EPOCHS:-48}"
 MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"
 RUN_TEST="${RUN_TEST:-1}"

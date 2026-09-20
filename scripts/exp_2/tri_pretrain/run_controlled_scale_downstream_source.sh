@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Execute one controlled-scale source on one two-GPU group.  The source stages
-# are deliberately serial: complete DFUI-to-RUOD transfer, direct RUOD, then
-# direct UIIS10K instance segmentation; ResNet-50 precedes ViT-S in each task.
+# Execute one controlled-scale source on one two-GPU group. The source stages
+# are deliberately serial: direct RUOD, DFUI-to-RUOD transfer, then direct
+# UIIS10K instance segmentation; ResNet-50 precedes ViT-S in each task.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -65,12 +65,12 @@ done
 
 {
   printf 'order\tfinal_result\tarchitecture\tstage\tinit_source\tdataset\tepochs\n'
-  printf '1\tdfui_to_ruod\tresnet50\tdfui_detector\traw_dino_teacher\tDFUI_RUOD_UIIS_EASY\t48\n'
-  printf '2\tdfui_to_ruod\tresnet50\truod_detector\tdfui_best_backbone\tRUOD\t24\n'
-  printf '3\tdfui_to_ruod\tvits\tdfui_detector\traw_dino_teacher\tDFUI_RUOD_UIIS_EASY\t48\n'
-  printf '4\tdfui_to_ruod\tvits\truod_detector\tdfui_best_backbone\tRUOD\t24\n'
-  printf '5\tdirect_ruod\tresnet50\truod_detector\traw_dino_teacher\tRUOD\t24\n'
-  printf '6\tdirect_ruod\tvits\truod_detector\traw_dino_teacher\tRUOD\t24\n'
+  printf '1\tdirect_ruod\tresnet50\truod_detector\traw_dino_teacher\tRUOD\t24\n'
+  printf '2\tdirect_ruod\tvits\truod_detector\traw_dino_teacher\tRUOD\t24\n'
+  printf '3\tdfui_to_ruod\tresnet50\tdfui_detector\traw_dino_teacher\tDFUI_RUOD_UIIS_EASY\t48\n'
+  printf '4\tdfui_to_ruod\tresnet50\truod_detector\tdfui_best_backbone\tRUOD\t24\n'
+  printf '5\tdfui_to_ruod\tvits\tdfui_detector\traw_dino_teacher\tDFUI_RUOD_UIIS_EASY\t48\n'
+  printf '6\tdfui_to_ruod\tvits\truod_detector\tdfui_best_backbone\tRUOD\t24\n'
   printf '7\tdirect_uiis\tresnet50\tuiis_mask\traw_dino_teacher\tUIIS10K\t24\n'
   printf '8\tdirect_uiis\tvits\tuiis_mask\traw_dino_teacher\tUIIS10K\t24\n'
 } > "$STATUS_ROOT/task_plan.tsv"
@@ -121,11 +121,11 @@ echo "output_root=$OUTPUT_ROOT"
 echo "dfui_dataset=$DFUI_RUOD_UIIS_ROOT"
 echo "============================================================"
 
-# The DFUI result is a two-stage detector transfer, not a standalone 48e score.
-run_phase dfui_to_ruod_resnet50 resnet50 0 '' 1 ruod 0
-run_phase dfui_to_ruod_vits vits 0 '' 1 ruod 30
-run_phase direct_ruod_resnet50 resnet50 1 ruod 0 '' 60
-run_phase direct_ruod_vits vits 1 ruod 0 '' 80
+# Prioritize direct RUOD baselines, then run the two-stage DFUI transfer.
+run_phase direct_ruod_resnet50 resnet50 1 ruod 0 '' 0
+run_phase direct_ruod_vits vits 1 ruod 0 '' 20
+run_phase dfui_to_ruod_resnet50 resnet50 0 '' 1 ruod 40
+run_phase dfui_to_ruod_vits vits 0 '' 1 ruod 70
 run_phase direct_uiis_resnet50 resnet50 1 uiis 0 '' 100
 run_phase direct_uiis_vits vits 1 uiis 0 '' 120
 

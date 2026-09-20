@@ -187,11 +187,23 @@ PY
 
 run_train() {
   local name="$1" config="$2" init="$3" root="$4" kind="$5" group="$6" port="$7" epochs="$8"
-  local work marker best save_best train_config runtime_config use_vits_schedule=0 is_dfui_detector=0
+  local work marker best save_best train_config runtime_config test_log test_status use_vits_schedule=0 is_dfui_detector=0
   work="$WORK_ROOT/$name"
   marker="$work/.complete"
   best="$(best_checkpoint "$work" || true)"
+  if [ "$kind" = "det" ]; then save_best='coco/bbox_mAP'; else save_best='coco/segm_mAP'; fi
+  test_log="$LOG_ROOT/${name}_test.log"
   if [ "$SKIP_COMPLETED" = 1 ] && [ -f "$marker" ] && [ -n "$best" ]; then echo "REUSE $name: $best"; return; fi
+
+  # A prior test can emit complete COCO metrics yet return nonzero from its launcher.
+  # Recover only a fully saved run whose corresponding test log contains the target metric.
+  if [ "$SKIP_COMPLETED" = 1 ] && [ -f "$work/epoch_${epochs}.pth" ] && [ -n "$best" ] && \
+     { [ "$RUN_TEST" != 1 ] || grep -qF "${save_best}:" "$test_log" 2>/dev/null; }; then
+    touch "$marker"
+    echo "RECOVER completed $name: $best"
+    return
+  fi
+
   mkdir -p "$work"
   if [ "$kind" = "det" ] && [[ "$name" == *dfui_* ]]; then
     is_dfui_detector=1
@@ -202,14 +214,25 @@ run_train() {
     [[ "$name" == *vits* ]] && use_vits_schedule=1
     prepare_dfui_detector_config "$config" "$train_config" "$use_vits_schedule"
   fi
-  if [ "$kind" = "det" ]; then save_best='coco/bbox_mAP'; else save_best='coco/segm_mAP'; fi
   runtime_config="$work/runtime_config.py"
   prepare_runtime_config "$train_config" "$runtime_config" "$init" "$root" "$kind" "$epochs" "$save_best" "$MAX_KEEP_CKPTS" "$is_dfui_detector"
   train_config="$runtime_config"
   echo "START $name  config=$train_config  init=$init  data=$root  gpus=$group"
   CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" 2>&1 | tee "$LOG_ROOT/$name.log"
   best="$(best_checkpoint "$work" || true)"; [ -n "$best" ] || die "no best checkpoint: $name"
-  if [ "$RUN_TEST" = 1 ]; then CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$train_config" "$best" "$(gpu_count "$group")" 2>&1 | tee "$LOG_ROOT/${name}_test.log"; fi
+  if [ "$RUN_TEST" = 1 ]; then
+    set +e
+    CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$train_config" "$best" "$(gpu_count "$group")" 2>&1 | tee "$test_log"
+    test_status="${PIPESTATUS[0]}"
+    set -e
+    if [ "$test_status" -ne 0 ]; then
+      if grep -qF "${save_best}:" "$test_log"; then
+        echo "WARNING: $name test launcher exited $test_status after reporting ${save_best}; accepting completed evaluation."
+      else
+        die "$name test failed with exit code $test_status and did not report ${save_best}"
+      fi
+    fi
+  fi
   touch "$marker"
 }
 

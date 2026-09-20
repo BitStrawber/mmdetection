@@ -106,6 +106,69 @@ print(f'Wrote DFUI 11-class Cascade config: {output}')
 PY
 }
 
+prepare_runtime_config() {
+  local source_config="$1" output_config="$2" init="$3" root="$4" kind="$5" epochs="$6" save_best="$7" max_keep_ckpts="$8" is_dfui_detector="$9"
+  python - "$source_config" "$output_config" "$init" "$root" "$kind" "$epochs" "$save_best" "$max_keep_ckpts" "$is_dfui_detector" <<'PY'
+import sys
+from pathlib import Path
+
+from mmengine.config import Config
+
+source, output, init, root, kind, epochs, save_best, max_keep_ckpts, is_dfui_detector = sys.argv[1:]
+root = Path(root)
+is_dfui_detector = is_dfui_detector == '1'
+cfg = Config.fromfile(source)
+
+if is_dfui_detector:
+    train_images = val_images = 'images/'
+else:
+    train_images, val_images = 'train/', 'val/'
+
+classes = (
+    'holothurian', 'echinus', 'scallop', 'starfish', 'fish', 'corals',
+    'diver', 'cuttlefish', 'turtle', 'jellyfish', 'waterweeds')
+
+def configure_dataset(dataset, ann_file, image_prefix):
+    """Reach the leaf COCO dataset even when it is wrapped by a sampler."""
+    if 'dataset' in dataset:
+        configure_dataset(dataset['dataset'], ann_file, image_prefix)
+        return
+    if 'datasets' in dataset:
+        for child in dataset['datasets']:
+            configure_dataset(child, ann_file, image_prefix)
+        return
+    dataset['data_root'] = f'{root}/'
+    dataset['ann_file'] = str(root / 'annotations' / ann_file)
+    dataset['data_prefix'] = dict(img=image_prefix)
+    if is_dfui_detector:
+        dataset['metainfo'] = dict(classes=classes)
+
+configure_dataset(cfg.train_dataloader['dataset'], 'instances_train.json', train_images)
+configure_dataset(cfg.val_dataloader['dataset'], 'instances_val.json', val_images)
+configure_dataset(cfg.test_dataloader['dataset'], 'instances_val.json', val_images)
+
+for evaluator_name in ('val_evaluator', 'test_evaluator'):
+    evaluator = cfg.get(evaluator_name)
+    if isinstance(evaluator, (list, tuple)):
+        for item in evaluator:
+            item['ann_file'] = str(root / 'annotations' / 'instances_val.json')
+    elif evaluator is not None:
+        evaluator['ann_file'] = str(root / 'annotations' / 'instances_val.json')
+
+cfg.model.backbone['init_cfg'] = dict(type='Pretrained', checkpoint=init)
+cfg['load_from'] = None
+cfg.train_cfg['max_epochs'] = int(epochs)
+cfg.default_hooks.checkpoint['save_best'] = save_best
+cfg.default_hooks.checkpoint['max_keep_ckpts'] = int(max_keep_ckpts)
+
+output.parent.mkdir(parents=True, exist_ok=True)
+cfg.dump(output)
+print(
+    f'Wrote runtime config: {output}; train_prefix={train_images}; '
+    f'val_prefix={val_images}; init={init}')
+PY
+}
+
 export_backbone() {
   local source="$1" output="$2"
   [ -s "$output" ] && return
@@ -122,7 +185,7 @@ PY
 
 run_train() {
   local name="$1" config="$2" init="$3" root="$4" kind="$5" group="$6" port="$7" epochs="$8"
-  local work marker best save_best train_images val_images train_config use_vits_schedule=0 is_dfui_detector=0
+  local work marker best save_best train_config runtime_config use_vits_schedule=0 is_dfui_detector=0
   work="$WORK_ROOT/$name"
   marker="$work/.complete"
   best="$(best_checkpoint "$work" || true)"
@@ -138,25 +201,13 @@ run_train() {
     prepare_dfui_detector_config "$config" "$train_config" "$use_vits_schedule"
   fi
   if [ "$kind" = "det" ]; then save_best='coco/bbox_mAP'; else save_best='coco/segm_mAP'; fi
-  if [ "$is_dfui_detector" = 1 ]; then
-    # Both DFUI mixtures store all train and validation images under images/.
-    train_images="$root/images/"; val_images="$root/images/"
-  else
-    train_images="$root/train/"; val_images="$root/val/"
-  fi
+  runtime_config="$work/runtime_config.py"
+  prepare_runtime_config "$train_config" "$runtime_config" "$init" "$root" "$kind" "$epochs" "$save_best" "$MAX_KEEP_CKPTS" "$is_dfui_detector"
+  train_config="$runtime_config"
   echo "START $name  config=$train_config  init=$init  data=$root  gpus=$group"
-  local opts=(load_from=None model.backbone.init_cfg.type=Pretrained model.backbone.init_cfg.checkpoint="$init"
-    train_cfg.max_epochs="$epochs" default_hooks.checkpoint.save_best="$save_best" default_hooks.checkpoint.max_keep_ckpts="$MAX_KEEP_CKPTS"
-    train_dataloader.dataset.data_root="$root/" train_dataloader.dataset.ann_file="$root/annotations/instances_train.json" train_dataloader.dataset.data_prefix.img="$train_images"
-    val_dataloader.dataset.data_root="$root/" val_dataloader.dataset.ann_file="$root/annotations/instances_val.json" val_dataloader.dataset.data_prefix.img="$val_images"
-    test_dataloader.dataset.data_root="$root/" test_dataloader.dataset.ann_file="$root/annotations/instances_val.json" test_dataloader.dataset.data_prefix.img="$val_images"
-    val_evaluator.ann_file="$root/annotations/instances_val.json" test_evaluator.ann_file="$root/annotations/instances_val.json")
-  if [ "$is_dfui_detector" = 1 ]; then
-    opts+=(train_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" val_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')" test_dataloader.dataset.metainfo.classes="('holothurian','echinus','scallop','starfish','fish','corals','diver','cuttlefish','turtle','jellyfish','waterweeds')")
-  fi
-  CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/$name.log"
+  CUDA_VISIBLE_DEVICES="$group" PORT="$port" bash tools/dist_train.sh "$train_config" "$(gpu_count "$group")" --work-dir "$work" 2>&1 | tee "$LOG_ROOT/$name.log"
   best="$(best_checkpoint "$work" || true)"; [ -n "$best" ] || die "no best checkpoint: $name"
-  if [ "$RUN_TEST" = 1 ]; then CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$train_config" "$best" "$(gpu_count "$group")" --cfg-options "${opts[@]}" 2>&1 | tee "$LOG_ROOT/${name}_test.log"; fi
+  if [ "$RUN_TEST" = 1 ]; then CUDA_VISIBLE_DEVICES="$group" PORT="$((port+100))" bash tools/dist_test.sh "$train_config" "$best" "$(gpu_count "$group")" 2>&1 | tee "$LOG_ROOT/${name}_test.log"; fi
   touch "$marker"
 }
 

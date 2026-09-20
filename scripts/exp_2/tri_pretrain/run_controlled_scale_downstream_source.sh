@@ -111,7 +111,10 @@ run_phase() {
     MAX_KEEP_CKPTS="$MAX_KEEP_CKPTS" \
     CHECK_ONLY="$CHECK_ONLY" \
     bash "$SCRIPT_DIR/run_nested_scale_downstream.sh"
-  [ "$CHECK_ONLY" = 1 ] || touch "$STATUS_ROOT/${phase}.complete"
+  if [ "$CHECK_ONLY" != 1 ]; then
+    touch "$STATUS_ROOT/${phase}.complete"
+  fi
+  return 0
 }
 
 echo "============================================================"

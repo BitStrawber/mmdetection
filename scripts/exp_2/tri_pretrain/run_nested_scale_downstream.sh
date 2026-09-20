@@ -241,10 +241,16 @@ run_arch() {
   if [ "$arch" = resnet50 ]; then raw="$R50_RAW"; init="$CONVERTED_ROOT/scale${SCALE}_${SOURCE}_r50_teacher.pth"; det="$R50_DET_CONFIG"; mask="$R50_MASK_CONFIG"; dfui_base="$R50_DFUI_RUOD_CONFIG"; convert "$raw" "$init" resnet50 ''; else raw="$VITS_RAW"; init="$CONVERTED_ROOT/scale${SCALE}_${SOURCE}_vits_teacher.pth"; det="$VITS_DET_CONFIG"; mask="$VITS_MASK_CONFIG"; dfui_base="$VITS_DFUI_CONFIG"; convert "$raw" "$init" vit_small backbone.; fi
   local prefix="scale${SCALE}_${SOURCE}_${arch}"
   if [ "$RUN_DIRECT" = 1 ]; then
-    [[ ",$DIRECT_TASKS," == *,ruod,* ]] && run_train "${prefix}_direct_ruod24e_det" "$det" "$init" "$RUOD_ROOT" det "$group" "$port" 24
-    [[ ",$DIRECT_TASKS," == *,uiis,* ]] && run_train "${prefix}_direct_uiis24e_mask" "$mask" "$init" "$UIIS_ROOT" mask "$group" "$((port+1))" 24
+    if [[ ",$DIRECT_TASKS," == *,ruod,* ]]; then
+      run_train "${prefix}_direct_ruod24e_det" "$det" "$init" "$RUOD_ROOT" det "$group" "$port" 24
+    fi
+    if [[ ",$DIRECT_TASKS," == *,uiis,* ]]; then
+      run_train "${prefix}_direct_uiis24e_mask" "$mask" "$init" "$UIIS_ROOT" mask "$group" "$((port+1))" 24
+    fi
   fi
-  [ "$RUN_DFUI" = 1 ] || return
+  if [ "$RUN_DFUI" != 1 ]; then
+    return 0
+  fi
   local -a branches=()
   IFS=',' read -r -a branches <<< "$VARIANTS"
   for branch in "${branches[@]}"; do
@@ -257,10 +263,15 @@ run_arch() {
     if [ "$branch" = dfui_ruod ]; then root="$DFUI_RUOD_ROOT"; config="$dfui_base"; else root="$DFUI_RUOD_UIIS_ROOT"; config="${R50_DFUI_RUOD_UIIS_CONFIG}"; [ "$arch" = vits ] && config="$VITS_DFUI_CONFIG"; fi
     dfui_name="${prefix}_${branch}_cascade48e"; run_train "$dfui_name" "$config" "$init" "$root" det "$group" "$((port+10))" "$DFUI_EPOCHS"
     dfui_work="$WORK_ROOT/$dfui_name"; dfui_best="$(best_checkpoint "$dfui_work")"; adapted="$BACKBONE_ROOT/${dfui_name}_best_backbone.pth"; export_backbone "$dfui_best" "$adapted"
-    [[ ",$DFUI_FOLLOWUPS," == *,ruod,* ]] && run_train "${prefix}_${branch}_backbone_ruod24e_det" "$det" "$adapted" "$RUOD_ROOT" det "$group" "$((port+11))" 24
-    [[ ",$DFUI_FOLLOWUPS," == *,mask,* ]] && run_train "${prefix}_${branch}_backbone_uiis24e_mask" "$mask" "$adapted" "$UIIS_ROOT" mask "$group" "$((port+12))" 24
+    if [[ ",$DFUI_FOLLOWUPS," == *,ruod,* ]]; then
+      run_train "${prefix}_${branch}_backbone_ruod24e_det" "$det" "$adapted" "$RUOD_ROOT" det "$group" "$((port+11))" 24
+    fi
+    if [[ ",$DFUI_FOLLOWUPS," == *,mask,* ]]; then
+      run_train "${prefix}_${branch}_backbone_uiis24e_mask" "$mask" "$adapted" "$UIIS_ROOT" mask "$group" "$((port+12))" 24
+    fi
     port=$((port+20))
   done
+  return 0
 }
 
 for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$R50_MASK_CONFIG" "$VITS_DET_CONFIG" "$VITS_MASK_CONFIG" "$R50_DFUI_RUOD_CONFIG" "$R50_DFUI_RUOD_UIIS_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done

@@ -76,7 +76,7 @@ convert() {
   mv -- "$partial" "$output"
 }
 
-best_checkpoint() { find "$1" -maxdepth 1 -type f -name 'best_*.pth' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-; }
+best_checkpoint() { find "$1" -maxdepth 1 -type f -name 'best_*.pth' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-; }
 
 prepare_dfui_detector_config() {
   local source_config="$1" output_config="$2" use_vits_schedule="$3"
@@ -115,6 +115,8 @@ from pathlib import Path
 from mmengine.config import Config
 
 source, output, init, root, kind, epochs, save_best, max_keep_ckpts, is_dfui_detector = sys.argv[1:]
+source = Path(source)
+output = Path(output)
 root = Path(root)
 is_dfui_detector = is_dfui_detector == '1'
 cfg = Config.fromfile(source)

@@ -205,7 +205,9 @@ run_train() {
   fi
 
   mkdir -p "$work"
-  if [ "$kind" = "det" ] && [[ "$name" == *dfui_* ]]; then
+  # A DFUI-to-RUOD follow-up contains "dfui" in its run name, but it is a
+  # 10-class RUOD task.  Select the 11-class DFUI setup from the dataset root.
+  if [ "$kind" = "det" ] && { [ "$root" = "$DFUI_RUOD_ROOT" ] || [ "$root" = "$DFUI_RUOD_UIIS_ROOT" ]; }; then
     is_dfui_detector=1
   fi
   train_config="$config"

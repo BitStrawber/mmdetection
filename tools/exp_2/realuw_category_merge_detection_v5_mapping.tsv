@@ -1,0 +1,1225 @@
+original_name	detection_name	coarse_name	training_eligible	mapping_confidence	merge_basis	aliases
+tergivelum baldwinae	acorn worm	acorn worm	yes	high	existing visually distinct group retained	Tergivelum baldwinae
+chinese fire belly newt	amphibian	amphibian	yes	high	existing visually distinct group retained	Chinese fire belly newt
+salamander	amphibian	amphibian	yes	high	existing visually distinct group retained	salamander
+amphipoda	amphipod	amphipod	yes	high	existing visually distinct group retained	Amphipoda
+caprellidae	amphipod	amphipod	yes	high	existing visually distinct group retained	Caprellidae
+hyperiidae	amphipod	amphipod	yes	high	existing visually distinct group retained	Hyperiidae
+phronima sedentaria	amphipod	amphipod	yes	high	existing visually distinct group retained	Phronima sedentaria
+bicolor angelfish	angelfish	fish	yes	high	visual-name rule	Bicolor Angelfish;BicolorAngelfish
+emperor angelfish	angelfish	fish	yes	high	visual-name rule	emperor angelfish;emperor angelfish displaying vibrant blue and;emperor angelfish displaying vivid blue and
+french angelfish	angelfish	fish	yes	high	visual-name rule	French angelfish
+holacanthus bermudensis	angelfish	fish	yes	high	visual-name rule	Holacanthus bermudensis
+juvenile emperor angelfish	angelfish	fish	yes	high	visual-name rule	juvenile emperor angelfish;juvenile emperor angelfish displaying vibrant blue
+juvenile french angelfish	angelfish	fish	yes	high	visual-name rule	juvenile French angelfish
+pomacanthus arcuatus	angelfish	fish	yes	high	visual-name rule	Pomacanthus arcuatus
+threespot angelfish	angelfish	fish	yes	high	visual-name rule	Threespot Angelfish;ThreespotAngelfish
+vibrant emperor angelfish	angelfish	fish	yes	high	visual-name rule	vibrant emperor angelfish
+vibrant queen angelfish	angelfish	fish	yes	high	visual-name rule	vibrant queen angelfish
+anglerfish	anglerfish	fish	yes	high	visual-name rule	well-camouflaged anglerfish
+chaenophryne	anglerfish	fish	yes	medium	taxonomy order: Lophiiformes	Chaenophryne
+chaunacops coloratus	anglerfish	fish	yes	medium	taxonomy order: Lophiiformes	Chaunacops coloratus
+gigantactis gargantua	anglerfish	fish	yes	medium	taxonomy order: Lophiiformes	Gigantactis gargantua
+large anglerfish	anglerfish	fish	yes	high	visual-name rule	large anglerfish
+lophiodes caulinaris	anglerfish	fish	yes	high	taxonomy family: Lophiidae	Lophiodes caulinaris
+lophiodes miacanthus	anglerfish	fish	yes	high	taxonomy family: Lophiidae	Lophiodes miacanthus
+melanocetus	anglerfish	fish	yes	medium	taxonomy order: Lophiiformes	Melanocetus
+monkfish	anglerfish	fish	yes	high	visual-name rule	well-camouflaged monkfish
+oneirodes acanthias	anglerfish	fish	yes	medium	taxonomy order: Lophiiformes	Oneirodes acanthias
+yellow goosefish	anglerfish	fish	yes	high	visual-name rule	yellow goosefish
+caecosagitta macrocephala	arrow worm	arrow worm	yes	high	existing visually distinct group retained	Caecosagitta macrocephala
+chaetognatha	arrow worm	arrow worm	yes	high	existing visually distinct group retained	Chaetognatha
+autonomous underwater vehicle (auv)	AUV	underwater vehicle	yes	high	autonomous underwater vehicle	Autonomous Underwater Vehicle (AUV)
+auv	AUV	underwater vehicle	yes	high	autonomous underwater vehicle	AUV
+yellow autonomous underwater vehicle (auv)	AUV	underwater vehicle	yes	high	autonomous underwater vehicle	yellow autonomous underwater vehicle (AUV)
+barnacle	barnacle	barnacle	yes	high	existing visually distinct group retained	barnacle
+cirripedia	barnacle	barnacle	yes	high	existing visually distinct group retained	Cirripedia
+poecilasmatidae	barnacle	barnacle	yes	high	existing visually distinct group retained	Poecilasmatidae
+barracuda	barracuda	fish	yes	high	visual-name rule	barracuda
+large great barracuda	barracuda	fish	yes	high	visual-name rule	large great barracuda;large great barracuda hovering motionless
+solitary great barracuda	barracuda	fish	yes	high	visual-name rule	solitary great barracuda
+longfin batfish	batfish	fish	yes	high	visual-name rule	longfin batfish
+obicular batfish	batfish	fish	yes	high	visual-name rule	ObicularBatfish
+orbicular batfish	batfish	fish	yes	high	visual-name rule	Orbicular Batfish
+red lipped batfish	batfish	fish	yes	high	visual-name rule	red-lipped batfish
+bivalve	bivalve	bivalve	yes	high	existing visually distinct group retained	bivalve
+bivalvia	bivalve	bivalve	yes	high	existing visually distinct group retained	Bivalvia
+black musselcracker	bivalve	bivalve	yes	high	existing visually distinct group retained	black musselcracker
+geoduck	bivalve	bivalve	yes	high	existing visually distinct group retained	Geoduck
+giant clam	bivalve	bivalve	yes	high	existing visually distinct group retained	Giant Clams;GiantClams
+vesicomya	bivalve	bivalve	yes	high	existing visually distinct group retained	Vesicomya
+vesicomyidae	bivalve	bivalve	yes	high	existing visually distinct group retained	Vesicomyidae
+alternatipathes	black coral	coral	yes	high	visual/taxonomic coral group	Alternatipathes
+antipatharia	black coral	coral	yes	high	visual/taxonomic coral group	Antipatharia
+bathypathes	black coral	coral	yes	high	visual/taxonomic coral group	Bathypathes
+black coral	black coral	coral	yes	high	visual/taxonomic coral group	black coral
+chrysopathes	black coral	coral	yes	high	visual/taxonomic coral group	Chrysopathes
+chrysopathes speciosa	black coral	coral	yes	high	visual/taxonomic coral group	Chrysopathes speciosa
+lillipathes	black coral	coral	yes	high	visual/taxonomic coral group	Lillipathes
+stichopathes	black coral	coral	yes	high	visual/taxonomic coral group	Stichopathes
+stichopathes spiessi	black coral	coral	yes	high	visual/taxonomic coral group	Stichopathes spiessi
+trissopathes	black coral	coral	yes	high	visual/taxonomic coral group	Trissopathes
+boxfish	boxfish	fish	yes	high	visual-name rule	boxfish
+yellow boxfish	boxfish	fish	yes	high	visual-name rule	Yellow Boxfish;YellowBoxfish
+brachiopoda	brachiopod	brachiopod	yes	high	existing visually distinct group retained	Brachiopoda
+laqueus californicus	brachiopod	brachiopod	yes	high	existing visually distinct group retained	Laqueus californicus
+asteronyx	brittle star	brittle star	yes	high	existing visually distinct group retained	Asteronyx
+asteronyx longifissus	brittle star	brittle star	yes	high	existing visually distinct group retained	Asteronyx longifissus
+euryalidae	brittle star	brittle star	yes	high	existing visually distinct group retained	Euryalidae
+gorgonocephalus	brittle star	brittle star	yes	high	existing visually distinct group retained	Gorgonocephalus
+gorgonocephalus eucnemis	brittle star	brittle star	yes	high	existing visually distinct group retained	Gorgonocephalus eucnemis
+ophiacanthidae	brittle star	brittle star	yes	high	existing visually distinct group retained	Ophiacanthidae
+ophiocreas oedipus	brittle star	brittle star	yes	high	existing visually distinct group retained	Ophiocreas oedipus
+ophioplinthaca	brittle star	brittle star	yes	high	existing visually distinct group retained	Ophioplinthaca
+ophiuroidea	brittle star	brittle star	yes	high	existing visually distinct group retained	Ophiuroidea
+bryozoa	bryozoan	bryozoan	yes	high	existing visually distinct group retained	Bryozoa
+smithsonius dorothea	bryozoan	bryozoan	yes	high	existing visually distinct group retained	Smithsonius dorothea
+blacktail butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Blacktail Butterflyfish;BlacktailButterflyfish
+bluecheek butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Bluecheek Butterflyfish;BluecheekButterflyfish
+chaetodon capistratus	butterflyfish	fish	yes	high	visual-name rule	Chaetodon capistratus
+chaetodon sedentarius	butterflyfish	fish	yes	high	visual-name rule	Chaetodon sedentarius
+copperband butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Copperband Butterflyfish;CopperbandButterflyfish
+eritrean butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Eritrean Butterflyfish;EritreanButterflyfish
+heniochus varius	butterflyfish	fish	yes	high	visual-name rule	Heniochus Varius;HeniochusVarius
+mirror butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Mirror Butterflyfish;MirrorButterflyfish
+pyramid butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Pyramid Butterflyfish;PyramidButterflyfish
+raccoon butterflyfish	butterflyfish	fish	yes	high	visual-name rule	raccoon butterflyfish;Raccoon Butterflyfish;RaccoonButterflyfish
+saddle butterflyfish	butterflyfish	fish	yes	high	visual-name rule	Saddle Butterflyfish;SaddleButterflyfish
+threadfin butterflyfish	butterflyfish	fish	yes	high	visual-name rule	threadfin butterflyfish;Threadfin Butterflyfish;ThreadfinButterflyfish
+banggai cardinalfish	cardinalfish	fish	yes	high	visual-name rule	Banggai cardinalfish
+cardinalfish	cardinalfish	fish	yes	high	visual-name rule	cardinalfish;Cardinalfish hiding beneath a rocky coral
+asbestopluma	carnivorous sponge	sponge	yes	high	cladorhizid carnivorous-sponge group	Asbestopluma
+asbestopluma monticola	carnivorous sponge	sponge	yes	high	cladorhizid carnivorous-sponge group	Asbestopluma monticola
+asbestopluma rickettsi	carnivorous sponge	sponge	yes	high	cladorhizid carnivorous-sponge group	Asbestopluma rickettsi
+axoniderma kensmithi	carnivorous sponge	sponge	yes	high	cladorhizid carnivorous-sponge group	Axoniderma kensmithi
+cladorhizidae	carnivorous sponge	sponge	yes	high	cladorhizid carnivorous-sponge group	Cladorhizidae
+opsariichthys bidens	carp and minnow	fish	yes	high	visual-name rule	opsariichthys bidens
+white koi carp	carp and minnow	fish	yes	high	visual-name rule	white koi carp
+apristurus brunneus	catshark	shark	yes	high	catshark taxonomy	Apristurus brunneus
+cephalurus cephalus	catshark	shark	yes	high	catshark taxonomy	Cephalurus cephalus
+parmaturus xaniurus	catshark	shark	yes	high	catshark taxonomy	Parmaturus xaniurus
+striped catshark	catshark	shark	yes	high	catshark taxonomy	Striped catshark
+chimaera	chimaera	chimaera	yes	high	existing visually distinct group retained	chimaera
+deep sea chimaera	chimaera	chimaera	yes	high	existing visually distinct group retained	deep-sea chimaera
+harriotta raleighana	chimaera	chimaera	yes	high	existing visually distinct group retained	Harriotta raleighana
+hydrolagus cf. trolli	chimaera	chimaera	yes	high	existing visually distinct group retained	Hydrolagus cf. trolli
+hydrolagus colliei	chimaera	chimaera	yes	high	existing visually distinct group retained	Hydrolagus colliei
+hydrolagus melanophasma	chimaera	chimaera	yes	high	existing visually distinct group retained	Hydrolagus melanophasma
+long nosed chimaera	chimaera	chimaera	yes	high	existing visually distinct group retained	long-nosed chimaera
+chiton	chiton	chiton	yes	high	existing visually distinct group retained	chiton
+neoloricata	chiton	chiton	yes	high	existing visually distinct group retained	Neoloricata
+cnidaria	cnidarian	cnidarian	yes	high	existing visually distinct group retained	Cnidaria
+bathocyroe fosteri	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Bathocyroe fosteri
+beroe	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Beroe
+beroe abyssicola	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Beroe abyssicola
+beroe cucumis	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Beroe cucumis
+beroe forskalii	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Beroe forskalii
+beroe gracilis	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Beroe gracilis
+comb jellyfish	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	translucent comb jellyfish drifts
+ctenophora	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Ctenophora
+cydippida	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Cydippida
+hormiphora californensis	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Hormiphora californensis
+kiyohimea usagi	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Kiyohimea usagi
+lampocteis cruentiventer	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Lampocteis cruentiventer
+lobata	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Lobata
+tjalfiella	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Tjalfiella
+tjalfiellidae	comb jellyfish	comb jellyfish	yes	high	existing visually distinct group retained	Tjalfiellidae
+copepoda	copepod	copepod	yes	high	existing visually distinct group retained	Copepoda
+anthozoa	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Anthozoa
+brain coral	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Brain Coral;BrainCoral
+coral	coral (unspecified)	coral	review	low	source label does not identify coral morphology	coral
+coral garden sea	coral (unspecified)	coral	review	low	source label does not identify coral morphology	CoralGardenSea
+coral hind	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Coral Hind;CoralHind
+elkhorn coral	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Elkhorn Coral;ElkhornCoral
+fan coral	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Fan Coral;FanCoral
+hexacorallia	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Hexacorallia
+keratoisidinae	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Keratoisidinae
+octocorallia	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Octocorallia
+paragorgia sp. 1	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Paragorgia sp. 1
+stolonifera	coral (unspecified)	coral	review	low	source label does not identify coral morphology	Stolonifera
+corallimorpharia	corallimorph	coral	yes	high	corallimorph taxonomy	Corallimorpharia
+corallimorphus	corallimorph	coral	yes	high	corallimorph taxonomy	Corallimorphus
+corallimorphus pilatus	corallimorph	coral	yes	high	corallimorph taxonomy	Corallimorphus pilatus
+brachyura	crab	crab	yes	high	existing visually distinct group retained	Brachyura
+cancer pagurus	crab	crab	yes	high	existing visually distinct group retained	Cancer Pagurus;CancerPagurus
+chionoecetes tanneri	crab	crab	yes	high	existing visually distinct group retained	Chionoecetes tanneri
+chorilia	crab	crab	yes	high	existing visually distinct group retained	Chorilia
+chorilia longipes	crab	crab	yes	high	existing visually distinct group retained	Chorilia longipes
+crab	crab	crab	yes	high	existing visually distinct group retained	blue crab;blue crab navigating a shallow;blue crab walking;brown crab;Calico Box Crab;Calico Crab;Caribbean reef crab;Chinese mitten crab;crab;crab eating little fish;decorator crab blending into;ghost crab;giant hermit crab;Giant Hermit Crab sits;hermit crab;Hermit Crab;hermit crab carrying a borrowed shell;HermitCrab;Japanese spider crab navigating an aquarium;King Crab;KingCrab;panther crab;porcelain crab;red claw crab exploring a freshwater;Red King Crab;Sally Lightfoot crab;Spanner Crab;SpannerCrab;Swimming Crab;SwimmingCrab;velvet crab
+lithodes couesi	crab	crab	yes	high	existing visually distinct group retained	Lithodes couesi
+majidae	crab	crab	yes	high	existing visually distinct group retained	Majidae
+moloha faxoni	crab	crab	yes	high	existing visually distinct group retained	Moloha faxoni
+stenocionops spinimanus	crab	crab	yes	high	existing visually distinct group retained	Stenocionops spinimanus
+crayfish	crayfish	crayfish	yes	high	existing visually distinct group retained	crayfish;CrayFish
+red swamp crayfish navigates the sandy	crayfish	crayfish	yes	high	existing visually distinct group retained	red swamp crayfish navigates the sandy
+vibrant blue crayfish	crayfish	crayfish	yes	high	existing visually distinct group retained	vibrant blue crayfish;vibrant blue crayfish walks
+vividly colored blue crayfish	crayfish	crayfish	yes	high	existing visually distinct group retained	vividly colored blue crayfish
+antedonidae	crinoid	crinoid	yes	high	existing visually distinct group retained	Antedonidae
+antedonoidea sp. 1	crinoid	crinoid	yes	high	existing visually distinct group retained	Antedonoidea sp. 1
+comatulida	crinoid	crinoid	yes	high	existing visually distinct group retained	Comatulida
+crinoid	crinoid	crinoid	yes	high	existing visually distinct group retained	Crinoid
+crinoidea	crinoid	crinoid	yes	high	existing visually distinct group retained	Crinoidea
+fariometra parvula	crinoid	crinoid	yes	high	existing visually distinct group retained	Fariometra parvula
+feather star	crinoid	crinoid	yes	high	existing visually distinct group retained	feather star
+florometra serratissima	crinoid	crinoid	yes	high	existing visually distinct group retained	Florometra serratissima
+hyocrinidae	crinoid	crinoid	yes	high	existing visually distinct group retained	Hyocrinidae
+psathyrometra fragilis	crinoid	crinoid	yes	high	existing visually distinct group retained	Psathyrometra fragilis
+alligator	crocodilian	crocodilian	yes	high	existing visually distinct group retained	alligator
+american crocodile	crocodilian	crocodilian	yes	high	existing visually distinct group retained	American crocodile
+crocodile	crocodilian	crocodilian	yes	high	existing visually distinct group retained	crocodile
+gharial	crocodilian	crocodilian	yes	high	existing visually distinct group retained	gharial
+large saltwater crocodile	crocodilian	crocodilian	yes	high	existing visually distinct group retained	large saltwater crocodile
+saltwater crocodile	crocodilian	crocodilian	yes	high	existing visually distinct group retained	saltwater crocodile walking
+ancylomenes pedersoni	crustacean	crustacean	yes	high	existing visually distinct group retained	ancylomenes pedersoni
+anomura	crustacean	crustacean	yes	high	existing visually distinct group retained	Anomura
+crustacea	crustacean	crustacean	yes	high	existing visually distinct group retained	Crustacea
+decapoda	crustacean	crustacean	yes	high	existing visually distinct group retained	Decapoda
+lithodidae	crustacean	crustacean	yes	high	existing visually distinct group retained	Lithodidae
+neolithodes diomedeae	crustacean	crustacean	yes	high	existing visually distinct group retained	Neolithodes diomedeae
+paralomis	crustacean	crustacean	yes	high	existing visually distinct group retained	Paralomis
+paralomis multispina	crustacean	crustacean	yes	high	existing visually distinct group retained	Paralomis multispina
+paralomis verrilli	crustacean	crustacean	yes	high	existing visually distinct group retained	Paralomis verrilli
+plesionika	crustacean	crustacean	yes	high	existing visually distinct group retained	Plesionika
+cherublemma emmelas	cusk-eel	fish	yes	high	taxonomy family: Ophidiidae	Cherublemma emmelas
+cusk eel	cusk-eel	fish	yes	high	visual-name rule	cusk eel undulates
+eretmichthys pinnatus	cusk-eel	fish	yes	high	taxonomy family: Ophidiidae	Eretmichthys pinnatus
+cuttlefish	cuttlefish	cuttlefish	yes	high	existing visually distinct group retained	Australian giant cuttlefish displaying vibrant patterns;broadclub cuttlefish;broadclub cuttlefish displaying;Broadclub Cuttlefish displaying;broadclub cuttlefish hovers;common cuttlefish;common cuttlefish drifts;common cuttlefish hovers;cuttlefish;Cuttlefish;cuttlefish displaying striking camouflage patterns as;cuttlefish displaying vibrant colors and patterns;cuttlefish hovers;cuttlefish hovers gracefully;flamboyant cuttlefish;flamboyant cuttlefish displaying vibrant colors while;giant australian cuttlefish plays;giant cuttle;giant cuttlefish;giant cuttlefish displaying intricate patterns;giant cuttlefish displaying rich colors as;giant cuttlefish displaying striking white lines;giant cuttlefish displaying vibrant colors;giant cuttlefish displays;giant cuttlefish displays vibrant colors and;GiantCuttlefish;large Australian giant cuttlefish;pharaoh cuttlefish;Pharaoh cuttlefish;pharaoh cuttlefish hovers;sepia;well-camouflaged broadclub cuttlefish blending into the
+amphiprion kirschi	damselfish	fish	yes	high	visual-name rule	amphiprion kirschi
+blacksmith chromis	damselfish	fish	yes	high	visual-name rule	Blacksmith Chromis
+chromis	damselfish	fish	yes	high	visual-name rule	Chromis
+chromis acares	damselfish	fish	yes	high	visual-name rule	chromis acares
+chromis dimidiata	damselfish	fish	yes	high	visual-name rule	Chromis Dimidiata;ChromisDimidiata
+clark's anemonefish	damselfish	fish	yes	high	visual-name rule	Clark's anemonefish;Clark’s anemonefish;Clark's anemonefish nestles;Clark’s anemonefish nestles
+clownfish	damselfish	fish	yes	high	visual-name rule	black clownfish hides;Cinnamon Clownfish;CinnamonClownfish;clownfish;Ocellaris Clownfish;OcellarisClownfish;Orange Skunk Clownfish;OrangeSkunkClownfish;Pink skunk clownfish;Red Sea Clownfish;RedSeaClownfish;tomato clownfish;vibrant clownfish
+dusky damselfish	damselfish	fish	yes	high	visual-name rule	dusky damselfish
+maldives damselfish	damselfish	fish	yes	high	visual-name rule	Maldives Damselfish;MaldivesDamselfish
+pink anemonefish	damselfish	fish	yes	high	visual-name rule	Pink Anemonefish;PinkAnemonefish
+pomacentridae	damselfish	fish	yes	high	taxonomy family: Pomacentridae	Pomacentridae
+pomacentrus sulfureus	damselfish	fish	yes	high	visual-name rule	Pomacentrus Sulfureus;PomacentrusSulfureus
+demospongiae	demosponge	sponge	yes	high	demosponge taxonomy	Demospongiae
+mycale	demosponge	sponge	yes	high	demosponge taxonomy	Mycale
+thenea muricata	demosponge	sponge	yes	high	demosponge taxonomy	Thenea muricata
+atlantic spotted dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	Atlantic spotted dolphin
+bottlenose dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	bottlenose dolphin;Bottlenose dolphin;bottlenose dolphins
+cartoon animated dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	cartoon animated dolphin
+cartoon dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	cartoon dolphin
+common dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	common dolphin
+dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	dolphin;Dolphin
+spinner dolphin	dolphin	dolphin	yes	high	existing visually distinct group retained	spinner dolphin
+pareques umbrosus	drum and croaker	fish	yes	high	taxonomy family: Sciaenidae	Pareques umbrosus
+dugong	dugong	dugong	yes	high	existing visually distinct group retained	dugong;Dugong
+eagle ray	eagle ray	ray	yes	high	distinct eagle-ray body plan	eagle ray gracefully
+spotted eagle ray	eagle ray	ray	yes	high	distinct eagle-ray body plan	spotted eagle ray;spotted eagle ray gracefully;Spotted eagle ray gracefully
+echinoderm	echinoderm	echinoderm	yes	high	existing visually distinct group retained	echinoderm
+eel	eel	eel	yes	high	existing visually distinct group retained	conger eel;eel;European conger eel hovers just;European eel;European eel slithers;FightingEels;giant moray eel;giant moray eel emerges from;giant moray eel emerges from a;giant moray eel emerging from a;giant moray eel hides within a;giant moray eel peeks out from;green moray eel emerges from a;GreenMoreyEel;gulper eel;Highfin Snake Eel partially buried;honeycomb moray eel;honeycomb moray eel peeking out from;honeycomb moray eel peeks out from;honeycomb moray eel weaving;moray eel;Moray Eel;moray eel emerges from a crevice;moray eel peeks out from a;moray eel weaves;moray eels;MorayEel;pale moray eel peeks out from;slender conger eel;spotted garden eel partially emerges from;tiger snake eel
+gymnothorax moringa	eel	eel	yes	high	existing visually distinct group retained	Gymnothorax moringa
+lycenchelys	eel	eel	yes	high	existing visually distinct group retained	Lycenchelys
+lycenchelys crotalinus	eel	eel	yes	high	existing visually distinct group retained	Lycenchelys crotalinus
+lycodapus fierasfer	eel	eel	yes	high	existing visually distinct group retained	Lycodapus fierasfer
+lycodes cortezianus	eel	eel	yes	high	existing visually distinct group retained	Lycodes cortezianus
+lycodes diapterus	eel	eel	yes	high	existing visually distinct group retained	Lycodes diapterus
+nettastoma parviceps	eel	eel	yes	high	existing visually distinct group retained	Nettastoma parviceps
+ophichthus puncticeps	eel	eel	yes	high	existing visually distinct group retained	Ophichthus puncticeps
+ophidiidae	eel	eel	yes	high	existing visually distinct group retained	Ophidiidae
+pachycara bulbiceps	eel	eel	yes	high	existing visually distinct group retained	Pachycara bulbiceps
+spectrunculus grandis	eel	eel	yes	high	existing visually distinct group retained	Spectrunculus grandis
+zoarcidae	eel	eel	yes	high	existing visually distinct group retained	Zoarcidae
+electric ray	electric ray	ray	yes	high	electric-ray taxonomy and body plan	electric ray;Electric Ray;ElectricRay
+pacific electric ray	electric ray	ray	yes	high	electric-ray taxonomy and body plan	Pacific electric ray
+panther electric ray	electric ray	ray	yes	high	electric-ray taxonomy and body plan	panther electric ray
+tetronarce californica	electric ray	ray	yes	high	electric-ray taxonomy and body plan	Tetronarce californica
+angler	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	angler
+animalia	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	Animalia
+character	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	character
+chordata	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	Chordata
+dancing	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	dancing
+deep ocean lost world	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	DeepOceanLostWorld
+defense	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	DefenseInTheSea
+fight to death	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	FightToDeath
+humpbacked	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	humpbacked
+large	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	large
+little monster	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	LittleMonster
+long	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	long
+marine organism	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	marine organism
+mucky secrets	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	MuckySecrets
+object	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	object
+passage	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	ThePassage
+performing	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	performing
+skagerrak	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	Skagerrak
+sofia rocks	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	SofiaRocks
+swallow larvae	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	swallow larvae
+swimming	exclude or review	other or unclear	no	low	non-specific or ambiguous source label	swimming
+bristle tail filefish	filefish	fish	yes	high	visual-name rule	bristle-tail filefish blends into the sandy
+scrawled filefish	filefish	fish	yes	high	visual-name rule	scrawled filefish
+actinopteri	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Actinopteri
+actinopterygii	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Actinopterygii
+african tigerfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	african tigerfish
+alligator gar	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	alligator gar
+atlantic cornetfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	atlantic cornetfish
+atlantic spadefish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Atlantic Spadefish;AtlanticSpadefish
+baldchin groper	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	baldchin groper
+bright orange midas cichlid	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	bright orange midas cichlid
+brilliantly colored mandarin dragonet	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	brilliantly colored mandarin dragonet
+california sheephead	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	California sheephead
+camouflaged bearded spiny devilfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	camouflaged bearded spiny devilfish
+catfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	catfish;electric catfish;estuary catfish;glass catfish;Goliath Catfish;Gulper Catfish;large redtail catfish;sea catfish;spotted electric catfish;Wels Catfish
+cornetfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	cornetfish
+coryphaenoides acrolepis filifer complex	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Coryphaenoides acrolepis-filifer complex
+coryphaenoides armatus yaquinae complex	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Coryphaenoides armatus-yaquinae complex
+crocodilefish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	well-camouflaged crocodilefish
+east star zebrafish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	east star zebrafish
+fisherman	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Fisherman
+fishing	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	fishing
+fishing adventure	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	FishingAdventure
+fluke fishing	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	FlukeFishing
+flying gurnard	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	flying gurnard
+foxface rabbitfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	foxface rabbitfish
+garpike	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	garpike
+golden dorado	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	golden dorado
+goldfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Comet Goldfish;goldfish;purple oranda goldfish
+graysby	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Graysby
+grubfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	grubfish
+grubfish lay motionless	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	grubfish lay motionless
+java rabbitfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Java rabbitfish
+juvenile pale chub	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	juvenile pale chub
+kelp greenling	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	kelp greenling;Kelp Greenling
+large atlantic tarpon	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	large Atlantic tarpon
+large goliath tigerfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	large goliath tigerfish displaying
+large oarfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	large oarfish
+large ocean sunfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	large ocean sunfish;large ocean sunfish drifts
+large striped beakfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	large striped beakfish
+large tigerfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	large tigerfish displaying bold horizontal stripes
+little red coffinfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Little Red Coffinfish
+lunar fusilier	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Lunar Fusilier;LunarFusilier
+moorish idol	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Moorish Idol;MoorishIdol
+moorish idols	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Moorish idols
+new zealand mado	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	New Zealand Mado
+ocean sunfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	ocean sunfish
+pale chub	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	pale chub
+phycis phycish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Phycis phycish undulates
+pinnate spadefish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	pinnate spadefish
+porkfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Porkfish
+rabbitfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	rabbitfish
+rare coelacanth	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	rare coelacanth
+rare deep sea coelacanth	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	rare deep-sea coelacanth
+razorfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	razorfish drifts vertically
+redsea bannerfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Redsea Bannerfish;RedseaBannerfish
+rock greenling	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	rock greenling lies camouflaged against the
+sailfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	sailfish;Sailfish;sailfish displaying
+scissortail sergeant	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Scissortail Sergeant;ScissortailSergeant
+sebastomus complex	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Sebastomus complex
+sleek unicornfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	sleek unicornfish
+slender bluespotted cornetfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	slender bluespotted cornetfish
+slender cornetfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	slender cornetfish
+smallmouth bass	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	smallmouth bass;Smallmouth bass
+spotted drum	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Spotted Drum;SpottedDrum
+striped beakfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	striped beakfish;striped beakfish displaying
+tigerfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	tigerfish
+trumpetfish	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	Trumpetfish;trumpetfish hovers vertically
+vividly patterned orange and white vermilion	fish (unspecified)	fish	review	low	source label lacks a reliable finer visual/taxonomic group	vividly patterned orange and white vermilion
+embassichthys bathybius	flatfish	fish	yes	high	taxonomy family: Pleuronectidae	Embassichthys bathybius
+flatfish	flatfish	fish	yes	high	visual-name rule	flatfish
+flounder	flatfish	fish	yes	high	visual-name rule	flounder;Flounder
+glyptocephalus zachirus	flatfish	fish	yes	high	visual-name rule	Glyptocephalus zachirus
+gulf flounder	flatfish	fish	yes	high	visual-name rule	well-camouflaged gulf flounder
+microstomus pacificus	flatfish	fish	yes	high	visual-name rule	Microstomus pacificus
+peacock flounder	flatfish	fish	yes	high	visual-name rule	peacock flounder;Peacock flounder;peacock flounder blending into the rocky;peacock flounder lies camouflaged;Peacock flounder partially buried
+plaice	flatfish	fish	yes	high	visual-name rule	plaice
+pleuronectiformes	flatfish	fish	yes	medium	taxonomy order: Pleuronectiformes	Pleuronectiformes
+syacium	flatfish	fish	yes	high	visual-name rule	Syacium
+papilloculiceps longiceps	flathead	fish	yes	high	taxonomy family: Platycephalidae	papilloculiceps longiceps
+bathysiphon major	foraminifer	foraminifer	yes	high	existing visually distinct group retained	Bathysiphon major
+psamminidae	foraminifer	foraminifer	yes	high	existing visually distinct group retained	Psamminidae
+psamminidae sp. 1	foraminifer	foraminifer	yes	high	existing visually distinct group retained	Psamminidae sp. 1
+cressi guillaume neri	freediver	human	yes	high	freediver visual role	CressiGuillaumeNeri
+freediver	freediver	human	yes	high	freediver visual role	freediver
+human freediver equipped	freediver	human	yes	high	freediver visual role	human freediver equipped
+wetsuit clad freediver	freediver	human	yes	high	freediver visual role	wetsuit-clad freediver;wetsuit-clad freediver explores a rocky underwater
+wetsuit clad freediver equipped	freediver	human	yes	high	freediver visual role	wetsuit-clad freediver equipped
+antennarius	frogfish	fish	yes	high	visual-name rule	antennarius
+antennarius commerson	frogfish	fish	yes	high	visual-name rule	antennarius commerson
+bright red giant frogfish	frogfish	fish	yes	high	visual-name rule	bright red giant frogfish
+frogfish	frogfish	fish	yes	high	visual-name rule	Frogfish;well-camouflaged frogfish blends into a colorful
+painted frogfish	frogfish	fish	yes	high	visual-name rule	painted frogfish
+striated frogfish	frogfish	fish	yes	high	visual-name rule	striated frogfish camouflaged against a sandy
+warty frogfish	frogfish	fish	yes	high	visual-name rule	warty frogfish camouflaged against a rocky
+bathydorus laevis pseudospinosus	glass sponge	sponge	yes	high	glass-sponge taxonomy	Bathydorus laevis pseudospinosus
+bathydorus laniger	glass sponge	sponge	yes	high	glass-sponge taxonomy	Bathydorus laniger
+bolosoma	glass sponge	sponge	yes	high	glass-sponge taxonomy	Bolosoma
+caulophacus	glass sponge	sponge	yes	high	glass-sponge taxonomy	Caulophacus
+chonelasma	glass sponge	sponge	yes	high	glass-sponge taxonomy	Chonelasma
+docosaccus maculatus	glass sponge	sponge	yes	high	glass-sponge taxonomy	Docosaccus maculatus
+euplectellidae	glass sponge	sponge	yes	high	glass-sponge taxonomy	Euplectellidae
+farrea	glass sponge	sponge	yes	high	glass-sponge taxonomy	Farrea
+farrea occa	glass sponge	sponge	yes	high	glass-sponge taxonomy	Farrea occa
+farreidae	glass sponge	sponge	yes	high	glass-sponge taxonomy	Farreidae
+hertwigia	glass sponge	sponge	yes	high	glass-sponge taxonomy	Hertwigia
+heterochone calyx	glass sponge	sponge	yes	high	glass-sponge taxonomy	Heterochone calyx
+hexactinellida	glass sponge	sponge	yes	high	glass-sponge taxonomy	Hexactinellida
+hyalonema	glass sponge	sponge	yes	high	glass-sponge taxonomy	Hyalonema
+poliopogon	glass sponge	sponge	yes	high	glass-sponge taxonomy	Poliopogon
+regadrella	glass sponge	sponge	yes	high	glass-sponge taxonomy	Regadrella
+rossellidae	glass sponge	sponge	yes	high	glass-sponge taxonomy	Rossellidae
+sclerothamnopsis	glass sponge	sponge	yes	high	glass-sponge taxonomy	Sclerothamnopsis
+sclerothamnus	glass sponge	sponge	yes	high	glass-sponge taxonomy	Sclerothamnus
+staurocalyptus	glass sponge	sponge	yes	high	glass-sponge taxonomy	Staurocalyptus
+staurocalyptus solidus	glass sponge	sponge	yes	high	glass-sponge taxonomy	Staurocalyptus solidus
+walteria	glass sponge	sponge	yes	high	glass-sponge taxonomy	Walteria
+walteria flemmingi	glass sponge	sponge	yes	high	glass-sponge taxonomy	Walteria flemmingi
+upeneus parvus	goatfish	fish	yes	high	taxonomy family: Mullidae	Upeneus parvus
+yellowfin goatfish	goatfish	fish	yes	high	visual-name rule	yellowfin goatfish
+fire dartfish	goby and dartfish	fish	yes	high	visual-name rule	fire dartfish hovers gracefully
+fire goby	goby and dartfish	fish	yes	high	visual-name rule	Fire Goby;FireGoby
+nemateleotris magnifica	goby and dartfish	fish	yes	high	visual-name rule	nemateleotris magnifica
+ptereleotris	goby and dartfish	fish	yes	high	taxonomy family: Microdesmidae	Ptereleotris
+twin spot goby	goby and dartfish	fish	yes	high	visual-name rule	Twin-spot Goby;Twin-spotGoby
+yellow goby	goby and dartfish	fish	yes	high	visual-name rule	yellow goby sheltering
+acanella weberi	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Acanella weberi
+callistephanus kofoidi	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Callistephanus kofoidi
+calyptrophora angularis	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Calyptrophora angularis
+candidella gigantea	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Candidella gigantea
+chrysogorgia	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Chrysogorgia
+chrysogorgia geniculata	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Chrysogorgia geniculata
+chrysogorgiidae	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Chrysogorgiidae
+iridogorgia	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Iridogorgia
+iridogorgia bella	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Iridogorgia bella
+iridogorgia magnispiralis	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Iridogorgia magnispiralis
+isidella	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Isidella
+isidella tentaculum	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Isidella tentaculum
+isididae	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Isididae
+keratoisididae	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Keratoisididae
+keratoisis	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Keratoisis
+lepidisis	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Lepidisis
+metallogorgia melanotrichos	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Metallogorgia melanotrichos
+parastenella	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Parastenella
+pleurogorgia militaris	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Pleurogorgia militaris
+plexauridae	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Plexauridae
+primnoidae	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Primnoidae
+swiftia	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Swiftia
+swiftia kofoidi	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Swiftia kofoidi
+swiftia simplex	gorgonian coral	coral	yes	high	branching fan/whip morphology and taxonomy	Swiftia simplex
+agrammus	greenling	fish	yes	high	taxonomy family: Hexagrammidae	agrammus
+hexagrammos otakii	greenling	fish	yes	high	taxonomy family: Hexagrammidae	hexagrammos otakii
+black grouper	grouper	fish	yes	high	visual-name rule	black grouper
+blackspotted grouper	grouper	fish	yes	high	visual-name rule	blackspotted grouper
+brown marbled grouper	grouper	fish	yes	high	visual-name rule	brown-marbled grouper
+dusky grouper	grouper	fish	yes	high	visual-name rule	dusky grouper
+epinephelus	grouper	fish	yes	high	visual-name rule	Epinephelus
+epinephelus morio	grouper	fish	yes	high	visual-name rule	Epinephelus morio
+giant grouper	grouper	fish	yes	high	visual-name rule	giant grouper;Giant grouper
+grouper	grouper	fish	yes	high	visual-name rule	grouper
+humpback grouper	grouper	fish	yes	high	visual-name rule	Humpback Grouper;HumpbackGrouper
+hyporthodus flavolimbatus	grouper	fish	yes	high	visual-name rule	Hyporthodus flavolimbatus
+large atlantic goliath grouper	grouper	fish	yes	high	visual-name rule	large Atlantic goliath grouper
+large goliath grouper	grouper	fish	yes	high	visual-name rule	large goliath grouper
+malabar grouper	grouper	fish	yes	high	visual-name rule	Malabar grouper emerges from a coral
+massive giant grouper	grouper	fish	yes	high	visual-name rule	massive giant grouper
+mycteroperca interstitialis	grouper	fish	yes	high	visual-name rule	Mycteroperca interstitialis
+mycteroperca microlepis	grouper	fish	yes	high	visual-name rule	Mycteroperca microlepis
+mycteroperca phenax	grouper	fish	yes	high	visual-name rule	Mycteroperca phenax
+nassau grouper	grouper	fish	yes	high	visual-name rule	Nassau grouper
+peacock grouper	grouper	fish	yes	high	visual-name rule	peacock grouper;Peacock Grouper;PeacockGrouper
+potato grouper	grouper	fish	yes	high	visual-name rule	Potato Grouper;PotatoGrouper
+red grouper	grouper	fish	yes	high	visual-name rule	Red Grouper
+redmouth grouper	grouper	fish	yes	high	visual-name rule	Redmouth Grouper;RedmouthGrouper
+spotted grouper	grouper	fish	yes	high	visual-name rule	spotted grouper camouflaged
+strawberry grouper	grouper	fish	yes	high	visual-name rule	strawberry grouper peeks out from beneath
+anyperodon leucogrammicus	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Anyperodon Leucogrammicus;AnyperodonLeucogrammicus
+centropristis ocyurus	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Centropristis ocyurus
+centropristis philadelphica	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Centropristis philadelphica
+dermatolepis inermis	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Dermatolepis inermis
+paranthias furcifer	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Paranthias furcifer
+pronotogrammus martinicensis	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Pronotogrammus martinicensis
+pseudanthias pleurotaenia	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Pseudanthias Pleurotaenia;PseudanthiasPleurotaenia
+serranus annularis	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Serranus annularis
+serranus phoebe	grouper and seabass	fish	yes	high	taxonomy family: Serranidae	Serranus phoebe
+african striped grunt	grunt and sweetlips	fish	yes	high	visual-name rule	African striped grunt
+dotted sweetlips	grunt and sweetlips	fish	yes	high	visual-name rule	dotted sweetlips
+haemulon aurolineatum	grunt and sweetlips	fish	yes	high	visual-name rule	Haemulon aurolineatum
+oriental sweetlips	grunt and sweetlips	fish	yes	high	visual-name rule	oriental sweetlips
+widenose guitarfish	guitarfish	ray	yes	high	distinct shark-like ray body plan	Widenose guitarfish
+eptatretus	hagfish	hagfish	yes	high	existing visually distinct group retained	Eptatretus
+grey hagfish slithers	hagfish	hagfish	yes	high	existing visually distinct group retained	grey hagfish slithers
+hagfish	hagfish	hagfish	yes	high	existing visually distinct group retained	hagfish
+merluccius productus	hake	fish	yes	high	visual-name rule	Merluccius productus
+hammerhead	hammerhead shark	shark	yes	high	distinct hammer-shaped head	hammerhead
+sphyrna lewini	hammerhead shark	shark	yes	high	distinct hammer-shaped head	Sphyrna lewini
+dendrophylliidae	hard coral	coral	yes	high	stony-coral taxonomy/visual form	Dendrophylliidae
+enallopsammia rostrata	hard coral	coral	yes	high	stony-coral taxonomy/visual form	Enallopsammia rostrata
+scleractinia	hard coral	coral	yes	high	stony-coral taxonomy/visual form	Scleractinia
+paguroidea	hermit crab	hermit crab	yes	high	existing visually distinct group retained	Paguroidea
+pagurus tanneri	hermit crab	hermit crab	yes	high	existing visually distinct group retained	Pagurus tanneri
+horseshoe crab	horseshoe crab	horseshoe crab	yes	high	existing visually distinct group retained	horseshoe crab
+two horseshoe crabs are seen	horseshoe crab	horseshoe crab	yes	high	existing visually distinct group retained	Two horseshoe crabs are seen moving
+grey smooth hound	houndshark	shark	yes	high	houndshark visual/taxonomic group	grey smooth-hound
+japanese topeshark	houndshark	shark	yes	high	houndshark visual/taxonomic group	japanese topeshark
+animated human character	human depiction	human	review	medium	non-photographic human depiction	animated human character
+cartoon girl	human depiction	human	review	medium	non-photographic human depiction	cartoon girl
+hydractiniidae	hydroid	hydroid	yes	high	existing visually distinct group retained	Hydractiniidae
+hydroid	hydroid	hydroid	yes	high	existing visually distinct group retained	hydroid
+hydroidolina	hydroid	hydroid	yes	high	existing visually distinct group retained	Hydroidolina
+aglantha digitale	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Aglantha digitale
+benthocodon	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Benthocodon
+benthocodon pedunculata	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Benthocodon pedunculata
+colobonema sericeum	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Colobonema sericeum
+crossota alba	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Crossota alba
+crossota millsae	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Crossota millsae
+halicreas	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Halicreas
+haliscera bigelowi	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Haliscera bigelowi
+haliscera conica	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Haliscera conica
+halitrephes maasi	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Halitrephes maasi
+hydromedusae	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: hydromedusae	Hydromedusae
+hydrozoa	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: hydrozoa	Hydrozoa
+melicertum octocostatum	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Melicertum octocostatum
+mitrocoma	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Mitrocoma
+mitrocoma cellularia	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Mitrocoma cellularia
+modeeria	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Modeeria
+modeeria rotunda	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Modeeria rotunda
+narcomedusae	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Narcomedusae	Narcomedusae
+pantachogon	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Pantachogon
+phialidium	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Phialidium
+ptychogastria polaris	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Ptychogastria polaris
+ptychogena	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Ptychogena
+ptychogena hyperborea	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Ptychogena hyperborea
+ptychogena lactea	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Leptothecata	Ptychogena lactea
+rhopalonematidae	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Rhopalonematidae
+solmaris	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Narcomedusae	Solmaris
+solmissus	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Narcomedusae	Solmissus
+solmissus incisa	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Narcomedusae	Solmissus incisa
+trachymedusae	hydromedusa	jellyfish	yes	high	hydrozoan medusa group: Trachymedusae	Trachymedusae
+acanthamunnopsis milleri	isopod	isopod	yes	high	existing visually distinct group retained	Acanthamunnopsis milleri
+isopod	isopod	isopod	yes	high	existing visually distinct group retained	isopod
+isopoda	isopod	isopod	yes	high	existing visually distinct group retained	Isopoda
+munnopsidae	isopod	isopod	yes	high	existing visually distinct group retained	Munnopsidae
+vanhoeffenura pulchra	isopod	isopod	yes	high	existing visually distinct group retained	Vanhoeffenura pulchra
+alectis ciliaris	jack and trevally	fish	yes	high	taxonomy family: Carangidae	Alectis ciliaris
+bigeye trevally	jack and trevally	fish	yes	high	visual-name rule	Bigeye trevally
+bluefin trevally	jack and trevally	fish	yes	high	visual-name rule	bluefin trevally
+caranx crysos	jack and trevally	fish	yes	high	visual-name rule	Caranx crysos
+caranx ignobilis	jack and trevally	fish	yes	high	visual-name rule	caranx ignobilis
+giant trevally	jack and trevally	fish	yes	high	visual-name rule	giant trevally
+golden trevally	jack and trevally	fish	yes	high	visual-name rule	golden trevally
+highfin amberjack	jack and trevally	fish	yes	high	visual-name rule	Highfin Amberjack
+seriola	jack and trevally	fish	yes	high	visual-name rule	Seriola
+seriola dumerili	jack and trevally	fish	yes	high	visual-name rule	Seriola dumerili
+seriola rivoliana	jack and trevally	fish	yes	high	visual-name rule	Seriola rivoliana
+jellyfish	jellyfish (mixed/unspecified)	jellyfish	review	low	one aggregated row contains several jellyfish forms	Aegina;Aegina citrea;Aegina rosea;Aegina sp. 1;blue jellyfish;Deepstaria jellyfish drifts gracefully;Flame Jellyfish;Fried Egg Jellyfish;FriedEggJellyfish;jellyfish;large blue jellyfish;large lion's mane jellyfish;large lion's mane jellyfish drifts gracefully;Lion's Mane Jellyfish;lion's mane jellyfish drifts;lion's mane jellyfish drifts gracefully;LionSManeJellyfish;lone Flame Jellyfish gracefully drifts;medusa;moon jellyfish;Moon Jellyfish;moon jellyfish drifts gracefully;MoonJellyfish;purple-striped jellyfish drifts gracefully;spotted jellyfish drifts gently;spotted jellyfish drifts gracefully;translucent box jellyfish drifting;translucent box jellyfish drifts;translucent Deepstaria jellyfish drifts slowly;translucent jellyfish drifts slowly;translucent lion's mane jellyfish drifts;translucent moon jellyfish;translucent moon jellyfish drifts gracefully;vibrant lion's mane jellyfish;vibrant purple jellyfish drifts gracefully;vibrant sea nettle jellyfish drifts gracefully;white upside-down jellyfish
+euphausiacea	krill	krill	yes	high	existing visually distinct group retained	Euphausiacea
+lamprey	lamprey	lamprey	yes	high	existing visually distinct group retained	lamprey
+toy lamprey	lamprey	lamprey	yes	high	existing visually distinct group retained	toy lamprey
+velvet belly lanternshark	lanternshark	shark	yes	high	deep-sea lanternshark group	velvet belly lanternshark
+appendicularia	larvacean	larvacean	yes	high	existing visually distinct group retained	Appendicularia
+ascidian larvacean	larvacean	larvacean	yes	high	existing visually distinct group retained	ascidian larvacean
+bathochordaeus	larvacean	larvacean	yes	high	existing visually distinct group retained	Bathochordaeus;Bathochordaeus charon;Bathochordaeus mcnutti;Bathochordaeus stygius
+larvacean	larvacean	larvacean	yes	high	existing visually distinct group retained	larvacean
+american lobster	lobster	lobster	yes	high	existing visually distinct group retained	American lobster
+caribbean spiny lobster	lobster	lobster	yes	high	existing visually distinct group retained	Caribbean spiny lobster;Caribbean spiny lobster hiding;Caribbean spiny lobsters
+european lobster	lobster	lobster	yes	high	existing visually distinct group retained	European lobster
+homarus	lobster	lobster	yes	high	existing visually distinct group retained	Homarus
+large california spiny lobster	lobster	lobster	yes	high	existing visually distinct group retained	large California spiny lobster
+lobster	lobster	lobster	yes	high	existing visually distinct group retained	lobster;Lobsters
+norway lobster	lobster	lobster	yes	high	existing visually distinct group retained	Norway lobster
+spiny lobster	lobster	lobster	yes	high	existing visually distinct group retained	spiny lobster;Spiny Lobster;spiny lobster sheltering beneath a rocky;SpinyLobster
+manatee	manatee	manatee	yes	high	existing visually distinct group retained	manatee;Manatee;solitary manatee;West Indian manatee;West Indian manatee calf;West Indian manatee calmly;West Indian manatee slowly
+west indian manatees	manatee	manatee	yes	high	existing visually distinct group retained	West Indian manatees
+giant manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	giant manta ray;giant manta ray gracefully
+graceful manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	graceful manta ray
+graceful reef manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	graceful reef manta ray
+large manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	large manta ray;large manta ray gracefully
+manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	manta ray;Manta Ray;manta ray gracefully;MantaRay
+manta rescue	manta ray	ray	yes	high	distinct manta-ray body plan	MantaRescue
+reef manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	reef manta ray gracefully
+solitary manta ray	manta ray	ray	yes	high	distinct manta-ray body plan	solitary manta ray soars gracefully
+brilliantly colored peacock mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	brilliantly colored peacock mantis shrimp peers
+colorful peacock mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	colorful peacock mantis shrimp stands alert
+mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	mantis shrimp;Mantis Shrimp;MantisShrimp
+vibrant peacock mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	vibrant peacock mantis shrimp;vibrant peacock mantis shrimp peeks out
+vibrantly colored peacock mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	vibrantly colored peacock mantis shrimp;vibrantly colored peacock mantis shrimp exploring
+vividly colored mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	vividly colored mantis shrimp peering out
+vividly colored peacock mantis shrimp	mantis shrimp	mantis shrimp	yes	high	existing visually distinct group retained	vividly colored peacock mantis shrimp peers
+boots	marine debris	marine debris	yes	high	existing visually distinct group retained	Boots
+can	marine debris	marine debris	yes	high	existing visually distinct group retained	Can
+glass bottle	marine debris	marine debris	yes	high	existing visually distinct group retained	Glass Bottle;GlassBottle
+glasses	marine debris	marine debris	yes	high	existing visually distinct group retained	Glasses
+phone	marine debris	marine debris	yes	high	existing visually distinct group retained	Phone
+plastic bag	marine debris	marine debris	yes	high	existing visually distinct group retained	Plastic Bag;PlasticBag
+plastic bottle	marine debris	marine debris	yes	high	existing visually distinct group retained	Plastic Bottle;PlasticBottle
+plastic box	marine debris	marine debris	yes	high	existing visually distinct group retained	Plastic Box;PlasticBox
+plastic cup	marine debris	marine debris	yes	high	existing visually distinct group retained	Plastic Cup;PlasticCup
+surgical mask	marine debris	marine debris	yes	high	existing visually distinct group retained	Surgical Mask;SurgicalMask
+tyre	marine debris	marine debris	yes	high	existing visually distinct group retained	Tyre
+marine iguana	marine iguana	marine iguana	yes	high	existing visually distinct group retained	marine iguana
+male mermaid performer	mermaid performer	human	yes	high	costumed underwater performer	male mermaid performer
+mermaid	mermaid performer	human	yes	high	costumed underwater performer	mermaid;Mermaid
+mermaid performer	mermaid performer	human	yes	high	costumed underwater performer	mermaid performer
+person dressed as a merman	mermaid performer	human	yes	high	costumed underwater performer	person dressed as a merman
+boreomysis	mysid	mysid	yes	high	existing visually distinct group retained	Boreomysis
+boreomysis californica	mysid	mysid	yes	high	existing visually distinct group retained	Boreomysis californica
+mysida	mysid	mysid	yes	high	existing visually distinct group retained	Mysida
+mysidacea	mysid	mysid	yes	high	existing visually distinct group retained	Mysidacea
+mysidae	mysid	mysid	yes	high	existing visually distinct group retained	Mysidae
+chambered nautilus	nautilus	nautilus	yes	high	existing visually distinct group retained	Chambered Nautilus
+nautilus	nautilus	nautilus	yes	high	existing visually distinct group retained	Nautilus
+slender needlefish	needlefish and halfbeak	fish	yes	high	visual-name rule	slender needlefish
+nudibranch	nudibranch	nudibranch	yes	high	existing visually distinct group retained	brightly colored chromodoris nudibranch;colorful blue dragon nudibranch;colorful blue-speckled nudibranch;colorful Chromodoris nudibranch;colorful Hypselodoris infucata nudibranch;colorful nudibranch;colorful purple-spotted nudibranch;golden-brown nudibranch;Halgerda batangas nudibranch camouflaged;Hypselodoris nudibranch nudibranch;Jorunna funebris nudibranch;Pikachu nudibranch;strikingly dark nudibranch;Tambja morosa nudibranch;turtle-looking nudibranch;vibrant Nembrotha kubaryana nudibranch;vibrant purple and white nudibranch;vibrant Spanish dancer nudibranch undulates gracefully;vibrant Thecacera pacifica nudibranch;vibrant yellow Thecacera pacifica nudibranch;vibrantly colored nudibranch;vividly colored Blue Dragon nudibranch;vividly colored Chromodoris africana nudibranch
+tritonia tetraquetra	nudibranch	nudibranch	yes	high	existing visually distinct group retained	Tritonia tetraquetra
+big blue octopus	octopus	octopus	yes	high	existing visually distinct group retained	Big Blue Octopus
+blue ringed octopus	octopus	octopus	yes	high	existing visually distinct group retained	blue-ringed octopus;Blue-ringed Octopus;Blue-ringedOctopus
+caribbean reef octopus	octopus	octopus	yes	high	existing visually distinct group retained	well-camouflaged Caribbean reef octopus
+clever octopus	octopus	octopus	yes	high	existing visually distinct group retained	CleverOctopus
+coconut octopus	octopus	octopus	yes	high	existing visually distinct group retained	coconut octopus;coconut octopus blending into the sandy;coconut octopus sheltering;coconut octopus sits partially sheltered;CoconutOctopus
+coconut octopus using	octopus	octopus	yes	high	existing visually distinct group retained	coconut octopus using
+coconut octopus using seashells as shelter	octopus	octopus	yes	high	existing visually distinct group retained	coconut octopus using seashells as shelter
+common octopus	octopus	octopus	yes	high	existing visually distinct group retained	common octopus;Common octopus;Common Octopus;common octopus blending into the rocky;Common Octopus camouflaged against a rocky;common octopus displaying pale coloration and;common octopus explores the sandy seafloor;common octopus gracefully propels itself;CommonOctopus;well-camouflaged Common octopus
+common octopus camouflages	octopus	octopus	yes	high	existing visually distinct group retained	common octopus camouflages against a rocky
+common octopus clings to a rocky	octopus	octopus	yes	high	existing visually distinct group retained	common octopus clings to a rocky
+common octopus expertly	octopus	octopus	yes	high	existing visually distinct group retained	common octopus expertly camouflaged
+common octopusnestled	octopus	octopus	yes	high	existing visually distinct group retained	common octopusnestled
+dumbo octopus	octopus	octopus	yes	high	existing visually distinct group retained	dumbo octopus;Dumbo Octopus;Dumbo octopus hovers;dumbo octopus hovers gracefully;DumboOctopus
+enteroctopus dofleini	octopus	octopus	yes	high	existing visually distinct group retained	Enteroctopus dofleini
+giant pacific octopus	octopus	octopus	yes	high	existing visually distinct group retained	Giant Pacific Octopus runs
+graneledone boreopacifica	octopus	octopus	yes	high	existing visually distinct group retained	Graneledone boreopacifica
+kleptopus	octopus	octopus	yes	high	existing visually distinct group retained	Kleptopus
+mimetic octopus	octopus	octopus	yes	high	existing visually distinct group retained	mimetic octopus
+mimic octopus	octopus	octopus	yes	high	existing visually distinct group retained	mimic octopus displaying;mimic octopus displays
+muusoctopus robustus	octopus	octopus	yes	high	existing visually distinct group retained	Muusoctopus robustus
+octopodidae	octopus	octopus	yes	high	existing visually distinct group retained	Octopodidae
+octopus	octopus	octopus	yes	high	existing visually distinct group retained	octopus;Octopus
+octopus californicus	octopus	octopus	yes	high	existing visually distinct group retained	Octopus californicus
+octopus oculifer	octopus	octopus	yes	high	existing visually distinct group retained	octopus oculifer
+octopus rubescens	octopus	octopus	yes	high	existing visually distinct group retained	Octopus rubescens
+opisthoteuthis cf. californiana	octopus	octopus	yes	high	existing visually distinct group retained	Opisthoteuthis cf. californiana
+ornate octopus	octopus	octopus	yes	high	existing visually distinct group retained	ornate octopus
+pacific red octopus	octopus	octopus	yes	high	existing visually distinct group retained	Pacific red octopus
+reef octopus	octopus	octopus	yes	high	existing visually distinct group retained	reef octopus blends into the rocky;well-camouflaged Reef octopus lies motionless
+small reef octopus	octopus	octopus	yes	high	existing visually distinct group retained	small reef octopus displaying mottled brown
+anoplogaster cornuta	other Anoplogastridae fish	fish	yes	medium	taxonomy family fallback: Anoplogastridae	Anoplogaster cornuta
+anotopterus nikparini	other Anotopteridae fish	fish	yes	medium	taxonomy family fallback: Anotopteridae	Anotopterus nikparini
+pseudobathylagus milleri	other Bathylagidae fish	fish	yes	medium	taxonomy family fallback: Bathylagidae	Pseudobathylagus milleri
+bathysaurus mollis	other Bathysauridae fish	fish	yes	medium	taxonomy family fallback: Bathysauridae	Bathysaurus mollis
+cataetyx	other Bythitidae fish	fish	yes	medium	taxonomy family fallback: Bythitidae	Cataetyx
+cetostoma regani	other Cetomimidae fish	fish	yes	medium	taxonomy family fallback: Cetomimidae	Cetostoma regani
+antimora microlepis	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Antimora microlepis
+coelorinchus scaphopsis	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Coelorinchus scaphopsis
+coryphaenoides	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Coryphaenoides
+coryphaenoides acrolepis	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Coryphaenoides acrolepis
+coryphaenoides armatus	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Coryphaenoides armatus
+macrouridae	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Macrouridae
+phycis phycis	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Phycis phycis
+physiculus rastrelliger	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Physiculus rastrelliger
+urophycis regia	other cod-like fish	fish	yes	medium	taxonomy order: Gadiformes	Urophycis regia
+bathycongrus macrurus	other Congridae fish	fish	yes	medium	taxonomy family fallback: Congridae	Bathycongrus macrurus
+lrj complex	other jellyfish	jellyfish	review	medium	specific jellyfish name without a supported major split	LRJ complex
+pacific sea nettle	other jellyfish	jellyfish	review	medium	specific jellyfish name without a supported major split	Pacific sea nettle drifts gracefully
+myctophidae	other Myctophidae fish	fish	yes	medium	taxonomy family fallback: Myctophidae	Myctophidae
+asthenactis fisheri	other Myxasteridae fish	fish	yes	medium	taxonomy family fallback: Myxasteridae	Asthenactis fisheri
+ballistic missile	other object	other object	yes	high	existing visually distinct group retained	BallisticMissile
+black stone	other object	other object	yes	high	existing visually distinct group retained	black stone blending
+coin	other object	other object	yes	high	existing visually distinct group retained	Coin
+gun	other object	other object	yes	high	existing visually distinct group retained	Gun
+heart shape	other object	other object	yes	high	existing visually distinct group retained	HeartShape
+ocean floor sensor	other object	other object	yes	high	existing visually distinct group retained	OceanFloorSensor
+ring	other object	other object	yes	high	existing visually distinct group retained	Ring
+statue	other object	other object	yes	high	existing visually distinct group retained	Statue
+stone	other object	other object	yes	high	existing visually distinct group retained	stone
+macropinna microstoma	other Opisthoproctidae fish	fish	yes	medium	taxonomy family fallback: Opisthoproctidae	Macropinna microstoma
+anthiadidae	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Anthiadidae
+callionymidae	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Callionymidae
+caulolatilus chrysops	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Caulolatilus chrysops
+caulolatilus cyanops	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Caulolatilus cyanops
+caulolatilus microps	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Caulolatilus microps
+enoplosus armatus	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Enoplosus Armatus;EnoplosusArmatus
+icichthys lockingtoni	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Icichthys lockingtoni
+kali kerberti	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Kali kerberti
+malacanthus plumieri	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Malacanthus plumieri
+priacanthus arenatus	other perch-like fish	fish	yes	medium	taxonomy order: Perciformes	Priacanthus arenatus
+scopelarchus	other Scopelarchidae fish	fish	yes	medium	taxonomy family fallback: Scopelarchidae	Scopelarchus
+anoplopoma fimbria	other scorpaeniform fish	fish	yes	medium	taxonomy order: Scorpaeniformes	Anoplopoma fimbria
+careproctus kamikawai	other scorpaeniform fish	fish	yes	medium	taxonomy order: Scorpaeniformes	Careproctus kamikawai
+careproctus melanurus	other scorpaeniform fish	fish	yes	medium	taxonomy order: Scorpaeniformes	Careproctus melanurus
+liparidae	other scorpaeniform fish	fish	yes	medium	taxonomy order: Scorpaeniformes	Liparidae
+psychrolutes phrictus	other scorpaeniform fish	fish	yes	medium	taxonomy order: Scorpaeniformes	Psychrolutes phrictus
+acanthascinae	other sponge	sponge	review	medium	specific sponge without a supported visual group	Acanthascinae
+bolosominae	other sponge	sponge	review	medium	specific sponge without a supported visual group	Bolosominae
+corbitellinae	other sponge	sponge	review	medium	specific sponge without a supported visual group	Corbitellinae
+hyalonema (corynonema) populiferum	other sponge	sponge	review	medium	specific sponge without a supported visual group	Hyalonema (Corynonema) populiferum
+hyalonema (oonema) bianchoratum	other sponge	sponge	review	medium	specific sponge without a supported visual group	Hyalonema (Oonema) bianchoratum
+latrunculia (latrunculia) austini	other sponge	sponge	review	medium	specific sponge without a supported visual group	Latrunculia (Latrunculia) austini
+mycale sp. 1	other sponge	sponge	review	medium	specific sponge without a supported visual group	Mycale sp. 1
+mola	other tetraodontiform fish	fish	yes	medium	taxonomy order: Tetraodontiformes	Mola
+mola mola	other tetraodontiform fish	fish	yes	medium	taxonomy order: Tetraodontiformes	Mola mola
+desmodema lorum	other Trachipteridae fish	fish	yes	medium	taxonomy family fallback: Trachipteridae	Desmodema lorum
+trachipterus altivelis	other Trachipteridae fish	fish	yes	medium	taxonomy family fallback: Trachipteridae	Trachipterus altivelis
+otter	otter	otter	yes	high	existing visually distinct group retained	otter
+young sea otter	otter	otter	yes	high	existing visually distinct group retained	young sea otter
+blue parrotfish	parrotfish	fish	yes	high	visual-name rule	Blue Parrotfish;BlueParrotfish
+japanese parrotfish	parrotfish	fish	yes	high	visual-name rule	Japanese parrotfish
+large humphead parrotfish	parrotfish	fish	yes	high	visual-name rule	large humphead parrotfish
+parrotfish	parrotfish	fish	yes	high	visual-name rule	parrotfish displaying
+redlip parrotfish	parrotfish	fish	yes	high	visual-name rule	Redlip Parrotfish
+scarus rubroviolaceus	parrotfish	fish	yes	high	visual-name rule	scarus rubroviolaceus
+stoplight parrotfish	parrotfish	fish	yes	high	visual-name rule	Stoplight Parrotfish;StoplightParrotfish
+african penguin	penguin	penguin	yes	high	existing visually distinct group retained	African penguin
+penguin	penguin	penguin	yes	high	existing visually distinct group retained	penguin;Penguin
+person	person (unspecified)	human	review	low	generic person label	person
+person wearing	person (unspecified)	human	review	low	generic person label	person wearing
+woman	person (unspecified)	human	review	low	generic person label	woman
+ornate ghost pipefish	pipefish and sea dragon	fish	yes	high	visual-name rule	ornate ghost pipefish camouflaged
+piaractus brachypomus	piranha and pacu	fish	yes	high	visual-name rule	piaractus brachypomus
+red bellied piranha	piranha and pacu	fish	yes	high	visual-name rule	red-bellied piranha
+aulosphaera	plankton	plankton	yes	high	existing visually distinct group retained	Aulosphaera
+hastigerinella digitata	plankton	plankton	yes	high	existing visually distinct group retained	Hastigerinella digitata
+radiozoa	plankton	plankton	yes	high	existing visually distinct group retained	Radiozoa
+porcupinefish	porcupinefish	fish	yes	high	visual-name rule	porcupinefish;Porcupinefish;porcupinefish hovers;porcupinefish nestles under a rocky ledge
+spiny porcupinefish	porcupinefish	fish	yes	high	visual-name rule	spiny porcupinefish shelters under a rocky
+spot fin porcupinefish	porcupinefish	fish	yes	high	visual-name rule	Spot-fin Porcupinefish sitting
+spotted porcupinefish	porcupinefish	fish	yes	high	visual-name rule	spotted porcupinefish
+blackspotted puffer	pufferfish	fish	yes	high	visual-name rule	Blackspotted Puffer;BlackspottedPuffer
+blackspotted pufferfish	pufferfish	fish	yes	high	visual-name rule	blackspotted pufferfish
+dog faced puffer	pufferfish	fish	yes	high	visual-name rule	dog-faced puffer
+narrow lined puffer	pufferfish	fish	yes	high	visual-name rule	narrow-lined puffer
+narrow lined pufferfish	pufferfish	fish	yes	high	visual-name rule	Narrow-lined pufferfish;Narrow-lined Pufferfish
+pufferfish	pufferfish	fish	yes	high	visual-name rule	pufferfish
+spotted pufferfish	pufferfish	fish	yes	high	visual-name rule	spotted pufferfish
+white spotted pufferfish	pufferfish	fish	yes	high	visual-name rule	white-spotted pufferfish
+remora	remora	fish	yes	high	visual-name rule	remora
+carcharhinus	requiem shark	shark	yes	high	requiem-shark taxonomy	Carcharhinus
+carcharhinus falciformis	requiem shark	shark	yes	high	requiem-shark taxonomy	Carcharhinus falciformis
+marbled rockfish	rockfish	fish	yes	high	visual-name rule	marbled rockfish
+saddle brown rockfish	rockfish	fish	yes	high	visual-name rule	saddle brown rockfish
+sebastes	rockfish	fish	yes	high	visual-name rule	Sebastes
+sebastes aurora	rockfish	fish	yes	high	visual-name rule	Sebastes aurora
+sebastes babcocki	rockfish	fish	yes	high	visual-name rule	Sebastes babcocki
+sebastes chlorostictus	rockfish	fish	yes	high	visual-name rule	Sebastes chlorostictus
+sebastes cortezi	rockfish	fish	yes	high	visual-name rule	Sebastes cortezi
+sebastes diploproa	rockfish	fish	yes	high	visual-name rule	Sebastes diploproa
+sebastes elongatus	rockfish	fish	yes	high	visual-name rule	Sebastes elongatus
+sebastes jordani	rockfish	fish	yes	high	visual-name rule	Sebastes jordani
+sebastes melanostomus	rockfish	fish	yes	high	visual-name rule	Sebastes melanostomus
+sebastes saxicola	rockfish	fish	yes	high	visual-name rule	Sebastes saxicola
+sebastidae	rockfish	fish	yes	high	taxonomy family: Sebastidae	Sebastidae
+sebastolobus	rockfish	fish	yes	high	taxonomy family: Sebastidae	Sebastolobus
+sebastolobus alascanus	rockfish	fish	yes	high	taxonomy family: Sebastidae	Sebastolobus alascanus
+sebastolobus altivelis	rockfish	fish	yes	high	taxonomy family: Sebastidae	Sebastolobus altivelis
+blueye remotely operated underwater vehicle	ROV	underwater vehicle	yes	high	remotely operated underwater vehicle	Blueye remotely operated underwater vehicle explores
+remotely operated vehicle (rov)	ROV	underwater vehicle	yes	high	remotely operated underwater vehicle	Remotely Operated Vehicle (ROV)
+research rov equipped	ROV	underwater vehicle	yes	high	remotely operated underwater vehicle	research ROV equipped
+rov	ROV	underwater vehicle	yes	high	remotely operated underwater vehicle	ROV
+small underwater remotely operated vehicle illuminates	ROV	underwater vehicle	yes	high	remotely operated underwater vehicle	small underwater remotely operated vehicle illuminates
+small burmese trout	salmon and trout	fish	yes	high	visual-name rule	small Burmese Trout
+pyrosoma	salp	salp	yes	high	existing visually distinct group retained	Pyrosoma
+pyrosoma atlanticum	salp	salp	yes	high	existing visually distinct group retained	Pyrosoma atlanticum
+salp	salp	salp	yes	high	existing visually distinct group retained	salp
+salp chain	salp	salp	yes	high	existing visually distinct group retained	salp chain
+salpa	salp	salp	yes	high	existing visually distinct group retained	Salpa
+salpida	salp	salp	yes	high	existing visually distinct group retained	Salpida
+salpidae	salp	salp	yes	high	existing visually distinct group retained	Salpidae
+vitreosalpa gemini	salp	salp	yes	high	existing visually distinct group retained	Vitreosalpa gemini
+sawfish	sawfish	ray	yes	high	distinct saw-like rostrum	sawfish;Sawfish
+smalltooth sawfish	sawfish	ray	yes	high	distinct saw-like rostrum	smalltooth sawfish
+acesta	scallop	scallop	yes	high	existing visually distinct group retained	Acesta
+delectopecten	scallop	scallop	yes	high	existing visually distinct group retained	Delectopecten
+pectinidae	scallop	scallop	yes	high	existing visually distinct group retained	Pectinidae
+scallop	scallop	scallop	yes	high	existing visually distinct group retained	scallop;Scallop
+bathypterois	scorpionfish	fish	yes	high	visual-name rule	Bathypterois
+bathypterois pectinatus	scorpionfish	fish	yes	high	visual-name rule	Bathypterois pectinatus
+devil scorpionfish	scorpionfish	fish	yes	high	visual-name rule	devil scorpionfish
+dwarf lionfish	scorpionfish	fish	yes	high	visual-name rule	dwarf lionfish displaying
+lionfish	scorpionfish	fish	yes	high	visual-name rule	lionfish;Lionfish;lionfish displaying;lionfish displays;lionfish hovers;Lionfish sitting
+pontinus furcirhinus	scorpionfish	fish	yes	high	taxonomy family: Scorpaenidae	Pontinus furcirhinus
+red lionfish	scorpionfish	fish	yes	high	visual-name rule	red lionfish;red lionfish displaying
+red scorpionfish	scorpionfish	fish	yes	high	visual-name rule	well-camouflaged red scorpionfish
+reef stonefish	scorpionfish	fish	yes	high	visual-name rule	well-camouflaged reef stonefish blends seamlessly
+scorpaena scrofa	scorpionfish	fish	yes	high	visual-name rule	scorpaena scrofa
+scorpaenidae	scorpionfish	fish	yes	high	taxonomy family: Scorpaenidae	Scorpaenidae
+scorpionfish	scorpionfish	fish	yes	high	visual-name rule	scorpionfish;well-camouflaged scorpionfish
+small dwarf lionfish	scorpionfish	fish	yes	high	visual-name rule	small dwarf lionfish displaying vibrant pectoral
+stonefish	scorpionfish	fish	yes	high	visual-name rule	stonefish;well-camouflaged stonefish
+striking lionfish	scorpionfish	fish	yes	high	visual-name rule	striking lionfish;striking lionfish displaying
+striking red lionfish	scorpionfish	fish	yes	high	visual-name rule	striking red lionfish
+vividly striped lionfish	scorpionfish	fish	yes	high	visual-name rule	vividly striped lionfish;vividly striped lionfish displaying
+diver	scuba diver	human	yes	high	scuba-diver visual role	Diver;diving;female diver;human diver;Human diver;human diver explores an underwater environment;Human diver gracefully;human diver hovers;lone diver;scuba diver;scuba diver equipped;Scuba diver equipped;scuba diver explores a vibrant coral;scuba diver explores an underwater structure;scuba diver explores the cockpit of;scuba diver exploring a rocky underwater;scuba diver exploring a vibrant underwater;scuba diver exploring the ocean floor;scuba diver hovers;solitary diver smoothly;wetsuit-clad diver;wetsuit-clad diver explores a rocky;wetsuit-clad diver gracefully explores the underwater;wetsuit-clad diver wearing goggles;wetsuit-clad scuba diver
+scuba diverexplores an artificial reef structure	scuba diver	human	yes	high	scuba-diver visual role	scuba diverexplores an artificial reef structure
+scuba diving	scuba diver	human	yes	high	scuba-diver visual role	ScubaDiving
+bathyphellia australis	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Bathyphellia australis
+bolocera	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Bolocera
+bolocera kensmithi	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Bolocera kensmithi
+dofleinia	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Dofleinia
+hormathiidae	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Hormathiidae
+hormathiidae sp. 1	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Hormathiidae sp. 1
+iosactis vagabunda	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Iosactis vagabunda
+isosicyonis	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Isosicyonis
+liponema	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Liponema
+liponema brevicorne	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Liponema brevicorne
+metridium farcimen	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Metridium farcimen
+paraphelliactis pabista	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Paraphelliactis pabista
+sea anemone	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Actinernus;actiniaria;Actiniaria;Actiniidae sp. 1;Actinoscyphia;Actinostolidae;Actinostoloidea;Sea Anemone;SeaAnemone
+sicyonis	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Sicyonis
+stomphia	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Stomphia
+stomphia didemon	sea anemone	sea anemone	yes	high	existing visually distinct group retained	Stomphia didemon
+abyssocucumis abyssorum	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Abyssocucumis abyssorum
+apostichopus leukothele	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Apostichopus leukothele
+benthothuria	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Benthothuria
+elpidia	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Elpidia
+elpidia sp. a	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Elpidia sp. A
+elpidiidae	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Elpidiidae
+hansenothuria	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Hansenothuria
+holothurian	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	holothurian
+holothuroidea	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Holothuroidea
+holothuroidea sp. 3	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Holothuroidea sp. 3
+laetmogonidae	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Laetmogonidae
+oneirophanta mutabilis complex	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Oneirophanta mutabilis complex
+paelopatides	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Paelopatides
+paelopatides confundens	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Paelopatides confundens
+pannychia	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Pannychia
+pannychia moseleyi	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Pannychia moseleyi
+pannychia sp. 1	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Pannychia sp. 1
+peniagone	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone
+peniagone gracilis	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone gracilis
+peniagone papillata	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone papillata
+peniagone sp. 1	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone sp. 1
+peniagone sp. 2	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone sp. 2
+peniagone sp. a	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone sp. A
+peniagone vitrea	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone vitrea
+peniagone vitrea sp. 1 complex	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Peniagone vitrea- sp. 1 complex
+psolidae	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Psolidae
+psolus squamatus	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Psolus squamatus
+psychropotes sp. 1	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Psychropotes sp. 1
+scotoplanes	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Scotoplanes
+scotoplanes globosa	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Scotoplanes globosa
+scotoplanes sp. a	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Scotoplanes sp. A
+sea cucumber	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	sea cucumber;Sea Cucumber;SeaCucumber
+synallactes	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Synallactes
+synallactidae	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Synallactidae
+synallactidae gen. et sp. indet	sea cucumber	sea cucumber	yes	high	existing visually distinct group retained	Synallactidae gen. et sp. indet.
+australian sea lion	sea lion	sea lion	yes	high	existing visually distinct group retained	Australian sea lion sits upright
+california sea lion	sea lion	sea lion	yes	high	existing visually distinct group retained	California sea lion;California sea lion gracefully
+california sea lions	sea lion	sea lion	yes	high	existing visually distinct group retained	California sea lions partially emerges from
+playful california sea lion	sea lion	sea lion	yes	high	existing visually distinct group retained	playful California sea lion
+sea lion	sea lion	sea lion	yes	high	existing visually distinct group retained	sea lion;Sea Lion;SeaLion
+zalophus californianus	sea lion	sea lion	yes	high	existing visually distinct group retained	Zalophus californianus
+acanthoptilum	sea pen	sea pen	yes	high	existing visually distinct group retained	Acanthoptilum
+funiculina	sea pen	sea pen	yes	high	existing visually distinct group retained	Funiculina
+funiculina balticina complex	sea pen	sea pen	yes	high	existing visually distinct group retained	Funiculina-Balticina complex
+funiculina halipteris complex	sea pen	sea pen	yes	high	existing visually distinct group retained	Funiculina-Halipteris complex
+kophobelemnon sp. 1	sea pen	sea pen	yes	high	existing visually distinct group retained	Kophobelemnon sp. 1
+pennatula	sea pen	sea pen	yes	high	existing visually distinct group retained	Pennatula
+pennatula phosphorea	sea pen	sea pen	yes	high	existing visually distinct group retained	Pennatula phosphorea
+pennatulacea	sea pen	sea pen	yes	high	existing visually distinct group retained	Pennatulacea
+pennatuloidea	sea pen	sea pen	yes	high	existing visually distinct group retained	Pennatuloidea
+sea pen	sea pen	sea pen	yes	high	existing visually distinct group retained	sea pen
+umbellula	sea pen	sea pen	yes	high	existing visually distinct group retained	Umbellula
+umbellula lindahli	sea pen	sea pen	yes	high	existing visually distinct group retained	Umbellula lindahli
+umbellula sp. 1	sea pen	sea pen	yes	high	existing visually distinct group retained	Umbellula sp. 1
+umbellula sp. 2	sea pen	sea pen	yes	high	existing visually distinct group retained	Umbellula sp. 2
+hemiptripterus villosus	sea raven	fish	yes	high	taxonomy family: Hemitripteridae	hemiptripterus villosus
+sea slug	sea slug	sea slug	yes	high	existing visually distinct group retained	sea slug;Sea Slug;SeaSlug
+striped sea hare	sea slug	sea slug	yes	high	existing visually distinct group retained	striped sea hare
+abalone	sea snail	sea snail	yes	high	existing visually distinct group retained	Abalone
+akoya platinum	sea snail	sea snail	yes	high	existing visually distinct group retained	Akoya platinum
+amphora	sea snail	sea snail	yes	high	existing visually distinct group retained	Amphora
+bathybembix	sea snail	sea snail	yes	high	existing visually distinct group retained	Bathybembix
+buccinidae	sea snail	sea snail	yes	high	existing visually distinct group retained	Buccinidae
+buccinoidea	sea snail	sea snail	yes	high	existing visually distinct group retained	Buccinoidea
+calliostoma	sea snail	sea snail	yes	high	existing visually distinct group retained	Calliostoma
+clio pyramidata	sea snail	sea snail	yes	high	existing visually distinct group retained	Clio pyramidata
+corolla	sea snail	sea snail	yes	high	existing visually distinct group retained	Corolla
+deep sea carinaria	sea snail	sea snail	yes	high	existing visually distinct group retained	deep sea Carinaria gracefully drifts
+gastropoda	sea snail	sea snail	yes	high	existing visually distinct group retained	Gastropoda
+neptunea	sea snail	sea snail	yes	high	existing visually distinct group retained	Neptunea
+neptunea buccinum complex	sea snail	sea snail	yes	high	existing visually distinct group retained	Neptunea-Buccinum Complex
+notobranchaea grandis	sea snail	sea snail	yes	high	existing visually distinct group retained	Notobranchaea grandis
+procymbulia	sea snail	sea snail	yes	high	existing visually distinct group retained	Procymbulia
+queen conch	sea snail	sea snail	yes	high	existing visually distinct group retained	Queen Conch;QueenConch
+sea snail	sea snail	sea snail	yes	high	existing visually distinct group retained	sea snail
+spider conch	sea snail	sea snail	yes	high	existing visually distinct group retained	spider conch
+triton's trumpet	sea snail	sea snail	yes	high	existing visually distinct group retained	Triton's Trumpet;TritonSTrumpet
+australian blacksnake	sea snake	sea snake	yes	high	existing visually distinct group retained	australian blacksnake
+banded sea krait	sea snake	sea snake	yes	high	existing visually distinct group retained	banded sea krait
+banded sea krait slithers	sea snake	sea snake	yes	high	existing visually distinct group retained	banded sea krait slithers gracefully across
+banded sea snake fighting	sea snake	sea snake	yes	high	existing visually distinct group retained	banded sea snake fighting
+red sea reptile	sea snake	sea snake	yes	high	existing visually distinct group retained	RedSeaReptile
+sea snake	sea snake	sea snake	yes	high	existing visually distinct group retained	sea snake
+snake	sea snake	sea snake	yes	high	existing visually distinct group retained	Snake
+colossendeidae	sea spider	sea spider	yes	high	existing visually distinct group retained	Colossendeidae
+colossendeis	sea spider	sea spider	yes	high	existing visually distinct group retained	Colossendeis
+pycnogonida	sea spider	sea spider	yes	high	existing visually distinct group retained	Pycnogonida
+sea spider	sea spider	sea spider	yes	high	existing visually distinct group retained	sea spider
+aporocidaris milleri	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Aporocidaris milleri
+cystechinus loveni	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Cystechinus loveni
+cystocrepis setigera	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Cystocrepis setigera
+echinocrepis rostrata	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Echinocrepis rostrata
+echinoidea	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Echinoidea
+echinothuriidae	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Echinothuriidae
+echinus	sea urchin	sea urchin	yes	high	existing visually distinct group retained	echinus
+sea urchin	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Sea Urchin;SeaUrchin
+strongylocentrotus fragilis	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Strongylocentrotus fragilis
+tromikosoma panamense	sea urchin	sea urchin	yes	high	existing visually distinct group retained	Tromikosoma panamense
+urchin	sea urchin	sea urchin	yes	high	existing visually distinct group retained	urchin
+giant sea bass	seabass	fish	yes	high	visual-name rule	giant sea bass
+black sea bream	seabream and porgy	fish	yes	high	visual-name rule	black sea bream
+black seabream lingers	seabream and porgy	fish	yes	high	visual-name rule	black seabream lingers
+calamus leucosteus	seabream and porgy	fish	yes	high	taxonomy family: Sparidae	Calamus leucosteus
+calamus nodosus	seabream and porgy	fish	yes	high	taxonomy family: Sparidae	Calamus nodosus
+pagrus pagrus	seabream and porgy	fish	yes	high	taxonomy family: Sparidae	Pagrus pagrus
+stenotomus caprinus	seabream and porgy	fish	yes	high	taxonomy family: Sparidae	Stenotomus caprinus
+camouflaged pygmy seahorse clings to a	seahorse	seahorse	yes	high	existing visually distinct group retained	camouflaged pygmy seahorse clings to a
+hippocampus	seahorse	seahorse	yes	high	existing visually distinct group retained	Hippocampus
+leafy sea dragon	seahorse	seahorse	yes	high	existing visually distinct group retained	leafy sea dragon drifts;leafy seadragon camouflaged
+longsnout seahorse camouflages	seahorse	seahorse	yes	high	existing visually distinct group retained	longsnout seahorse camouflages
+pygmy seahorse	seahorse	seahorse	yes	high	existing visually distinct group retained	pygmy seahorse
+sea dragon	seahorse	seahorse	yes	high	existing visually distinct group retained	Sea Dragon;SeaDragon
+seahorse	seahorse	seahorse	yes	high	existing visually distinct group retained	seahorse
+seahorse clings to a textured underwater	seahorse	seahorse	yes	high	existing visually distinct group retained	seahorse clings to a textured underwater
+seahorse clings to underwater seagrass	seahorse	seahorse	yes	high	existing visually distinct group retained	seahorse clings to underwater seagrass
+spiny seahorse	seahorse	seahorse	yes	high	existing visually distinct group retained	spiny seahorse blends into a sandy
+yellow pygmy seahorse	seahorse	seahorse	yes	high	existing visually distinct group retained	yellow pygmy seahorse
+yellow seahorse clings vertically to the	seahorse	seahorse	yes	high	existing visually distinct group retained	yellow seahorse clings vertically to the
+seal	seal	seal	yes	high	existing visually distinct group retained	ElephantSeals;grey seal;harbor seal;seal;Seal;spotted seal
+shark	shark (mixed/unspecified)	shark	review	low	one aggregated source row contains multiple shark types	angel shark;angel shark lies camouflaged against the;animated shark;basking shark;blacktip reef shark;bluntnose sixgill shark;Brownbanded Bamboo Shark;bull shark;Bull Shark patrols a rocky reef;Bullhead Shark;BullheadShark;caribbean reef shark;Caribbean reef shark;cartoon shark;cat shark;common blacktip shark;Galapagos shark;great hammerhead shark;great white shark;Great white shark;Great White Shark;great white shark approaches and investigates;GreatWhiteShark;grey reef shark;gummy shark;hammerhead shark;Hammerhead Shark;HammerheadShark;harpy shark;horn shark;juvenile blacktip reef shark;lantern shark;large great hammerhead shark;large sixgill shark;large tiger shark;large whale shark;lemon shark;leopard shark;massive whale shark;nurse shark;oceanic whitetip shark;oceanic whitetip shark cruising;prickly shark;robust bull shark;robust lemon shark;sand tiger shark;sandbar shark;sawtooth shark;scalloped hammerhead shark;Scalloped hammerhead shark;shark;SharkCloseCall;SharkSuckers;silky shark;sixgill shark;Sixgill shark;sixgill shark cruises slowly;tasseled wobbegong shark;tasseled wobbegong shark blends seamlessly into;Thresher Shark;ThresherShark;tiger shark;well-camouflaged wobbegong shark;whale shark;Whale shark;Whale Shark;WhaleShark;WhiteShark;whitetip reef shark;wobbegong shark;zebra shark
+anchor	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Anchor
+over board valve	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Over Board Valve;OverBoardValve
+propeller	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Propeller
+sea chest grating	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Sea Chest Grating;SeaChestGrating
+ship's anode	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Ship's Anode;ShipSAnode
+ship's wheel	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Ship's Wheel;ShipSWheel
+shipwreck	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Shipwreck
+spherical pressure hull of the historic	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	spherical pressure hull of the historic
+submarine pipeline	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Submarine Pipeline;SubmarinePipeline
+wrecked aircraft	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Wrecked Aircraft;WreckedAircraft
+wrecked car	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Wrecked Car;WreckedCar
+wrecked tank	shipwreck structure	shipwreck structure	yes	high	existing visually distinct group retained	Wrecked Tank;WreckedTank
+acanthephyra	shrimp	shrimp	yes	high	existing visually distinct group retained	Acanthephyra
+caridea	shrimp	shrimp	yes	high	existing visually distinct group retained	Caridea
+cerataspis monstrosus	shrimp	shrimp	yes	high	existing visually distinct group retained	Cerataspis monstrosus
+common prawn	shrimp	shrimp	yes	high	existing visually distinct group retained	Common Prawn;CommonPrawn
+eualus macrophthalmus	shrimp	shrimp	yes	high	existing visually distinct group retained	Eualus macrophthalmus
+eusergestes similis	shrimp	shrimp	yes	high	existing visually distinct group retained	Eusergestes similis
+glyphocrangon vicaria	shrimp	shrimp	yes	high	existing visually distinct group retained	Glyphocrangon vicaria
+hairy armored shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	hairy armored shrimp
+hymenodora	shrimp	shrimp	yes	high	existing visually distinct group retained	Hymenodora
+hymenodora frontalis	shrimp	shrimp	yes	high	existing visually distinct group retained	Hymenodora frontalis
+large tadpole shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	large tadpole shrimp
+light pink hairy armored shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	light pink hairy armored shrimp walking
+pandalidae	shrimp	shrimp	yes	high	existing visually distinct group retained	Pandalidae
+pandalopsis ampla	shrimp	shrimp	yes	high	existing visually distinct group retained	Pandalopsis ampla
+pandalus amplus	shrimp	shrimp	yes	high	existing visually distinct group retained	Pandalus amplus
+pandalus platyceros	shrimp	shrimp	yes	high	existing visually distinct group retained	Pandalus platyceros
+pasiphaea	shrimp	shrimp	yes	high	existing visually distinct group retained	Pasiphaea
+prawn	shrimp	shrimp	yes	high	existing visually distinct group retained	prawn
+sergestidae	shrimp	shrimp	yes	high	existing visually distinct group retained	Sergestidae
+shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	shrimp
+shrimp goby	shrimp	shrimp	yes	high	existing visually distinct group retained	shrimp goby hovers watchfully
+shrimpfish	shrimp	shrimp	yes	high	existing visually distinct group retained	shrimpfish
+squat anenome shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	squat anenome shrimp
+systellaspis	shrimp	shrimp	yes	high	existing visually distinct group retained	Systellaspis
+tadpole shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	tadpole shrimp
+tadpole shrimp close to the sandy	shrimp	shrimp	yes	high	existing visually distinct group retained	tadpole shrimp close to the sandy
+tadpole shrimp scurries	shrimp	shrimp	yes	high	existing visually distinct group retained	tadpole shrimp scurries
+tadpole shrimp scuttles	shrimp	shrimp	yes	high	existing visually distinct group retained	tadpole shrimp scuttles
+translucent ghost shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	translucent ghost shrimp
+vividly striped tiger shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	vividly striped tiger shrimp
+white and transparent shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	white and transparent shrimp
+whiteleg shrimp	shrimp	shrimp	yes	high	existing visually distinct group retained	whiteleg shrimp
+apolemia	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Apolemia
+apolemia lanosa	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Apolemia lanosa
+bargmannia elongata	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Bargmannia elongata
+bargmannia lata	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Bargmannia lata
+benthic siphonophore	siphonophore	siphonophore	yes	high	existing visually distinct group retained	benthic siphonophore
+calycophorae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Calycophorae
+chuniphyes moserae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Chuniphyes moserae
+chuniphyes multidentata	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Chuniphyes multidentata
+clausophyes	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Clausophyes
+clausophyes moserae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Clausophyes moserae
+craseoa lathetica	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Craseoa lathetica
+desmophyes annectens	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Desmophyes annectens
+desmophyes haematogaster	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Desmophyes haematogaster
+erenna	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Erenna
+erenna cornuta	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Erenna cornuta
+erenna laciniata	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Erenna laciniata
+erenna richardi	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Erenna richardi
+erenna sirena	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Erenna sirena
+forskalia	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Forskalia
+frillagalma vityazi	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Frillagalma vityazi
+kephyes ovata	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Kephyes ovata
+lensia conoidea	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Lensia conoidea
+lilyopsis fluoracantha	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Lilyopsis fluoracantha
+lychnagalma	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Lychnagalma
+lychnagalma utricularia	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Lychnagalma utricularia
+marrus claudanielis	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Marrus claudanielis
+marrus orthocanna	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Marrus orthocanna
+nanomia	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Nanomia
+nanomia bijuga	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Nanomia bijuga
+physonectae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Physonectae
+physophora hydrostatica	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Physophora hydrostatica
+praya dubia	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Praya dubia
+prayidae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Prayidae
+rhodaliidae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Rhodaliidae
+rosacea	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Rosacea
+siphonophorae	siphonophore	siphonophore	yes	high	existing visually distinct group retained	siphonophorae;Siphonophorae
+siphonophore	siphonophore	siphonophore	yes	high	existing visually distinct group retained	siphonophore
+sphaeronectes haddocki	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Sphaeronectes haddocki
+tottonophyes enigmatica	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Tottonophyes enigmatica
+vogtia	siphonophore	siphonophore	yes	high	existing visually distinct group retained	Vogtia
+bathyraja	skate	ray	yes	high	skate taxonomy and body plan	Bathyraja;Bathyraja abyssicola;Bathyraja kincaidii;Bathyraja microtrachys;Bathyraja spinosissima;Bathyraja trachura
+beringraja rhina	skate	ray	yes	high	skate taxonomy and body plan	Beringraja rhina
+raja porosa	skate	ray	yes	high	skate taxonomy and body plan	raja porosa
+rajiformes	skate	ray	yes	high	skate taxonomy and body plan	Rajiformes
+australasian snapper	snapper	fish	yes	high	visual-name rule	australasian snapper;Australasian snapper
+bluestripe snapper	snapper	fish	yes	high	visual-name rule	bluestripe snapper
+large mangrove snapper	snapper	fish	yes	high	visual-name rule	large mangrove snapper
+lutjanus apodus	snapper	fish	yes	high	visual-name rule	Lutjanus apodus
+lutjanus griseus	snapper	fish	yes	high	visual-name rule	Lutjanus griseus
+lutjanus synagris	snapper	fish	yes	high	visual-name rule	Lutjanus synagris
+pristipomoides	snapper	fish	yes	high	visual-name rule	Pristipomoides
+rhomboplites aurorubens	snapper	fish	yes	high	visual-name rule	Rhomboplites aurorubens
+snorkeler	snorkeler	human	yes	high	snorkeler visual role	snorkeler
+wetsuit clad snorkeler	snorkeler	human	yes	high	snorkeler visual role	wetsuit-clad snorkeler;wetsuit-clad snorkeler gracefully descends into the
+acanthogorgia	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Acanthogorgia
+alcyonacea	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Alcyonacea
+anthomastus	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Anthomastus
+clavularia	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Clavularia
+coralliidae	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Coralliidae
+corallium	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Corallium
+gersemia juliepackardae	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Gersemia juliepackardae
+heteropolypus	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Heteropolypus
+heteropolypus ritteri	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Heteropolypus ritteri
+malacalcyonacea	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Malacalcyonacea
+paragorgia	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Paragorgia
+paragorgia arborea	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Paragorgia arborea
+paragorgia yutlinux	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Paragorgia yutlinux
+paragorgiidae	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Paragorgiidae
+scleralcyonacea	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Scleralcyonacea
+sibogagorgia cauliflora	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Sibogagorgia cauliflora
+soft coral	soft coral	coral	yes	high	soft-coral taxonomy/visual form	soft coral
+victorgorgia alba	soft coral	coral	yes	high	soft-coral taxonomy/visual form	Victorgorgia alba
+porifera	sponge (unspecified)	sponge	review	low	generic sponge label	Porifera
+sponge	sponge (unspecified)	sponge	review	low	generic sponge label	sponge;Sponge
+galatheidae	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Galatheidae
+galatheoidea	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Galatheoidea
+hairy squat lobster clings to a	squat lobster	squat lobster	yes	high	existing visually distinct group retained	hairy squat lobster clings to a
+munida	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Munida
+munida bapensis	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Munida bapensis
+munidopsis	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Munidopsis
+munidopsis depressa	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Munidopsis depressa
+munidopsis kensmithi	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Munidopsis kensmithi
+munidopsis sp. 1	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Munidopsis sp. 1
+pleuroncodes planipes	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Pleuroncodes planipes
+squat lobster	squat lobster	squat lobster	yes	high	existing visually distinct group retained	squat lobster
+sternostylus perarmatus	squat lobster	squat lobster	yes	high	existing visually distinct group retained	Sternostylus perarmatus
+tiny purple hairy squat lobster	squat lobster	squat lobster	yes	high	existing visually distinct group retained	tiny purple hairy squat lobster
+abraliopsis	squid	squid	yes	high	existing visually distinct group retained	Abraliopsis
+bathyteuthis berryi	squid	squid	yes	high	existing visually distinct group retained	Bathyteuthis berryi
+chiroteuthis calyx	squid	squid	yes	high	existing visually distinct group retained	Chiroteuthis calyx
+cranchia scabra	squid	squid	yes	high	existing visually distinct group retained	Cranchia scabra
+doryteuthis (amerigo) opalescens	squid	squid	yes	high	existing visually distinct group retained	Doryteuthis (Amerigo) opalescens
+dosidicus gigas	squid	squid	yes	high	existing visually distinct group retained	Dosidicus gigas
+galiteuthis pacifica	squid	squid	yes	high	existing visually distinct group retained	Galiteuthis pacifica
+galiteuthis phyllura	squid	squid	yes	high	existing visually distinct group retained	Galiteuthis phyllura
+gonatopsis	squid	squid	yes	high	existing visually distinct group retained	Gonatopsis
+gonatopsis borealis	squid	squid	yes	high	existing visually distinct group retained	Gonatopsis borealis
+gonatopsis octopedatus	squid	squid	yes	high	existing visually distinct group retained	Gonatopsis octopedatus
+gonatus	squid	squid	yes	high	existing visually distinct group retained	Gonatus
+gonatus berryi	squid	squid	yes	high	existing visually distinct group retained	Gonatus berryi
+gonatus onyx	squid	squid	yes	high	existing visually distinct group retained	Gonatus onyx
+grimalditeuthis	squid	squid	yes	high	existing visually distinct group retained	Grimalditeuthis
+grimalditeuthis bonplandi	squid	squid	yes	high	existing visually distinct group retained	Grimalditeuthis bonplandi
+helicocranchia	squid	squid	yes	high	existing visually distinct group retained	Helicocranchia
+histioteuthis heteropsis	squid	squid	yes	high	existing visually distinct group retained	Histioteuthis heteropsis
+leachia danae	squid	squid	yes	high	existing visually distinct group retained	Leachia danae
+magnapinna pacifica	squid	squid	yes	high	existing visually distinct group retained	Magnapinna pacifica
+onykia robusta	squid	squid	yes	high	existing visually distinct group retained	Onykia robusta
+planctoteuthis	squid	squid	yes	high	existing visually distinct group retained	Planctoteuthis
+planctoteuthis danae	squid	squid	yes	high	existing visually distinct group retained	Planctoteuthis danae
+planctoteuthis oligobessa	squid	squid	yes	high	existing visually distinct group retained	Planctoteuthis oligobessa
+squid	squid	squid	yes	high	existing visually distinct group retained	chameleon squid;ColourChangingSquid;Common European Squid;flame squid;longfin reef squid;small bottletail squid;squid;Squid;transparent piglet squid drifts;vampire squid
+stigmatoteuthis dofleini	squid	squid	yes	high	existing visually distinct group retained	Stigmatoteuthis dofleini
+taonius	squid	squid	yes	high	existing visually distinct group retained	Taonius
+taonius borealis	squid	squid	yes	high	existing visually distinct group retained	Taonius borealis
+teuthoidea	squid	squid	yes	high	existing visually distinct group retained	Teuthoidea
+vampyroteuthis infernalis	squid	squid	yes	high	existing visually distinct group retained	Vampyroteuthis infernalis
+holocentrus adscensionis	squirrelfish	fish	yes	high	visual-name rule	Holocentrus adscensionis
+vibrant red squirrelfish	squirrelfish	fish	yes	high	visual-name rule	vibrant red squirrelfish
+acanthaster planci	starfish	starfish	yes	high	existing visually distinct group retained	Acanthaster planci
+asteroidea	starfish	starfish	yes	high	existing visually distinct group retained	Asteroidea
+asthenactis	starfish	starfish	yes	high	existing visually distinct group retained	Asthenactis
+benthopecten	starfish	starfish	yes	high	existing visually distinct group retained	Benthopecten
+brisingida	starfish	starfish	yes	high	existing visually distinct group retained	Brisingida
+brisingidae	starfish	starfish	yes	high	existing visually distinct group retained	Brisingidae
+chocolate chip sea star	starfish	starfish	yes	high	existing visually distinct group retained	chocolate chip sea star
+crossaster	starfish	starfish	yes	high	existing visually distinct group retained	Crossaster
+crossaster borealis	starfish	starfish	yes	high	existing visually distinct group retained	Crossaster borealis
+goniasteridae	starfish	starfish	yes	high	existing visually distinct group retained	Goniasteridae
+hippasteria	starfish	starfish	yes	high	existing visually distinct group retained	Hippasteria
+hippasteria californica	starfish	starfish	yes	high	existing visually distinct group retained	Hippasteria californica
+hippasteria lepidonotus	starfish	starfish	yes	high	existing visually distinct group retained	Hippasteria lepidonotus
+hippasteria muscipula	starfish	starfish	yes	high	existing visually distinct group retained	Hippasteria muscipula
+hymenaster	starfish	starfish	yes	high	existing visually distinct group retained	Hymenaster
+linckia laevigata	starfish	starfish	yes	high	existing visually distinct group retained	Linckia Laevigata;LinckiaLaevigata
+lophaster	starfish	starfish	yes	high	existing visually distinct group retained	Lophaster
+luidia foliolata	starfish	starfish	yes	high	existing visually distinct group retained	Luidia foliolata
+mediaster	starfish	starfish	yes	high	existing visually distinct group retained	Mediaster
+mediaster aequalis	starfish	starfish	yes	high	existing visually distinct group retained	Mediaster aequalis
+oreaster reticulatus	starfish	starfish	yes	high	existing visually distinct group retained	Oreaster Reticulatus;OreasterReticulatus
+paxillosida	starfish	starfish	yes	high	existing visually distinct group retained	Paxillosida
+pedicellasteridae	starfish	starfish	yes	high	existing visually distinct group retained	Pedicellasteridae
+protoreaster nodosus	starfish	starfish	yes	high	existing visually distinct group retained	Protoreaster Nodosus;ProtoreasterNodosus
+pteraster	starfish	starfish	yes	high	existing visually distinct group retained	Pteraster
+pterasteridae	starfish	starfish	yes	high	existing visually distinct group retained	Pterasteridae
+pythonaster	starfish	starfish	yes	high	existing visually distinct group retained	Pythonaster
+rathbunaster californicus	starfish	starfish	yes	high	existing visually distinct group retained	Rathbunaster californicus
+sea star	starfish	starfish	yes	high	existing visually distinct group retained	sea star
+solaster	starfish	starfish	yes	high	existing visually distinct group retained	Solaster
+solaster hypothrissus	starfish	starfish	yes	high	existing visually distinct group retained	Solaster hypothrissus
+solasteridae	starfish	starfish	yes	high	existing visually distinct group retained	Solasteridae
+starfish	starfish	starfish	yes	high	existing visually distinct group retained	starfish
+stylasterias forreri	starfish	starfish	yes	high	existing visually distinct group retained	Stylasterias forreri
+zoroasteridae	starfish	starfish	yes	high	existing visually distinct group retained	Zoroasteridae
+bluespotted ribbontail ray	stingray	ray	yes	high	stingray visual-name group	blue-spotted ribbontail ray;bluespotted ribbontail ray;bluespotted ribbontail ray gracefully;Bluespotted ribbontail ray sheltering under a
+bluespotted stingray	stingray	ray	yes	high	stingray visual-name group	bluespotted stingray
+cowtail stingray	stingray	ray	yes	high	stingray visual-name group	cow-tail stingray;Cowtail Stingray
+dark spotted stingray	stingray	ray	yes	high	stingray visual-name group	dark-spotted stingray
+large southern stingray	stingray	ray	yes	high	stingray visual-name group	large southern stingray
+large stingray	stingray	ray	yes	high	stingray visual-name group	large stingray
+ocellate river stingray	stingray	ray	yes	high	stingray visual-name group	ocellate river stingray
+southern stingray	stingray	ray	yes	high	stingray visual-name group	southern stingray;southern stingray gracefully;Southern Stingray gracefully;southern stingray lying flat
+stingray	stingray	ray	yes	high	stingray visual-name group	stingray;stingray gracefully
+whiptail stingray	stingray	ray	yes	high	stingray visual-name group	whiptail stingray
+yellow spotted stingray	stingray	ray	yes	high	stingray visual-name group	Yellow Spotted Stingray
+chinese paddlefish	sturgeon and paddlefish	fish	yes	high	visual-name rule	chinese paddlefish
+paddlefish	sturgeon and paddlefish	fish	yes	high	visual-name rule	paddlefish
+polyodon spathula	sturgeon and paddlefish	fish	yes	high	visual-name rule	polyodon spathula
+russian sturgeon	sturgeon and paddlefish	fish	yes	high	visual-name rule	Russian sturgeon
+sturgeon	sturgeon and paddlefish	fish	yes	high	visual-name rule	sturgeon
+black submarine	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	black submarine
+large black submarine	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	large black submarine
+military submarine	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	Military Submarines;MilitarySubmarines
+minisub	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	minisub
+personal submarine	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	Personal Submarines;PersonalSubmarines
+small white submarine	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	small white submarine explores a clear
+small white submarine cruising	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	small white submarine cruising just
+small white submarine navigating	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	small white submarine navigating just
+submarine	submarine and submersible	underwater vehicle	yes	high	crewed or submarine-form vehicle	submarine;Submarine
+achilles tang	surgeonfish	fish	yes	high	visual-name rule	Achilles Tang;AchillesTang
+convict surgeonfish	surgeonfish	fish	yes	high	visual-name rule	Convict Surgeonfish;ConvictSurgeonfish
+fish	surgeonfish	fish	yes	high	visual-name rule	broom fish;cartoon fish;cobia fish;colorful koi fish;deep sea fish;deep-sea rattail fish;DeepSeaFish;fighting fish;fish;jawless fish;MississippiFish;Moorish idol fish;orange koi fish;Oscar fish;Red Paradise Fish;sea fish;sea wolf fish;Sheepshead fish;speckled turbot fish;sucker fish;turbot fish;Twotone Tang fish;vibrant blue and red betta fish;vibrant white and red koi fish;well-camouflaged cabezon fish;well-camouflaged sargassum fish
+lined surgeonfish	surgeonfish	fish	yes	high	visual-name rule	Lined Surgeonfish;LinedSurgeonfish
+orange band surgeonfish	surgeonfish	fish	yes	high	visual-name rule	Orange-band Surgeonfish;Orange-bandSurgeonfish
+powder blue tang	surgeonfish	fish	yes	high	visual-name rule	Powder Blue Tang;PowderBlueTang
+red sea sailfin tang	surgeonfish	fish	yes	high	visual-name rule	red sea sailfin tang
+regal blue tang	surgeonfish	fish	yes	high	visual-name rule	Regal Blue Tang;RegalBlueTang
+sailfin tang	surgeonfish	fish	yes	high	visual-name rule	sailfin tang
+sohal surgeonfish	surgeonfish	fish	yes	high	visual-name rule	Sohal Surgeonfish;SohalSurgeonfish
+vibrant palette surgeonfish	surgeonfish	fish	yes	high	visual-name rule	vibrant palette surgeonfish
+vibrant sohal surgeonfish	surgeonfish	fish	yes	high	visual-name rule	vibrant sohal surgeonfish
+whitecheek surgeonfish	surgeonfish	fish	yes	high	visual-name rule	Whitecheek Surgeonfish;WhitecheekSurgeonfish
+whitespotted surgeonfish	surgeonfish	fish	yes	high	visual-name rule	Whitespotted Surgeonfish;WhitespottedSurgeonfish
+yellowfin surgeonfish	surgeonfish	fish	yes	high	visual-name rule	yellowfin surgeonfish;Yellowfin Surgeonfish
+girl wearing goggles and a swimsuit	swimmer	human	yes	high	swimmer visual role	girl wearing goggles and a swimsuit
+swimmer	swimmer	human	yes	high	swimmer visual role	competitive swimmer;competitive swimmer streamlined underwater;human swimmer;swimmer;Swimmer;swimmer practicing;swimmer practicing freestyle;swimmer practicing freestyle stroke without kicking;swimmer practicing streamlined underwater strokes;swimmer practicing the breaststroke kick;swimmer practicing the breaststroke under clear;swimmer propelling;swimmer uses a blue kickboard to;swimmer using a blue kickboard practices;swimmer wearing a;swimmer wearing a full body black;swimmer wearing a red;swimmer wearing a white cap and;swimmer wearing a yellow;swimmer wearing goggles and;young swimmer practicing freestyle strokes
+brazilian tapir	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	Brazilian tapir walks gracefully
+capybara	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	capybara;capybara walks calmly
+cheetah	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	cheetah
+emperor scorpion	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	Emperor Scorpion
+ice bear	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	ice bear
+jaguar	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	jaguar
+platypus	terrestrial animal	terrestrial animal	yes	high	existing visually distinct group retained	platypus
+balistes capriscus	triggerfish	fish	yes	high	visual-name rule	Balistes capriscus
+black triggerfish	triggerfish	fish	yes	high	visual-name rule	black triggerfish
+clown triggerfish	triggerfish	fish	yes	high	visual-name rule	clown triggerfish
+gray triggerfish	triggerfish	fish	yes	high	visual-name rule	gray triggerfish
+titan triggerfish	triggerfish	fish	yes	high	visual-name rule	titan triggerfish
+titan triggerfish forages	triggerfish	fish	yes	high	visual-name rule	titan triggerfish forages
+atolla	true jellyfish	jellyfish	yes	high	jellyfish order: Coronatae	Atolla;Atolla gigantea;Atolla parva;Atolla vanhoeffeni;Atolla wyvillei
+aurelia aurita	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Aurelia aurita
+chrysaora fuscescens	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Chrysaora fuscescens
+deepstaria	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Deepstaria
+deepstaria enigmatica	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Deepstaria enigmatica
+deepstaria reticulum	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Deepstaria reticulum
+paraphyllina	true jellyfish	jellyfish	yes	high	jellyfish order: Coronatae	Paraphyllina
+periphylla periphylla	true jellyfish	jellyfish	yes	high	jellyfish order: Coronatae	Periphylla periphylla
+phacellophora camtschatica	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Phacellophora camtschatica
+poralia	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Poralia
+poralia rufescens	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Poralia rufescens
+stellamedusa ventana	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Stellamedusa ventana
+stygiomedusa gigantea	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Stygiomedusa gigantea
+tiburonia granrojo	true jellyfish	jellyfish	yes	high	jellyfish order: Semaeostomeae	Tiburonia granrojo
+ceriantharia	tube anemone	tube anemone	yes	high	existing visually distinct group retained	Ceriantharia
+ceriantharia sp. 2	tube anemone	tube anemone	yes	high	existing visually distinct group retained	Ceriantharia sp. 2
+cerianthidae	tube anemone	tube anemone	yes	high	existing visually distinct group retained	Cerianthidae
+tube anemone	tube anemone	tube anemone	yes	high	existing visually distinct group retained	tube anemone
+ascidiacea	tunicate	tunicate	yes	high	existing visually distinct group retained	Ascidiacea
+cnemidocarpa	tunicate	tunicate	yes	high	existing visually distinct group retained	Cnemidocarpa
+culeolus	tunicate	tunicate	yes	high	existing visually distinct group retained	Culeolus
+culeolus barryi	tunicate	tunicate	yes	high	existing visually distinct group retained	Culeolus barryi
+octacnemidae sp. 1	tunicate	tunicate	yes	high	existing visually distinct group retained	Octacnemidae sp. 1
+sea squirt	tunicate	tunicate	yes	high	existing visually distinct group retained	sea squirt
+tunicata	tunicate	tunicate	yes	high	existing visually distinct group retained	Tunicata
+tunicate	tunicate	tunicate	yes	high	existing visually distinct group retained	tunicate
+turtle	turtle (mixed/unspecified)	turtle	review	low	the aggregated turtle row mixes sea turtles and non-biological/cartoon aliases	AntiguaTurtle;cartoon turtle;green sea turtle;Green sea turtle;green sea turtle feeds;green sea turtle gracefully;HappyTurtle;hawksbill sea turtle;Hawksbill sea turtle;hawksbill sea turtle gracefully;hawksbill turtle;juvenile hawksbill sea turtle;large green sea turtle;loggerhead sea turtle;SeaTurtle;turtle;Turtle;young green sea turtle
+homemade underwater drone	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	homemade underwater drone
+humanoid underwater robot	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	humanoid underwater robot
+orange underwater drone equipped	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	orange underwater drone equipped
+quadcopter style underwater drone maneuvering	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	quadcopter-style underwater drone maneuvering
+small cylindrical underwater robot	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	small cylindrical underwater robot
+underwater drone	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	underwater drone
+underwater robot	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	underwater robot
+unmanned underwater vehicle	underwater robot or drone	underwater vehicle	yes	medium	generic robotic underwater vehicle	unmanned underwater vehicle
+amphibious drone	vehicle depiction or ambiguous drone	underwater vehicle	review	low	toy or amphibious label is not a stable underwater-vehicle class	amphibious drone
+toy submarine	vehicle depiction or ambiguous drone	underwater vehicle	review	low	toy or amphibious label is not a stable underwater-vehicle class	toy submarine
+pacific walrus	walrus	walrus	yes	high	existing visually distinct group retained	pacific walrus;Pacific walrus
+walrus	walrus	walrus	yes	high	existing visually distinct group retained	Walrus
+ballena	whale	whale	yes	high	existing visually distinct group retained	Ballena
+humpback	whale	whale	yes	high	existing visually distinct group retained	humpback
+humpback whale	whale	whale	yes	high	existing visually distinct group retained	humpback whale;Humpback Whale;HumpbackWhale
+humpback whale calf	whale	whale	yes	high	existing visually distinct group retained	humpback whale calf
+killer whale	whale	whale	yes	high	existing visually distinct group retained	Killer Whale;KillerWhale
+massive blue whale	whale	whale	yes	high	existing visually distinct group retained	massive blue whale
+short finned pilot whale	whale	whale	yes	high	existing visually distinct group retained	short-finned pilot whale
+sperm whale	whale	whale	yes	high	existing visually distinct group retained	Sperm Whale;SpermWhale
+whale diving	whale	whale	yes	high	existing visually distinct group retained	WhaleDiving
+young humpback whale	whale	whale	yes	high	existing visually distinct group retained	young humpback whale
+tasselled wobbegong	wobbegong shark	shark	yes	high	distinct flattened carpet-shark body plan	tasselled wobbegong camouflaged against the sandy
+wolf eel	wolffish	fish	yes	high	visual-name rule	large wolf eel;wolf eel
+wolffish	wolffish	fish	yes	high	visual-name rule	wolffish
+echiura	worm	worm	yes	high	existing visually distinct group retained	Echiura
+hirudinea	worm	worm	yes	high	existing visually distinct group retained	Hirudinea
+osedax frankpressi	worm	worm	yes	high	existing visually distinct group retained	Osedax frankpressi
+paradiopatra	worm	worm	yes	high	existing visually distinct group retained	Paradiopatra
+poeobius	worm	worm	yes	high	existing visually distinct group retained	Poeobius
+poeobius meseres	worm	worm	yes	high	existing visually distinct group retained	Poeobius meseres
+polychaeta	worm	worm	yes	high	existing visually distinct group retained	Polychaeta
+polynoidae	worm	worm	yes	high	existing visually distinct group retained	Polynoidae
+riftia pachyptila	worm	worm	yes	high	existing visually distinct group retained	Riftia pachyptila
+sabellida	worm	worm	yes	high	existing visually distinct group retained	Sabellida
+sabellidae	worm	worm	yes	high	existing visually distinct group retained	Sabellidae
+serpulidae	worm	worm	yes	high	existing visually distinct group retained	Serpulidae
+swima	worm	worm	yes	high	existing visually distinct group retained	Swima
+tomopteris	worm	worm	yes	high	existing visually distinct group retained	Tomopteris
+tomopteris nisseni	worm	worm	yes	high	existing visually distinct group retained	Tomopteris nisseni
+anampses twistii	wrasse	fish	yes	high	visual-name rule	Anampses Twistii;AnampsesTwistii
+blue spotted wrasse	wrasse	fish	yes	high	visual-name rule	Blue-spotted Wrasse;Blue-spottedWrasse
+bluestreak cleaner wrasse	wrasse	fish	yes	high	visual-name rule	bluestreak cleaner wrasse;Bluestreak cleaner wrasse
+bodianus pulchellus	wrasse	fish	yes	high	visual-name rule	Bodianus pulchellus
+broomtail wrasse	wrasse	fish	yes	high	visual-name rule	broomtail wrasse
+california sheephead wrasse	wrasse	fish	yes	high	visual-name rule	California sheephead wrasse
+checkerboard wrasse	wrasse	fish	yes	high	visual-name rule	Checkerboard Wrasse
+decodon puellaris	wrasse	fish	yes	high	visual-name rule	Decodon puellaris
+giant wrasse	wrasse	fish	yes	high	visual-name rule	Giant Wrasse;GiantWrasse
+halichoeres bathyphilus	wrasse	fish	yes	high	visual-name rule	Halichoeres bathyphilus
+halichoeres bivittatus	wrasse	fish	yes	high	visual-name rule	Halichoeres bivittatus
+humphead wrasse	wrasse	fish	yes	high	visual-name rule	humphead wrasse
+lachnolaimus maximus	wrasse	fish	yes	high	visual-name rule	Lachnolaimus maximus
+large hogfish	wrasse	fish	yes	high	visual-name rule	large hogfish displaying
+large napoleon wrasse	wrasse	fish	yes	high	visual-name rule	large Napoleon wrasse
+large sandager's wrasse	wrasse	fish	yes	high	visual-name rule	large Sandager's Wrasse
+napoleon wrasse	wrasse	fish	yes	high	visual-name rule	Napoleon wrasse;Napoleon Wrasse
+napoleon wrasse forages	wrasse	fish	yes	high	visual-name rule	Napoleon wrasse forages
+red breasted wrasse	wrasse	fish	yes	high	visual-name rule	Red-breasted Wrasse;Red-breastedWrasse
+sandager's wrasse	wrasse	fish	yes	high	visual-name rule	sandager's wrasse;Sandager's wrasse;Sandager's Wrasse displaying
+slingjaw wrasse	wrasse	fish	yes	high	visual-name rule	Slingjaw Wrasse;SlingjawWrasse
+spotted wrasse	wrasse	fish	yes	high	visual-name rule	Spotted Wrasse;SpottedWrasse
+epizoanthus stellaris	zoanthid	zoanthid	yes	high	existing visually distinct group retained	Epizoanthus stellaris
+parazoanthidae	zoanthid	zoanthid	yes	high	existing visually distinct group retained	Parazoanthidae
+zoantharia	zoanthid	zoanthid	yes	high	existing visually distinct group retained	Zoantharia
+zoanthid	zoanthid	zoanthid	yes	high	existing visually distinct group retained	zoanthid

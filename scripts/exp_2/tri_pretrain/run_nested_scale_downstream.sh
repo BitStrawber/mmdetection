@@ -276,8 +276,12 @@ run_arch() {
   return 0
 }
 
-for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$R50_MASK_CONFIG" "$VITS_DET_CONFIG" "$VITS_MASK_CONFIG" "$R50_DFUI_RUOD_CONFIG" "$R50_DFUI_RUOD_UIIS_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
-for root in "$RUOD_ROOT" "$UIIS_ROOT" "$DFUI_RUOD_ROOT" "$DFUI_RUOD_UIIS_ROOT"; do [ -f "$root/annotations/instances_train.json" ] && [ -f "$root/annotations/instances_val.json" ] || die "invalid dataset: $root"; done
+for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$R50_MASK_CONFIG" "$VITS_DET_CONFIG" "$VITS_MASK_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+for root in "$RUOD_ROOT" "$UIIS_ROOT"; do [ -f "$root/annotations/instances_train.json" ] && [ -f "$root/annotations/instances_val.json" ] || die "invalid dataset: $root"; done
+if [ "$RUN_DFUI" = 1 ]; then
+  for file in "$R50_DFUI_RUOD_CONFIG" "$R50_DFUI_RUOD_UIIS_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+  for root in "$DFUI_RUOD_ROOT" "$DFUI_RUOD_UIIS_ROOT"; do [ -f "$root/annotations/instances_train.json" ] && [ -f "$root/annotations/instances_val.json" ] || die "invalid dataset: $root"; done
+fi
 validate_raw "$R50_RAW" resnet50; validate_raw "$VITS_RAW" vit_small
 IFS=',' read -r -a ARCHITECTURE_LIST <<< "$ARCHITECTURES"
 [ "${#ARCHITECTURE_LIST[@]}" -gt 0 ] || die "ARCHITECTURES must contain resnet50 and/or vits"

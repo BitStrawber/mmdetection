@@ -1,15 +1,24 @@
 #!/usr/bin/env bash
-# Launch the complete 300k downstream matrix.  Sources run independently on
-# separate two-GPU groups while every source's eight training stages are serial.
+# Launch a complete controlled-scale downstream matrix. Sources run independently
+# on separate two-GPU groups while every source's four direct 24e stages are serial.
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"
 
-PRETRAIN_ROOT="${PRETRAIN_ROOT:-/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/Controlled300K}"
+SCALE="${SCALE:-300k}"
+case "$SCALE" in 100k|300k|500k|800k|1m) ;; *) echo "ERROR: unsupported SCALE: $SCALE" >&2; exit 1 ;; esac
+case "$SCALE" in
+  100k) SCALE_LABEL="100K" ;;
+  300k) SCALE_LABEL="300K" ;;
+  500k) SCALE_LABEL="500K" ;;
+  800k) SCALE_LABEL="800K" ;;
+  1m) SCALE_LABEL="1M" ;;
+esac
+PRETRAIN_ROOT="${PRETRAIN_ROOT:-/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/Controlled${SCALE_LABEL}}"
 DATA_ROOT="${DATA_ROOT:-/media/HDD0/XCX/exp_2}"
-RUN_NAME="${RUN_NAME:-controlled300k_dfui_ruod_uiis_direct_$(date +%Y%m%d_%H%M%S)}"
+RUN_NAME="${RUN_NAME:-controlled${SCALE}_dfui_ruod_uiis_direct_$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/downstream_runs/$RUN_NAME}"
 RUN_TEST="${RUN_TEST:-1}"
 SKIP_COMPLETED="${SKIP_COMPLETED:-1}"
@@ -34,14 +43,14 @@ for file in \
   "$PRETRAIN_ROOT/Synthetic5/DINO_ResNet50_100e/checkpoint.pth" \
   "$PRETRAIN_ROOT/Synthetic5/DINO_ViTS_100e/checkpoint.pth" \
   "$PRETRAIN_ROOT/metadata/CHECKSUMS.sha256"; do
-  [ -s "$file" ] || die "missing required Controlled300K file: $file"
+  [ -s "$file" ] || die "missing required Controlled${SCALE_LABEL} file: $file"
 done
 
 {
   printf 'source\tgpu_group\tr50_checkpoint\tvits_checkpoint\tfinal_results\n'
-  printf 'imagenet\t%s\t%s\t%s\tdfui_to_ruod,direct_ruod,direct_uiis\n' "$IMAGENET_GPUS" "$PRETRAIN_ROOT/ImageNet/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/ImageNet/DINO_ViTS_100e/checkpoint.pth"
-  printf 'realuw\t%s\t%s\t%s\tdfui_to_ruod,direct_ruod,direct_uiis\n' "$REALUW_GPUS" "$PRETRAIN_ROOT/RealUW/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/RealUW/DINO_ViTS_100e/checkpoint.pth"
-  printf 'synthetic5\t%s\t%s\t%s\tdfui_to_ruod,direct_ruod,direct_uiis\n' "$SYNTHETIC5_GPUS" "$PRETRAIN_ROOT/Synthetic5/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/Synthetic5/DINO_ViTS_100e/checkpoint.pth"
+  printf 'imagenet\t%s\t%s\t%s\tdirect_ruod,direct_uiis\n' "$IMAGENET_GPUS" "$PRETRAIN_ROOT/ImageNet/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/ImageNet/DINO_ViTS_100e/checkpoint.pth"
+  printf 'realuw\t%s\t%s\t%s\tdirect_ruod,direct_uiis\n' "$REALUW_GPUS" "$PRETRAIN_ROOT/RealUW/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/RealUW/DINO_ViTS_100e/checkpoint.pth"
+  printf 'synthetic5\t%s\t%s\t%s\tdirect_ruod,direct_uiis\n' "$SYNTHETIC5_GPUS" "$PRETRAIN_ROOT/Synthetic5/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/Synthetic5/DINO_ViTS_100e/checkpoint.pth"
 } > "$OUTPUT_ROOT/run_matrix.tsv"
 
 launch_source() {
@@ -50,7 +59,7 @@ launch_source() {
   mkdir -p "$source_root/logs"
   env \
     SOURCE="$source" \
-    SCALE=300k \
+    SCALE="$SCALE" \
     R50_RAW="$r50" \
     VITS_RAW="$vits" \
     GPU_GROUP="$gpu_group" \
@@ -67,12 +76,13 @@ launch_source() {
 }
 
 echo "============================================================"
-echo "Controlled300K downstream matrix"
+echo "Controlled${SCALE_LABEL} downstream matrix"
+echo "scale=$SCALE"
 echo "output_root=$OUTPUT_ROOT"
 echo "ImageNet GPUs=$IMAGENET_GPUS"
 echo "RealUW GPUs=$REALUW_GPUS"
 echo "Synthetic5 GPUs=$SYNTHETIC5_GPUS"
-echo "Each source runs eight training stages serially."
+echo "Each source runs four direct 24e training stages serially."
 echo "============================================================"
 
 launch_source imagenet "$IMAGENET_GPUS" 31000 "$PRETRAIN_ROOT/ImageNet/DINO_ResNet50_100e/checkpoint.pth" "$PRETRAIN_ROOT/ImageNet/DINO_ViTS_100e/checkpoint.pth"
@@ -97,4 +107,4 @@ if [ "$status" -ne 0 ]; then
 fi
 
 [ "$CHECK_ONLY" = 1 ] || touch "$OUTPUT_ROOT/status/matrix.complete"
-echo "COMPLETE controlled300k matrix output_root=$OUTPUT_ROOT"
+echo "COMPLETE controlled${SCALE_LABEL} matrix output_root=$OUTPUT_ROOT"

@@ -96,7 +96,11 @@ def build(args: argparse.Namespace) -> dict:
     annotations: list[dict] = []
     image_lines: list[dict] = []
     source_rows: list[dict] = []
-    image_key_to_id: dict[tuple[str, int], int] = {}
+    # The ImageFolder manifest, rather than a source COCO image ID, defines
+    # what DINO actually sees. A source image can legitimately be represented
+    # by multiple ImageFolder filenames, so retain every distinct filename.
+    image_key_to_id: dict[tuple[str, str], int] = {}
+    output_ids_by_source_image: dict[tuple[str, int], list[int]] = defaultdict(list)
     annotation_id = 1
     unmapped = Counter()
     all_source_categories: set[str] = set()
@@ -112,17 +116,18 @@ def build(args: argparse.Namespace) -> dict:
         if missing_ids:
             raise RuntimeError(f"{source}: {len(missing_ids)} manifest image IDs absent from {annotation_path}")
 
-        manifest_duplicates = 0
+        exact_manifest_duplicates = 0
         for record in records:
             source_id = int(record["image_id"])
-            key = (source, source_id)
+            file_name = manifest_file_name(record)
+            key = (source, file_name)
             if key in image_key_to_id:
-                manifest_duplicates += 1
+                exact_manifest_duplicates += 1
                 continue
             source_image = source_images[source_id]
             output_id = len(images) + 1
             image_key_to_id[key] = output_id
-            file_name = manifest_file_name(record)
+            output_ids_by_source_image[(source, source_id)].append(output_id)
             image = {
                 "id": output_id,
                 "file_name": file_name,
@@ -142,54 +147,66 @@ def build(args: argparse.Namespace) -> dict:
         status_instances = Counter()
         source_unmapped = Counter()
         source_detection_classes: set[str] = set()
+        output_bbox_instances = 0
         for item in source_annotations:
             source_id = int(item["image_id"])
             raw_name = source_categories.get(int(item["category_id"]), f"UNKNOWN_CATEGORY_ID_{item['category_id']}")
             all_source_categories.add(raw_name)
             mapping = lookup.get(normalize(raw_name))
-            output = {
-                "id": annotation_id,
-                "image_id": image_key_to_id[(source, source_id)],
-                "bbox": item["bbox"],
-                "area": item.get("area", float(item["bbox"][2]) * float(item["bbox"][3])),
-                "iscrowd": int(item.get("iscrowd", 0)),
-                "source_dataset": source,
-                "source_annotation_id": item.get("id"),
-                "source_category_id": item["category_id"],
-                "source_category_name": raw_name,
-            }
             if mapping is None:
-                output.update({
+                unmapped[raw_name] += 1
+                source_unmapped[raw_name] += 1
+                mapped_values = {
                     "category_id": 0,
                     "mapped_category_name": "__unmapped__",
                     "training_status": "unmapped",
-                })
-                unmapped[raw_name] += 1
-                source_unmapped[raw_name] += 1
+                }
             else:
                 name, status = mapping["detection_name"], mapping["training_status"]
-                output.update({
+                mapped_values = {
                     "category_id": category_id[name],
                     "mapped_category_name": name,
                     "training_status": status,
                     "canonical_excel_name": mapping["canonical_original_name"],
                     "excel_row": mapping["excel_row"],
-                })
+                }
                 mapped_instances[name] += 1
                 status_instances[status] += 1
                 source_detection_classes.add(name)
-            annotations.append(output)
-            annotation_id += 1
+
+            # Duplicate the source box only when the same source image was
+            # intentionally represented by multiple ImageFolder filenames.
+            for output_image_id in output_ids_by_source_image[(source, source_id)]:
+                output = {
+                    "id": annotation_id,
+                    "image_id": output_image_id,
+                    "bbox": item["bbox"],
+                    "area": item.get("area", float(item["bbox"][2]) * float(item["bbox"][3])),
+                    "iscrowd": int(item.get("iscrowd", 0)),
+                    "source_dataset": source,
+                    "source_annotation_id": item.get("id"),
+                    "source_category_id": item["category_id"],
+                    "source_category_name": raw_name,
+                    **mapped_values,
+                }
+                annotations.append(output)
+                annotation_id += 1
+                output_bbox_instances += 1
 
         source_rows.append({
             "source": source,
             "annotation_file": str(annotation_path),
             "annotation_override": int(source in overrides),
-            "manifest_records": len(records),
-            "unique_images": len(selected_ids),
-            "manifest_duplicate_records": manifest_duplicates,
+            "manifest_image_records": len(records),
+            "unique_imagefolder_files": sum(
+                1 for image in images if image["source_dataset"] == source
+            ),
+            "unique_source_image_ids": len(selected_ids),
+            "reused_source_image_records": len(records) - len(selected_ids),
+            "exact_manifest_duplicate_records": exact_manifest_duplicates,
             "bbox_images": len({int(item["image_id"]) for item in source_annotations}),
-            "bbox_instances": len(source_annotations),
+            "source_bbox_instances": len(source_annotations),
+            "output_bbox_instances": output_bbox_instances,
             "mapped_instances": sum(mapped_instances.values()),
             "yes_instances": status_instances["yes"],
             "review_instances": status_instances["review"],
@@ -210,16 +227,21 @@ def build(args: argparse.Namespace) -> dict:
         "manifest": str(args.manifest),
         "annotation_overrides": {source: str(path) for source, path in overrides.items()},
         "sources": len(source_rows),
-        "manifest_records": sum(row["manifest_records"] for row in source_rows),
-        "unique_images": len(images),
-        "manifest_duplicate_records": sum(row["manifest_duplicate_records"] for row in source_rows),
-        "bbox_instances": len(annotations),
+        "manifest_records": sum(row["manifest_image_records"] for row in source_rows),
+        "unique_imagefolder_files": len(images),
+        "unique_source_image_ids": sum(row["unique_source_image_ids"] for row in source_rows),
+        "reused_source_image_records": sum(row["reused_source_image_records"] for row in source_rows),
+        "exact_manifest_duplicate_records": sum(row["exact_manifest_duplicate_records"] for row in source_rows),
+        "source_bbox_instances": sum(row["source_bbox_instances"] for row in source_rows),
+        "output_bbox_instances": len(annotations),
         "excel_categories": len(category_names),
         "mapped_bbox_instances": sum(1 for item in annotations if item["training_status"] != "unmapped"),
         "yes_bbox_instances": sum(1 for item in annotations if item["training_status"] == "yes"),
         "review_bbox_instances": sum(1 for item in annotations if item["training_status"] == "review"),
         "no_bbox_instances": sum(1 for item in annotations if item["training_status"] == "no"),
-        "unmapped_bbox_instances": sum(unmapped.values()),
+        "unmapped_bbox_instances": sum(
+            1 for item in annotations if item["training_status"] == "unmapped"
+        ),
         "unmapped_source_categories": len(unmapped),
         "source_categories_observed": len(all_source_categories),
     }

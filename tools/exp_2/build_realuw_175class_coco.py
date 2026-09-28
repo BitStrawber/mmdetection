@@ -18,6 +18,9 @@ from pathlib import Path
 from audit_realuw_excel_175class_mapping import load_mapping, normalize
 
 
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".ppm", ".bmp", ".pgm", ".tif", ".tiff", ".webp"}
+
+
 def parse_overrides(values: list[str]) -> dict[str, Path]:
     overrides: dict[str, Path] = {}
     for value in values:
@@ -56,6 +59,41 @@ def manifest_file_name(record: dict) -> str:
     )
 
 
+def build_imagefolder_index(root: Path) -> tuple[set[str], dict[str, list[str]]]:
+    if not root.is_dir():
+        raise RuntimeError(f"ImageFolder root not found: {root}")
+
+    relative_paths: set[str] = set()
+    paths_by_basename: dict[str, list[str]] = defaultdict(list)
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix.casefold() not in IMAGE_SUFFIXES:
+            continue
+        relative = path.relative_to(root).as_posix()
+        relative_paths.add(relative)
+        paths_by_basename[path.name].append(relative)
+    return relative_paths, paths_by_basename
+
+
+def resolve_imagefolder_file(
+    record: dict,
+    relative_paths: set[str],
+    paths_by_basename: dict[str, list[str]],
+) -> str | None:
+    value = manifest_file_name(record).replace("\\", "/").lstrip("/")
+    if value in relative_paths:
+        return value
+
+    candidates = paths_by_basename.get(Path(value).name, [])
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        raise RuntimeError(
+            f"Ambiguous ImageFolder basename {Path(value).name!r}; "
+            f"manifest value={value!r}, candidates={candidates[:5]}"
+        )
+    return None
+
+
 def load_coco(path: Path) -> dict:
     if not path.is_file():
         raise RuntimeError(f"Annotation file not found: {path}")
@@ -92,6 +130,11 @@ def build(args: argparse.Namespace) -> dict:
     if unknown_overrides:
         raise RuntimeError(f"Overrides name unknown manifest sources: {unknown_overrides}")
 
+    if args.image_root is not None:
+        imagefolder_relative_paths, paths_by_basename = build_imagefolder_index(args.image_root)
+    else:
+        imagefolder_relative_paths, paths_by_basename = set(), {}
+
     images: list[dict] = []
     annotations: list[dict] = []
     image_lines: list[dict] = []
@@ -104,9 +147,32 @@ def build(args: argparse.Namespace) -> dict:
     annotation_id = 1
     unmapped = Counter()
     all_source_categories: set[str] = set()
+    missing_imagefolder_records: list[dict] = []
+    referenced_imagefolder_files: set[str] = set()
 
     for source in sorted(records_by_source):
-        records = records_by_source[source]
+        all_records = records_by_source[source]
+        records = []
+        for record in all_records:
+            if args.image_root is None:
+                record = {**record, "_imagefolder_file_name": manifest_file_name(record)}
+            else:
+                resolved_file_name = resolve_imagefolder_file(
+                    record, imagefolder_relative_paths, paths_by_basename
+                )
+                if resolved_file_name is None:
+                    missing_imagefolder_records.append({
+                        "dataset": source,
+                        "image_id": record["image_id"],
+                        "manifest_file_name": manifest_file_name(record),
+                    })
+                    continue
+                record = {**record, "_imagefolder_file_name": resolved_file_name}
+                referenced_imagefolder_files.add(resolved_file_name)
+            records.append(record)
+
+        if not records:
+            raise RuntimeError(f"{source}: no manifest records resolve under the ImageFolder root")
         annotation_path = source_annotation_path(source, records, overrides)
         coco = load_coco(annotation_path)
         source_images = {int(image["id"]): image for image in coco.get("images", [])}
@@ -119,7 +185,7 @@ def build(args: argparse.Namespace) -> dict:
         exact_manifest_duplicates = 0
         for record in records:
             source_id = int(record["image_id"])
-            file_name = manifest_file_name(record)
+            file_name = record["_imagefolder_file_name"]
             key = (source, file_name)
             if key in image_key_to_id:
                 exact_manifest_duplicates += 1
@@ -138,7 +204,8 @@ def build(args: argparse.Namespace) -> dict:
                 "source_annotation_file": str(annotation_path),
             }
             images.append(image)
-            image_lines.append({**image, "manifest_record": record})
+            manifest_record = {key: value for key, value in record.items() if key != "_imagefolder_file_name"}
+            image_lines.append({**image, "manifest_record": manifest_record})
 
         source_annotations = [
             item for item in coco.get("annotations", []) if int(item["image_id"]) in selected_ids
@@ -197,7 +264,9 @@ def build(args: argparse.Namespace) -> dict:
             "source": source,
             "annotation_file": str(annotation_path),
             "annotation_override": int(source in overrides),
-            "manifest_image_records": len(records),
+            "manifest_image_records": len(all_records),
+            "matched_imagefolder_records": len(records),
+            "missing_imagefolder_records": len(all_records) - len(records),
             "unique_imagefolder_files": sum(
                 1 for image in images if image["source_dataset"] == source
             ),
@@ -228,6 +297,8 @@ def build(args: argparse.Namespace) -> dict:
         "annotation_overrides": {source: str(path) for source, path in overrides.items()},
         "sources": len(source_rows),
         "manifest_records": sum(row["manifest_image_records"] for row in source_rows),
+        "matched_imagefolder_records": sum(row["matched_imagefolder_records"] for row in source_rows),
+        "missing_imagefolder_records": len(missing_imagefolder_records),
         "unique_imagefolder_files": len(images),
         "unique_source_image_ids": sum(row["unique_source_image_ids"] for row in source_rows),
         "reused_source_image_records": sum(row["reused_source_image_records"] for row in source_rows),
@@ -245,6 +316,12 @@ def build(args: argparse.Namespace) -> dict:
         "unmapped_source_categories": len(unmapped),
         "source_categories_observed": len(all_source_categories),
     }
+    if args.image_root is not None:
+        summary.update({
+            "image_root": str(args.image_root),
+            "physical_imagefolder_files": len(imagefolder_relative_paths),
+            "unreferenced_imagefolder_files": len(imagefolder_relative_paths - referenced_imagefolder_files),
+        })
     return {
         "images": images,
         "annotations": annotations,
@@ -252,6 +329,7 @@ def build(args: argparse.Namespace) -> dict:
         "image_lines": image_lines,
         "source_rows": source_rows,
         "unmapped": unmapped,
+        "missing_imagefolder_records": missing_imagefolder_records,
         "summary": summary,
     }
 
@@ -283,6 +361,10 @@ def write_outputs(result: dict, output: Path) -> None:
         writer = csv.writer(handle, delimiter="\t")
         writer.writerow(["source_category_name", "bbox_instances"])
         writer.writerows(result["unmapped"].most_common())
+    (output / "missing_imagefolder_manifest_records.json").write_text(
+        json.dumps(result["missing_imagefolder_records"], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     (output / "summary.json").write_text(
         json.dumps(result["summary"], ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -294,6 +376,7 @@ def main() -> int:
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--annotation-override", action="append", default=[], metavar="SOURCE=PATH")
+    parser.add_argument("--image-root", type=Path, help="Actual DINO ImageFolder train root to align output images.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     result = build(args)

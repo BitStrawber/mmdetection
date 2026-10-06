@@ -7,10 +7,13 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/AquaOV255}"
 DOWNLOAD_ROOT="${DOWNLOAD_ROOT:-$OUTPUT_ROOT/_downloads}"
 DATA_ROOT="${DATA_ROOT:-$OUTPUT_ROOT/raw}"
 KEEP_ARCHIVES="${KEEP_ARCHIVES:-1}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 command -v hf >/dev/null 2>&1 || die "Hugging Face CLI 'hf' is required. Activate the hf_transfer environment first."
 command -v unzip >/dev/null 2>&1 || die "unzip is required."
+"$PYTHON_BIN" -c 'import numpy; from PIL import Image' >/dev/null 2>&1 || \
+  die "PYTHON_BIN must provide numpy and Pillow; for example set PYTHON_BIN=/media/SSD1/conda_envs/detector/bin/python"
 
 mkdir -p "$DOWNLOAD_ROOT" "$DATA_ROOT"
 
@@ -51,7 +54,7 @@ fi
 # remove the invalid Catfish pair and remap 254 -> 206 in three Lanternfish masks.
 rm -f -- "$AQUA_ROOT/images/Catfish_112.png" "$AQUA_ROOT/masks/Catfish_112.jpg"
 
-python - "$AQUA_ROOT" <<'PY'
+"$PYTHON_BIN" - "$AQUA_ROOT" <<'PY'
 import sys
 from pathlib import Path
 
@@ -73,7 +76,7 @@ for name in ("Lanternfish_003.png", "Lanternfish_001.png", "Lanternfish_002.png"
 PY
 
 MANIFEST="$OUTPUT_ROOT/aquaov255_source_manifest.tsv"
-python - "$AQUA_ROOT" "$MANIFEST" <<'PY'
+"$PYTHON_BIN" - "$AQUA_ROOT" "$MANIFEST" <<'PY'
 import sys
 from pathlib import Path
 

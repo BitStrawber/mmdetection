@@ -94,9 +94,6 @@ def read_record(image_path: Path, mask_path: Path, categories: list[str], seed: 
     invalid_values = [value for value in label_values if value < 0 or value >= len(categories)]
     if invalid_values:
         die(f"Mask has invalid foreground labels {invalid_values[:10]}: {mask_path}")
-    if not label_values:
-        die(f"Mask has no foreground labels: {mask_path}")
-
     return {
         "image": image_path,
         "mask": mask_path,
@@ -182,6 +179,7 @@ def main() -> int:
         print(f"val_images={split_images['val']}")
         print(f"train_categories={len({label for split, label in split_labels if split == 'train'})}")
         print(f"val_categories={len({label for split, label in split_labels if split == 'val'})}")
+        print(f"empty_mask_images={sum(not record['labels'] for record in records)}")
         print("mask_background_value=65535")
         print("RESULT=PASS_AQUAOV255_OFFICIAL_MASK_MAPPING_AND_SPLIT_PREFLIGHT")
         return 0
@@ -252,6 +250,13 @@ def main() -> int:
         "val_images": len(payloads["val"]["images"]),
         "train_instances": len(payloads["train"]["annotations"]),
         "val_instances": len(payloads["val"]["annotations"]),
+        "empty_mask_images": sum(not record["labels"] for record in records),
+        "train_empty_mask_images": sum(
+            record["split"] == "train" and not record["labels"] for record in records
+        ),
+        "val_empty_mask_images": sum(
+            record["split"] == "val" and not record["labels"] for record in records
+        ),
         "mask_interpretation": "Each connected component of each foreground semantic label becomes one instance.",
     }
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")

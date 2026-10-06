@@ -61,6 +61,7 @@ echo "============================================================"
 python tools/exp_2/build_aquaov255_instance_coco.py \
   --images "$AQUA_ROOT/images" \
   --masks "$AQUA_ROOT/masks" \
+  --categories "$AQUA_ROOT/category.txt" \
   --output "$COCO_ROOT" \
   --val-ratio "$VAL_RATIO" \
   --seed "$SPLIT_SEED" \
@@ -75,6 +76,7 @@ if [ ! -f "$COCO_ROOT/.complete" ]; then
   python tools/exp_2/build_aquaov255_instance_coco.py \
     --images "$AQUA_ROOT/images" \
     --masks "$AQUA_ROOT/masks" \
+    --categories "$AQUA_ROOT/category.txt" \
     --output "$COCO_ROOT" \
     --val-ratio "$VAL_RATIO" \
     --seed "$SPLIT_SEED" \
@@ -97,8 +99,8 @@ categories = __import__('json').loads(
     (root / 'train' / 'annotations' / 'instances_train.json').read_text(encoding='utf-8')
 )['categories']
 classes = tuple(item['name'] for item in categories)
-if len(classes) != 255:
-    raise SystemExit(f'Expected 255 AquaOV255 classes, got {len(classes)}')
+if len(classes) != 254:
+    raise SystemExit(f'Expected 254 AquaOV255 foreground classes, got {len(classes)}')
 
 def configure_dataset(dataset, split):
     if 'dataset' in dataset:

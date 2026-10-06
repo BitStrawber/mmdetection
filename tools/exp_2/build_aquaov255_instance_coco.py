@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Convert prepared AquaOV255 semantic masks into a deterministic COCO instance split.
+"""Build deterministic instance-COCO splits from official AquaOV255 masks.
 
-The official AquaOV255 layout uses one image/mask pair per fine-grained class.
-This tool deliberately verifies that each mask has exactly one non-background
-label before treating its non-zero region as an instance.  A mismatch stops the
-pipeline instead of silently assigning an incorrect category.
+Official AquaOV255 stores semantic labels in 16-bit masks. Pixel value 65535
+is background; foreground values 0..253 map to category.txt lines 1..254.
+Filenames are retained solely for provenance because their embedded numbers do
+not form a globally reliable category mapping.
 """
 
 from __future__ import annotations
@@ -15,22 +15,25 @@ import json
 import os
 import shutil
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+import cv2
 import numpy as np
 from PIL import Image
 from pycocotools import mask as mask_utils
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+BACKGROUND_VALUE = 65535
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--images", type=Path, required=True)
     parser.add_argument("--masks", type=Path, required=True)
+    parser.add_argument("--categories", type=Path, required=True, help="Official AquaOV255 category.txt.")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=20261006)
@@ -43,20 +46,23 @@ def die(message: str) -> None:
     raise SystemExit(f"ERROR: {message}")
 
 
-def class_name_from_stem(stem: str) -> str:
-    prefix, separator, suffix = stem.rpartition("_")
-    if not separator or not prefix or not suffix.isdigit():
-        die(f"Cannot infer an AquaOV255 class from filename stem: {stem}")
-    return prefix
-
-
-def list_files(root: Path) -> list[Path]:
+def image_files(root: Path) -> list[Path]:
     return sorted(path for path in root.rglob("*") if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
 
 
-def stable_is_validation(stem: str, seed: int, val_ratio: float) -> bool:
-    digest = hashlib.sha256(f"{seed}:{stem}".encode("utf-8")).digest()
-    return int.from_bytes(digest[:8], "big") / 2**64 < val_ratio
+def load_categories(path: Path) -> list[str]:
+    if not path.is_file():
+        die(f"Official category.txt is missing: {path}")
+    categories = [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if len(categories) != 254:
+        die(f"Expected 254 foreground entries in category.txt, found {len(categories)}")
+    if len(set(categories)) != len(categories):
+        die("Official category.txt contains duplicate class names")
+    return categories
+
+
+def stable_key(stem: str, seed: int) -> int:
+    return int.from_bytes(hashlib.sha256(f"{seed}:{stem}".encode("utf-8")).digest()[:8], "big")
 
 
 def materialize(source: Path, destination: Path, mode: str) -> None:
@@ -67,28 +73,67 @@ def materialize(source: Path, destination: Path, mode: str) -> None:
         shutil.copy2(source, destination)
 
 
-def rle_for(mask: np.ndarray) -> tuple[dict[str, Any], list[float], float]:
-    encoded = mask_utils.encode(np.asfortranarray(mask.astype(np.uint8)))
+def encode(binary_mask: np.ndarray) -> tuple[dict[str, Any], list[float], float]:
+    encoded = mask_utils.encode(np.asfortranarray(binary_mask.astype(np.uint8)))
     bbox = [float(value) for value in mask_utils.toBbox(encoded).tolist()]
     area = float(mask_utils.area(encoded))
     encoded["counts"] = encoded["counts"].decode("ascii")
     return encoded, bbox, area
 
 
-def validate_mask_pair(image_path: Path, mask_path: Path) -> None:
+def read_record(image_path: Path, mask_path: Path, categories: list[str], seed: int) -> dict[str, Any]:
     with Image.open(image_path) as image:
         width, height = image.size
-    mask_array = np.asarray(Image.open(mask_path))
-    if mask_array.ndim != 2:
-        die(f"Mask is not single-channel: {mask_path} shape={mask_array.shape}")
-    if mask_array.shape != (height, width):
+    mask = np.asarray(Image.open(mask_path))
+    if mask.ndim != 2:
+        die(f"Mask is not single-channel: {mask_path} shape={mask.shape}")
+    if mask.shape != (height, width):
         die(f"Image/mask size mismatch: {image_path.name} vs {mask_path.name}")
-    foreground_values = np.unique(mask_array[mask_array != 0])
-    if len(foreground_values) != 1:
-        die(
-            f"Expected exactly one non-zero semantic label in {mask_path.name}, "
-            f"found {foreground_values.tolist()[:10]}"
-        )
+
+    label_values = sorted(int(value) for value in np.unique(mask) if int(value) != BACKGROUND_VALUE)
+    invalid_values = [value for value in label_values if value < 0 or value >= len(categories)]
+    if invalid_values:
+        die(f"Mask has invalid foreground labels {invalid_values[:10]}: {mask_path}")
+    if not label_values:
+        die(f"Mask has no foreground labels: {mask_path}")
+
+    return {
+        "image": image_path,
+        "mask": mask_path,
+        "width": width,
+        "height": height,
+        "labels": tuple(label_values),
+        "key": stable_key(image_path.stem, seed),
+    }
+
+
+def assign_splits(records: list[dict[str, Any]], val_ratio: float) -> None:
+    threshold = int(val_ratio * (2**64))
+    for record in records:
+        record["split"] = "val" if record["key"] < threshold else "train"
+
+    by_label: dict[int, list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        for label in record["labels"]:
+            by_label[label].append(record)
+
+    # Repair the deterministic hash split only when a category would otherwise
+    # be absent from one side. The selected record is deterministic by hash.
+    for label, members in sorted(by_label.items()):
+        if not any(record["split"] == "val" for record in members):
+            min(members, key=lambda record: record["key"])["split"] = "val"
+        if not any(record["split"] == "train" for record in members):
+            max(members, key=lambda record: record["key"])["split"] = "train"
+
+    for label, members in sorted(by_label.items()):
+        if not any(record["split"] == "train" for record in members) or not any(record["split"] == "val" for record in members):
+            die(f"Could not create both train and val coverage for label {label}")
+
+
+def components_for_label(mask: np.ndarray, label: int) -> list[np.ndarray]:
+    binary = (mask == label).astype(np.uint8)
+    count, labels = cv2.connectedComponents(binary, connectivity=8)
+    return [(labels == component_id) for component_id in range(1, count)]
 
 
 def main() -> int:
@@ -100,110 +145,92 @@ def main() -> int:
     if not args.check_only and args.output.exists():
         die(f"Output already exists: {args.output}")
 
-    images = list_files(args.images)
-    if not images:
-        die(f"No images found in {args.images}")
-
+    categories = load_categories(args.categories)
     masks_by_stem: dict[str, Path] = {}
-    for path in list_files(args.masks):
+    for path in image_files(args.masks):
         if path.stem in masks_by_stem:
             die(f"Duplicate mask stem: {path.stem}")
         masks_by_stem[path.stem] = path
 
+    images = image_files(args.images)
+    if not images:
+        die(f"No images found in {args.images}")
     records: list[dict[str, Any]] = []
-    for image_path in images:
+    for index, image_path in enumerate(images, start=1):
         mask_path = masks_by_stem.get(image_path.stem)
         if mask_path is None:
             die(f"No mask with matching stem for image: {image_path.name}")
-        records.append(
-            {
-                "image": image_path,
-                "mask": mask_path,
-                "class_name": class_name_from_stem(image_path.stem),
-                "split": "val" if stable_is_validation(image_path.stem, args.seed, args.val_ratio) else "train",
-            }
-        )
+        records.append(read_record(image_path, mask_path, categories, args.seed))
+        if index % 5000 == 0:
+            print(f"validated_images={index}/{len(images)}", file=sys.stderr)
 
     image_stems = {item["image"].stem for item in records}
     unmatched_masks = sorted(set(masks_by_stem) - image_stems)
     if unmatched_masks:
         die(f"Found {len(unmatched_masks)} masks without an image; first: {unmatched_masks[0]}")
 
-    classes = sorted({str(item["class_name"]) for item in records})
-    class_ids = {name: index for index, name in enumerate(classes, start=1)}
-    split_counts = Counter(str(item["split"]) for item in records)
-    class_split_counts = Counter((str(item["split"]), str(item["class_name"])) for item in records)
-    missing_val_classes = [name for name in classes if not class_split_counts[("val", name)]]
-    missing_train_classes = [name for name in classes if not class_split_counts[("train", name)]]
-    if missing_val_classes or missing_train_classes:
-        die(
-            "Deterministic split left a class empty: "
-            f"missing_train={missing_train_classes[:5]} missing_val={missing_val_classes[:5]}. "
-            "Use a different --seed or a larger --val-ratio."
-        )
+    assign_splits(records, args.val_ratio)
+    split_images = Counter(record["split"] for record in records)
+    split_labels = Counter((record["split"], label) for record in records for label in record["labels"])
+    if len({label for _, label in split_labels}) != len(categories):
+        die("Not every official category is represented by an AquaOV255 foreground mask")
 
     if args.check_only:
-        for record in records:
-            validate_mask_pair(Path(record["image"]), Path(record["mask"]))
         print(f"images={len(records)}")
-        print(f"classes={len(classes)}")
-        print(f"train_images={split_counts['train']}")
-        print(f"val_images={split_counts['val']}")
-        print("RESULT=PASS_AQUAOV255_PAIR_AND_SPLIT_PREFLIGHT")
+        print(f"foreground_categories={len(categories)}")
+        print(f"train_images={split_images['train']}")
+        print(f"val_images={split_images['val']}")
+        print(f"train_categories={len({label for split, label in split_labels if split == 'train'})}")
+        print(f"val_categories={len({label for split, label in split_labels if split == 'val'})}")
+        print("mask_background_value=65535")
+        print("RESULT=PASS_AQUAOV255_OFFICIAL_MASK_MAPPING_AND_SPLIT_PREFLIGHT")
         return 0
 
+    coco_categories = [
+        {"id": label + 1, "name": name, "supercategory": "aquaov255"}
+        for label, name in enumerate(categories)
+    ]
     payloads: dict[str, dict[str, Any]] = {
-        split: {"images": [], "annotations": [], "categories": [
-            {"id": category_id, "name": name, "supercategory": "aquaov255"}
-            for name, category_id in class_ids.items()
-        ]}
+        split: {"images": [], "annotations": [], "categories": coco_categories}
         for split in ("train", "val")
     }
     annotation_id = 1
     manifest_rows = [
-        "split\timage_id\tannotation_id\timage_name\tmask_name\tclass_name\tclass_id\tforeground_value\tarea\n"
+        "split\timage_id\tannotation_id\timage_name\tmask_name\tmask_label\tclass_id\tclass_name\tarea\n"
     ]
 
     for image_id, record in enumerate(records, start=1):
         image_path = Path(record["image"])
         mask_path = Path(record["mask"])
         split = str(record["split"])
-        class_name = str(record["class_name"])
-
-        validate_mask_pair(image_path, mask_path)
-        with Image.open(image_path) as image:
-            width, height = image.size
-        mask_array = np.asarray(Image.open(mask_path))
-        foreground_values = np.unique(mask_array[mask_array != 0])
-        foreground_value = int(foreground_values[0])
-        binary_mask = mask_array != 0
-        rle, bbox, area = rle_for(binary_mask)
-        if area <= 0:
-            die(f"Empty foreground mask: {mask_path}")
-
+        mask = np.asarray(Image.open(mask_path))
         file_name = f"{image_id:06d}__{image_path.name}"
-        destination = args.output / split / "images" / file_name
-        materialize(image_path, destination, args.storage_mode)
-
+        materialize(image_path, args.output / split / "images" / file_name, args.storage_mode)
         payloads[split]["images"].append(
-            {"id": image_id, "file_name": file_name, "width": width, "height": height}
+            {"id": image_id, "file_name": file_name, "width": record["width"], "height": record["height"]}
         )
-        payloads[split]["annotations"].append(
-            {
-                "id": annotation_id,
-                "image_id": image_id,
-                "category_id": class_ids[class_name],
-                "segmentation": rle,
-                "area": area,
-                "bbox": bbox,
-                "iscrowd": 0,
-            }
-        )
-        manifest_rows.append(
-            f"{split}\t{image_id}\t{annotation_id}\t{image_path.name}\t{mask_path.name}\t"
-            f"{class_name}\t{class_ids[class_name]}\t{foreground_value}\t{area:.0f}\n"
-        )
-        annotation_id += 1
+
+        for label in record["labels"]:
+            for component in components_for_label(mask, label):
+                rle, bbox, area = encode(component)
+                if area <= 0:
+                    continue
+                payloads[split]["annotations"].append(
+                    {
+                        "id": annotation_id,
+                        "image_id": image_id,
+                        "category_id": label + 1,
+                        "segmentation": rle,
+                        "area": area,
+                        "bbox": bbox,
+                        "iscrowd": 0,
+                    }
+                )
+                manifest_rows.append(
+                    f"{split}\t{image_id}\t{annotation_id}\t{image_path.name}\t{mask_path.name}\t"
+                    f"{label}\t{label + 1}\t{categories[label]}\t{area:.0f}\n"
+                )
+                annotation_id += 1
 
     for split, payload in payloads.items():
         annotation_path = args.output / split / "annotations" / f"instances_{split}.json"
@@ -214,22 +241,24 @@ def main() -> int:
     summary = {
         "source_images": str(args.images.resolve()),
         "source_masks": str(args.masks.resolve()),
+        "official_category_file": str(args.categories.resolve()),
         "storage_mode": args.storage_mode,
         "seed": args.seed,
         "val_ratio": args.val_ratio,
         "images": len(records),
-        "classes": len(classes),
+        "foreground_categories": len(categories),
+        "mask_background_value": BACKGROUND_VALUE,
         "train_images": len(payloads["train"]["images"]),
         "val_images": len(payloads["val"]["images"]),
         "train_instances": len(payloads["train"]["annotations"]),
         "val_instances": len(payloads["val"]["annotations"]),
-        "mask_interpretation": "Each verified single-label, non-zero semantic mask becomes one instance.",
+        "mask_interpretation": "Each connected component of each foreground semantic label becomes one instance.",
     }
     (args.output / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     (args.output / ".complete").touch()
     print(json.dumps(summary, indent=2))
     print(f"output={args.output}")
-    print("RESULT=PASS_AQUAOV255_INSTANCE_COCO")
+    print("RESULT=PASS_AQUAOV255_OFFICIAL_MASK_TO_INSTANCE_COCO")
     return 0
 
 

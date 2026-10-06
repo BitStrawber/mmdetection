@@ -52,7 +52,13 @@ fi
 
 # Official Earth2Ocean repository corrections:
 # remove the invalid Catfish pair and remap 254 -> 206 in three Lanternfish masks.
-rm -f -- "$AQUA_ROOT/images/Catfish_112.png" "$AQUA_ROOT/masks/Catfish_112.jpg"
+# The upstream README names the mask as .jpg, but the Hugging Face archive
+# contains it as .png. Remove either extension so reruns remain idempotent.
+rm -f -- \
+  "$AQUA_ROOT/images/Catfish_112.png" \
+  "$AQUA_ROOT/images/Catfish_112.jpg" \
+  "$AQUA_ROOT/masks/Catfish_112.png" \
+  "$AQUA_ROOT/masks/Catfish_112.jpg"
 
 "$PYTHON_BIN" - "$AQUA_ROOT" <<'PY'
 import sys

@@ -75,6 +75,22 @@ def rle_for(mask: np.ndarray) -> tuple[dict[str, Any], list[float], float]:
     return encoded, bbox, area
 
 
+def validate_mask_pair(image_path: Path, mask_path: Path) -> None:
+    with Image.open(image_path) as image:
+        width, height = image.size
+    mask_array = np.asarray(Image.open(mask_path))
+    if mask_array.ndim != 2:
+        die(f"Mask is not single-channel: {mask_path} shape={mask_array.shape}")
+    if mask_array.shape != (height, width):
+        die(f"Image/mask size mismatch: {image_path.name} vs {mask_path.name}")
+    foreground_values = np.unique(mask_array[mask_array != 0])
+    if len(foreground_values) != 1:
+        die(
+            f"Expected exactly one non-zero semantic label in {mask_path.name}, "
+            f"found {foreground_values.tolist()[:10]}"
+        )
+
+
 def main() -> int:
     args = parse_args()
     if not 0 < args.val_ratio < 1:
@@ -127,6 +143,8 @@ def main() -> int:
         )
 
     if args.check_only:
+        for record in records:
+            validate_mask_pair(Path(record["image"]), Path(record["mask"]))
         print(f"images={len(records)}")
         print(f"classes={len(classes)}")
         print(f"train_images={split_counts['train']}")
@@ -152,20 +170,11 @@ def main() -> int:
         split = str(record["split"])
         class_name = str(record["class_name"])
 
+        validate_mask_pair(image_path, mask_path)
         with Image.open(image_path) as image:
             width, height = image.size
         mask_array = np.asarray(Image.open(mask_path))
-        if mask_array.ndim != 2:
-            die(f"Mask is not single-channel: {mask_path} shape={mask_array.shape}")
-        if mask_array.shape != (height, width):
-            die(f"Image/mask size mismatch: {image_path.name} vs {mask_path.name}")
-
         foreground_values = np.unique(mask_array[mask_array != 0])
-        if len(foreground_values) != 1:
-            die(
-                f"Expected exactly one non-zero semantic label in {mask_path.name}, "
-                f"found {foreground_values.tolist()[:10]}"
-            )
         foreground_value = int(foreground_values[0])
         binary_mask = mask_array != 0
         rle, bbox, area = rle_for(binary_mask)

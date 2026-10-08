@@ -36,6 +36,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--categories", type=Path, required=True, help="Official AquaOV255 category.txt.")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--val-ratio", type=float, default=0.1)
+    parser.add_argument("--expected-images", type=int, default=20722)
+    parser.add_argument(
+        "--no-validation",
+        action="store_true",
+        help="Put every paired image in train; create an empty val split.",
+    )
     parser.add_argument("--seed", type=int, default=20261006)
     parser.add_argument("--storage-mode", choices=("symlink", "copy"), default="symlink")
     parser.add_argument("--check-only", action="store_true")
@@ -135,7 +141,10 @@ def components_for_label(mask: np.ndarray, label: int) -> list[np.ndarray]:
 
 def main() -> int:
     args = parse_args()
-    if not 0 < args.val_ratio < 1:
+    if args.no_validation:
+        if args.val_ratio != 0.1:
+            die("Do not combine --no-validation with a custom --val-ratio")
+    elif not 0 < args.val_ratio < 1:
         die("--val-ratio must be strictly between 0 and 1")
     if not args.images.is_dir() or not args.masks.is_dir():
         die("--images and --masks must both be existing directories")
@@ -152,6 +161,8 @@ def main() -> int:
     images = image_files(args.images)
     if not images:
         die(f"No images found in {args.images}")
+    if len(images) != args.expected_images:
+        die(f"Expected {args.expected_images} images, found {len(images)}")
     records: list[dict[str, Any]] = []
     for index, image_path in enumerate(images, start=1):
         mask_path = masks_by_stem.get(image_path.stem)
@@ -166,7 +177,11 @@ def main() -> int:
     if unmatched_masks:
         die(f"Found {len(unmatched_masks)} masks without an image; first: {unmatched_masks[0]}")
 
-    assign_splits(records, args.val_ratio)
+    if args.no_validation:
+        for record in records:
+            record["split"] = "train"
+    else:
+        assign_splits(records, args.val_ratio)
     split_images = Counter(record["split"] for record in records)
     split_labels = Counter((record["split"], label) for record in records for label in record["labels"])
     if len({label for _, label in split_labels}) != len(categories):
@@ -242,7 +257,8 @@ def main() -> int:
         "official_category_file": str(args.categories.resolve()),
         "storage_mode": args.storage_mode,
         "seed": args.seed,
-        "val_ratio": args.val_ratio,
+        "val_ratio": None if args.no_validation else args.val_ratio,
+        "source_validation": not args.no_validation,
         "images": len(records),
         "foreground_categories": len(categories),
         "mask_background_value": BACKGROUND_VALUE,

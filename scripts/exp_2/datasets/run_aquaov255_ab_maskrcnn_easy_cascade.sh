@@ -15,8 +15,9 @@ CASCADE_CONFIG="${CASCADE_CONFIG:-configs/cascade_rcnn/cascade-mask-rcnn_r50_fpn
 IMAGENET_INIT="${IMAGENET_INIT:-torchvision://resnet50}"
 MASK_EPOCHS="${MASK_EPOCHS:-24}"
 CASCADE_EPOCHS="${CASCADE_EPOCHS:-24}"
+MASK_LR="${MASK_LR:-0.005}"
+CASCADE_LR="${CASCADE_LR:-0.005}"
 SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.60}"
-VAL_RATIO="${VAL_RATIO:-0.10}"
 EASY_VAL_RATIO="${EASY_VAL_RATIO:-0.10}"
 EASY_SPLIT_SEED="${EASY_SPLIT_SEED:-20261007}"
 DATA_SPLIT_SEED="${DATA_SPLIT_SEED:-20261006}"
@@ -56,9 +57,10 @@ echo "aqua_root=$AQUA_ROOT"
 echo "gpu_group=$GPU_GROUP"
 echo "mask_config=$MASK_CONFIG epochs=$MASK_EPOCHS"
 echo "cascade_mask_config=$CASCADE_CONFIG epochs=$CASCADE_EPOCHS"
+echo "mask_lr=$MASK_LR cascade_lr=$CASCADE_LR"
 echo "imagenet_init=$IMAGENET_INIT"
 echo "per_image_bbox_map_threshold=$SCORE_THRESHOLD"
-echo "source_validation_ratio=$VAL_RATIO data_seed=$DATA_SPLIT_SEED ab_seed=$AB_SEED"
+echo "source_split=all paired images -> equal A/B; ab_seed=$AB_SEED"
 echo "easy_validation_ratio=$EASY_VAL_RATIO easy_split_seed=$EASY_SPLIT_SEED"
 echo "output_root=$OUTPUT_ROOT"
 echo "============================================================"
@@ -68,7 +70,8 @@ python tools/exp_2/build_aquaov255_instance_coco.py \
   --masks "$AQUA_ROOT/masks" \
   --categories "$AQUA_ROOT/category.txt" \
   --output "$COCO_ROOT" \
-  --val-ratio "$VAL_RATIO" \
+  --expected-images 20722 \
+  --no-validation \
   --seed "$DATA_SPLIT_SEED" \
   --check-only
 
@@ -77,13 +80,39 @@ if [[ "$CHECK_ONLY" == 1 ]]; then
   exit 0
 fi
 
+if [[ -f "$COCO_ROOT/.complete" ]]; then
+  python - "$COCO_ROOT/summary.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.is_file():
+    raise SystemExit(f"ERROR: completed COCO build has no summary: {path}")
+summary = json.loads(path.read_text(encoding="utf-8"))
+valid = (
+    summary.get("images") == 20722
+    and summary.get("train_images") == 20722
+    and summary.get("val_images") == 0
+    and summary.get("source_validation") is False
+)
+if not valid:
+    raise SystemExit(
+        "ERROR: existing COCO output is not the full 20,722-image no-holdout build; "
+        "use a new OUTPUT_ROOT instead of reusing this run directory"
+    )
+print("REUSE verified full-source COCO build: 20,722 train / 0 val")
+PY
+fi
+
 if [[ ! -f "$COCO_ROOT/.complete" ]]; then
   python tools/exp_2/build_aquaov255_instance_coco.py \
     --images "$AQUA_ROOT/images" \
     --masks "$AQUA_ROOT/masks" \
     --categories "$AQUA_ROOT/category.txt" \
     --output "$COCO_ROOT" \
-    --val-ratio "$VAL_RATIO" \
+    --expected-images 20722 \
+    --no-validation \
     --seed "$DATA_SPLIT_SEED" \
     --storage-mode symlink
 fi
@@ -95,13 +124,36 @@ if [[ ! -f "$AB_ROOT/.complete" ]]; then
     --seed "$AB_SEED"
 fi
 
+python - "$AB_ROOT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+expected = {"images": 20722, "A_images": 10361, "B_images": 10361}
+for key, value in expected.items():
+    if summary.get(key) != value:
+        raise SystemExit(f"ERROR: A/B summary {key}={summary.get(key)}; expected {value}")
+
+def image_ids(path):
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {int(image["id"]) for image in data.get("images", [])}
+
+a_ids = image_ids(root / "train_A.json")
+b_ids = image_ids(root / "train_B.json")
+if len(a_ids) != 10361 or len(b_ids) != 10361 or a_ids & b_ids or a_ids | b_ids != set(range(1, 20723)):
+    raise SystemExit("ERROR: A/B folds are not a disjoint, exhaustive split of all 20,722 images")
+print("VERIFIED A/B split: 20,722 total; A=10,361; B=10,361; overlap=0")
+PY
+
 write_runtime_config() {
   local kind="$1" source_config="$2" output_config="$3" train_ann="$4" val_ann="$5" \
     train_prefix="$6" val_prefix="$7" epochs="$8" save_best="$9" validation_enabled="${10}" \
-    test_ann="${11}" test_prefix="${12}" test_enabled="${13}"
+    test_ann="${11}" test_prefix="${12}" test_enabled="${13}" lr="${14}"
   python - "$kind" "$source_config" "$output_config" "$COCO_ROOT" "$IMAGENET_INIT" \
     "$train_ann" "$val_ann" "$train_prefix" "$val_prefix" "$epochs" "$save_best" "$MAX_KEEP_CKPTS" \
-    "$validation_enabled" "$test_ann" "$test_prefix" "$test_enabled" <<'PY'
+    "$validation_enabled" "$test_ann" "$test_prefix" "$test_enabled" "$lr" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -110,7 +162,7 @@ from mmengine.config import Config
 
 (kind, source, output, coco_root, init, train_ann, val_ann,
  train_prefix, val_prefix, epochs, save_best, max_keep, validation_enabled,
- test_ann, test_prefix, test_enabled) = sys.argv[1:]
+ test_ann, test_prefix, test_enabled, learning_rate) = sys.argv[1:]
 validation_enabled = validation_enabled == '1'
 test_enabled = test_enabled == '1'
 source, output, coco_root = Path(source), Path(output), Path(coco_root)
@@ -161,6 +213,7 @@ else:
 
 cfg.model.backbone['init_cfg'] = dict(type='Pretrained', checkpoint=init)
 cfg.load_from = None
+cfg.optim_wrapper.optimizer.lr = float(learning_rate)
 cfg.train_cfg.max_epochs = int(epochs)
 cfg.train_cfg.val_interval = 1
 if validation_enabled:
@@ -217,7 +270,7 @@ run_mask_fold() {
   mkdir -p "$work"
   write_runtime_config mask "$MASK_CONFIG" "$runtime" "$train_ann" "$val_ann" \
     "train/images/" "train/images/" "$MASK_EPOCHS" "coco/bbox_mAP" 1 \
-    "$val_ann" "train/images/" 1
+    "$val_ann" "train/images/" 1 "$MASK_LR"
   echo "START $name train=$train_fold val=$val_fold GPUs=$GPU_GROUP"
   local -a resume_args=()
   [[ -s "$work/latest.pth" ]] && resume_args+=(--resume)
@@ -298,9 +351,9 @@ run_cascade_variant() {
   [[ "$has_val" != 1 ]] || save_best="coco/segm_mAP"
   local test_ann test_prefix test_description
   if [[ "$has_val" == 1 ]]; then
-    test_ann="$COCO_ROOT/val/annotations/instances_val.json"
-    test_prefix="val/images/"
-    test_description="independent original AquaOV255 holdout"
+    test_ann="$val_ann"
+    test_prefix="train/images/"
+    test_description="same Easy 10% validation split used for checkpoint selection; not an independent test set"
   else
     test_ann="$EASY_ANN"
     test_prefix="train/images/"
@@ -308,7 +361,7 @@ run_cascade_variant() {
   fi
   write_runtime_config cascade "$CASCADE_CONFIG" "$runtime" "$train_ann" "$val_ann" \
     "train/images/" "train/images/" "$CASCADE_EPOCHS" "$save_best" "$has_val" \
-    "$test_ann" "$test_prefix" 1
+    "$test_ann" "$test_prefix" 1 "$CASCADE_LR"
   if [[ ! -s "$work/epoch_${CASCADE_EPOCHS}.pth" ]]; then
     local -a resume_args=()
     [[ -s "$work/latest.pth" ]] && resume_args+=(--resume)
@@ -353,15 +406,18 @@ run_cascade_variant() {
   fi
 }
 
+run_cascade_variant all_easy "$EASY_ANN" "" 0 20
 run_cascade_variant split10 \
   "$EASY_SPLIT_ROOT/instances_train.json" \
   "$EASY_SPLIT_ROOT/instances_val.json" 1 10
-run_cascade_variant all_easy "$EASY_ANN" "" 0 20
 
 printf 'field\tvalue\n' > "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'aqua_root\t%s\n' "$AQUA_ROOT" >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'gpu_group\t%s\n' "$GPU_GROUP" >> "$OUTPUT_ROOT/run_provenance.tsv"
+printf 'source_split\tAll paired source images; no separate source holdout\n' >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'ab_rule\tRUOD-style shuffle seed %s; equal halves; Mask R-CNN filters opposite fold\n' "$AB_SEED" >> "$OUTPUT_ROOT/run_provenance.tsv"
+printf 'mask_learning_rate\t%s\n' "$MASK_LR" >> "$OUTPUT_ROOT/run_provenance.tsv"
+printf 'cascade_learning_rate\t%s\n' "$CASCADE_LR" >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'filter_metric\tper-image custom bbox AP averaged over IoU 0.50:0.95; threshold >= %s\n' "$SCORE_THRESHOLD" >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'easy_annotation\t%s\n' "$EASY_ANN" >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'cascade_split10\tEasy random split %.3f; evaluate segm AP\n' "$EASY_VAL_RATIO" >> "$OUTPUT_ROOT/run_provenance.tsv"

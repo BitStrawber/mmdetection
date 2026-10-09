@@ -21,7 +21,9 @@ RUN_TEST="${RUN_TEST:-1}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
-[[ "$SCORE_THRESHOLD" == "0.65" ]] || die "This runner is intentionally fixed to threshold 0.65"
+awk -v threshold="$SCORE_THRESHOLD" 'BEGIN {
+  if (threshold !~ /^[0-9]+([.][0-9]+)?$/ || threshold < 0 || threshold > 1) exit 1
+}' || die "SCORE_THRESHOLD must be a number in [0, 1]"
 [[ ! -e "$OUTPUT_ROOT" ]] || die "OUTPUT_ROOT already exists; choose a fresh directory: $OUTPUT_ROOT"
 [[ -d "$AQUA_ROOT/images" && -d "$AQUA_ROOT/masks" && -s "$AQUA_ROOT/category.txt" ]] ||
   die "AquaOV255 images, masks, or category.txt are missing under $AQUA_ROOT"

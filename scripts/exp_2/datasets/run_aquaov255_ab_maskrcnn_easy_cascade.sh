@@ -19,6 +19,7 @@ MASK_LR="${MASK_LR:-0.005}"
 CASCADE_LR="${CASCADE_LR:-0.005}"
 SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.60}"
 EASY_VAL_RATIO="${EASY_VAL_RATIO:-0.10}"
+CASCADE_VARIANTS="${CASCADE_VARIANTS:-all_easy,split10}"
 EASY_SPLIT_SEED="${EASY_SPLIT_SEED:-20261007}"
 DATA_SPLIT_SEED="${DATA_SPLIT_SEED:-20261006}"
 AB_SEED="${AB_SEED:-42}"
@@ -26,6 +27,18 @@ MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"
 CHECK_ONLY="${CHECK_ONLY:-0}"
 SKIP_COMPLETED="${SKIP_COMPLETED:-1}"
 RUN_TEST="${RUN_TEST:-1}"
+
+IFS=, read -r -a CASCADE_VARIANT_LIST <<< "$CASCADE_VARIANTS"
+declare -A SEEN_CASCADE_VARIANTS=()
+for variant in "${CASCADE_VARIANT_LIST[@]}"; do
+  [[ "$variant" == all_easy || "$variant" == split10 ]] ||
+    { echo "ERROR: unsupported Cascade variant: $variant" >&2; exit 1; }
+  [[ -z "${SEEN_CASCADE_VARIANTS[$variant]+x}" ]] ||
+    { echo "ERROR: duplicate Cascade variant: $variant" >&2; exit 1; }
+  SEEN_CASCADE_VARIANTS[$variant]=1
+done
+[[ "${#CASCADE_VARIANT_LIST[@]}" -gt 0 && -n "${CASCADE_VARIANT_LIST[0]}" ]] ||
+  { echo "ERROR: CASCADE_VARIANTS must not be empty" >&2; exit 1; }
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 gpu_count() { awk -F, '{print NF}' <<< "$1"; }
@@ -60,6 +73,7 @@ echo "cascade_mask_config=$CASCADE_CONFIG epochs=$CASCADE_EPOCHS"
 echo "mask_lr=$MASK_LR cascade_lr=$CASCADE_LR"
 echo "imagenet_init=$IMAGENET_INIT"
 echo "per_image_bbox_map_threshold=$SCORE_THRESHOLD"
+echo "cascade_variants=$CASCADE_VARIANTS"
 echo "source_split=all paired images -> equal A/B; ab_seed=$AB_SEED"
 echo "easy_validation_ratio=$EASY_VAL_RATIO easy_split_seed=$EASY_SPLIT_SEED"
 echo "output_root=$OUTPUT_ROOT"
@@ -321,7 +335,7 @@ if [[ ! -s "$EASY_ANN" ]]; then
   touch "$EASY_ROOT/.complete"
 fi
 
-if [[ ! -f "$EASY_SPLIT_ROOT/.complete" ]]; then
+if [[ -n "${SEEN_CASCADE_VARIANTS[split10]+x}" && ! -f "$EASY_SPLIT_ROOT/.complete" ]]; then
   python tools/exp_2/aquaov255_cross_easy.py partition \
     --annotation "$EASY_ANN" \
     --output "$EASY_SPLIT_ROOT" \
@@ -406,10 +420,18 @@ run_cascade_variant() {
   fi
 }
 
-run_cascade_variant all_easy "$EASY_ANN" "" 0 20
-run_cascade_variant split10 \
-  "$EASY_SPLIT_ROOT/instances_train.json" \
-  "$EASY_SPLIT_ROOT/instances_val.json" 1 10
+for variant in "${CASCADE_VARIANT_LIST[@]}"; do
+  case "$variant" in
+    all_easy)
+      run_cascade_variant all_easy "$EASY_ANN" "" 0 20
+      ;;
+    split10)
+      run_cascade_variant split10 \
+        "$EASY_SPLIT_ROOT/instances_train.json" \
+        "$EASY_SPLIT_ROOT/instances_val.json" 1 10
+      ;;
+  esac
+done
 
 printf 'field\tvalue\n' > "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'aqua_root\t%s\n' "$AQUA_ROOT" >> "$OUTPUT_ROOT/run_provenance.tsv"
@@ -420,7 +442,16 @@ printf 'mask_learning_rate\t%s\n' "$MASK_LR" >> "$OUTPUT_ROOT/run_provenance.tsv
 printf 'cascade_learning_rate\t%s\n' "$CASCADE_LR" >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'filter_metric\tper-image custom bbox AP averaged over IoU 0.50:0.95; threshold >= %s\n' "$SCORE_THRESHOLD" >> "$OUTPUT_ROOT/run_provenance.tsv"
 printf 'easy_annotation\t%s\n' "$EASY_ANN" >> "$OUTPUT_ROOT/run_provenance.tsv"
-printf 'cascade_split10\tEasy random split %.3f; evaluate segm AP\n' "$EASY_VAL_RATIO" >> "$OUTPUT_ROOT/run_provenance.tsv"
-printf 'cascade_all_easy\tall A_easy+B_easy images used for training and self-evaluation; not a generalization estimate\n' >> "$OUTPUT_ROOT/run_provenance.tsv"
+if [[ -n "${SEEN_CASCADE_VARIANTS[split10]+x}" ]]; then
+  printf 'cascade_split10\tEasy random split %.3f; evaluate segm AP\n' "$EASY_VAL_RATIO" >> "$OUTPUT_ROOT/run_provenance.tsv"
+else
+  printf 'cascade_split10\tNOT_RUN\n' >> "$OUTPUT_ROOT/run_provenance.tsv"
+fi
+if [[ -n "${SEEN_CASCADE_VARIANTS[all_easy]+x}" ]]; then
+  printf 'cascade_all_easy\tall A_easy+B_easy images used for training and self-evaluation; not a generalization estimate\n' >> "$OUTPUT_ROOT/run_provenance.tsv"
+else
+  printf 'cascade_all_easy\tNOT_RUN\n' >> "$OUTPUT_ROOT/run_provenance.tsv"
+fi
+printf 'cascade_variants\t%s\n' "$CASCADE_VARIANTS" >> "$OUTPUT_ROOT/run_provenance.tsv"
 echo "COMPLETE output_root=$OUTPUT_ROOT"
 echo "EASY_ANNOTATION=$EASY_ANN"

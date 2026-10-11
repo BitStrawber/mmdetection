@@ -101,7 +101,8 @@ prepare_raw_vits() {
 }
 
 write_sfui_config() {
-  local init="$1" work="$2" runtime="$work/runtime_config.py" candidate="$work/runtime_config.py.candidate"
+  local init="$1" work="$2"
+  local runtime="$work/runtime_config.py" candidate="$work/runtime_config.py.candidate"
   local args=(prepare-sfui --base-config "$SFUI_CONFIG" --output "$candidate"
     --init-checkpoint "$init" --data-root "$SFUI_DATA_ROOT" --train-ann "$SFUI_TRAIN_ANN"
     --train-prefix "$SFUI_TRAIN_PREFIX" --test-prefix "$SFUI_TEST_PREFIX"
@@ -115,7 +116,8 @@ write_sfui_config() {
 }
 
 write_uiis_config() {
-  local init="$1" work="$2" runtime="$work/runtime_config.py" candidate="$work/runtime_config.py.candidate"
+  local init="$1" work="$2"
+  local runtime="$work/runtime_config.py" candidate="$work/runtime_config.py.candidate"
   local args=(prepare-uiis --base-config "$UIIS_CONFIG" --output "$candidate"
     --init-checkpoint "$init" --data-root "$UIIS_ROOT"
     --train-prefix "$UIIS_TRAIN_PREFIX" --val-prefix "$UIIS_VAL_PREFIX"

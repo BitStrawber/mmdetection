@@ -69,7 +69,7 @@ mkdir -p "$OUTPUT_ROOT" "$WORK_ROOT" "$BACKBONE_ROOT" "$CONVERTED_ROOT" "$LOG_RO
   printf 'vits_raw\t%s\n' "$VITS_RAW"
   printf 'dfui_variants\t%s\n' "$VARIANTS"
   printf 'dfui_epochs\t%s\n' "$DFUI_EPOCHS"
-  printf 'uiis_mask_epochs\t24\n'
+  printf 'uiis_mask_epochs\t%s\n' "${UIIS_MASK_EPOCHS:-24}"
   printf 'r50_gpus\t%s\n' "$R50_GPUS"
   printf 'vits_gpus\t%s\n' "$VITS_GPUS"
 } > "$OUTPUT_ROOT/run_provenance.tsv"

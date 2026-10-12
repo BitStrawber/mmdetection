@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 SOURCE="${SOURCE:?set SOURCE to imagenet, realuw, or synthetic5}"
-SCALE="${SCALE:?set SCALE to 100k, 300k, 500k, 800k, or 1m}"
+SCALE="${SCALE:?set SCALE to full, 100k, 300k, 500k, 800k, or 1m}"
 RAW_ROOT="${RAW_ROOT:-/media/SSD1/XCX/exp_2/manual_dino_nested_transfer}"
 R50_RAW="${R50_RAW:-$RAW_ROOT/scale${SCALE}_${SOURCE}_dino_resnet50_100e/checkpoint.pth}"
 VITS_RAW="${VITS_RAW:-$RAW_ROOT/scale${SCALE}_${SOURCE}_dino_vits_100e/checkpoint.pth}"
@@ -46,6 +46,9 @@ MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"
 RUN_TEST="${RUN_TEST:-1}"
 SKIP_COMPLETED="${SKIP_COMPLETED:-1}"
 CHECK_ONLY="${CHECK_ONLY:-0}"
+DFUI_DYNAMIC_CLASSES="${DFUI_DYNAMIC_CLASSES:-0}"
+DFUI_CLASS_NAMES_FILE="${DFUI_CLASS_NAMES_FILE:-}"
+UIIS_MASK_EPOCHS="${UIIS_MASK_EPOCHS:-24}"
 
 mkdir -p "$WORK_ROOT" "$BACKBONE_ROOT" "$CONVERTED_ROOT" "$LOG_ROOT"
 PIPELINE_LOG="${PIPELINE_LOG:-$LOG_ROOT/${SOURCE}_${SCALE}_pipeline_$(date +%Y%m%d_%H%M%S).log}"
@@ -79,8 +82,9 @@ convert() {
 best_checkpoint() { find "$1" -maxdepth 1 -type f -name 'best_*.pth' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -n1 | cut -d' ' -f2-; }
 
 prepare_dfui_detector_config() {
-  local source_config="$1" output_config="$2" use_vits_schedule="$3"
-  python - "$source_config" "$output_config" "$use_vits_schedule" <<'PY'
+  local source_config="$1" output_config="$2" use_vits_schedule="$3" root="$4"
+  python - "$source_config" "$output_config" "$use_vits_schedule" "$root" "$DFUI_DYNAMIC_CLASSES" "$DFUI_CLASS_NAMES_FILE" <<'PY'
+import json
 import sys
 from pathlib import Path
 
@@ -88,37 +92,65 @@ from mmengine.config import Config
 
 source, output = map(Path, sys.argv[1:3])
 use_vits_schedule = sys.argv[3] == '1'
+root = Path(sys.argv[4])
+dynamic_classes = sys.argv[5] == '1'
+classes_file = sys.argv[6]
 cfg = Config.fromfile(source)
+
+if dynamic_classes:
+    train_ann = json.loads((root / 'annotations/instances_train.json').read_text(encoding='utf-8'))
+    val_ann = json.loads((root / 'annotations/instances_val.json').read_text(encoding='utf-8'))
+    train_categories = sorted(train_ann.get('categories', []), key=lambda item: item['id'])
+    val_categories = sorted(val_ann.get('categories', []), key=lambda item: item['id'])
+    if [(item['id'], item['name']) for item in train_categories] != [(item['id'], item['name']) for item in val_categories]:
+        raise SystemExit('SFUI train/val category definitions differ')
+    if classes_file:
+        class_data = json.loads(Path(classes_file).read_text(encoding='utf-8'))
+        if isinstance(class_data, dict):
+            class_data = class_data.get('classes')
+        if not isinstance(class_data, list) or not all(isinstance(name, str) and name for name in class_data):
+            raise SystemExit('class names file must contain a JSON string array or {"classes": [...]}')
+        classes = tuple(class_data)
+    else:
+        classes = tuple(item['name'] for item in train_categories)
+    if not classes or len(classes) != len(train_categories) or len(set(classes)) != len(classes):
+        raise SystemExit('class names must be unique and match the annotation category count')
+else:
+    classes = ('holothurian', 'echinus', 'scallop', 'starfish', 'fish', 'corals',
+               'diver', 'cuttlefish', 'turtle', 'jellyfish', 'waterweeds')
+
 bbox_heads = cfg.model.roi_head.bbox_head
 if not isinstance(bbox_heads, (list, tuple)) or len(bbox_heads) != 3:
     raise SystemExit(
         'Expected a three-stage Cascade R-CNN bbox_head list, got '
         f'{type(bbox_heads).__name__}: {bbox_heads!r}')
 for stage in bbox_heads:
-    stage['num_classes'] = 11
+    stage['num_classes'] = len(classes)
 if use_vits_schedule:
     schedulers = cfg.param_scheduler
     if not isinstance(schedulers, (list, tuple)) or len(schedulers) < 2:
         raise SystemExit('Expected at least two ViT-S parameter schedulers')
     schedulers[1]['milestones'] = [32, 44]
 cfg.dump(output)
-print(f'Wrote DFUI 11-class Cascade config: {output}')
+print(f'Wrote {len(classes)}-class Cascade config: {output}')
 PY
 }
 
 prepare_runtime_config() {
   local source_config="$1" output_config="$2" init="$3" root="$4" kind="$5" epochs="$6" save_best="$7" max_keep_ckpts="$8" is_dfui_detector="$9"
-  python - "$source_config" "$output_config" "$init" "$root" "$kind" "$epochs" "$save_best" "$max_keep_ckpts" "$is_dfui_detector" <<'PY'
+  python - "$source_config" "$output_config" "$init" "$root" "$kind" "$epochs" "$save_best" "$max_keep_ckpts" "$is_dfui_detector" "$DFUI_DYNAMIC_CLASSES" "$DFUI_CLASS_NAMES_FILE" <<'PY'
+import json
 import sys
 from pathlib import Path
 
 from mmengine.config import Config
 
-source, output, init, root, kind, epochs, save_best, max_keep_ckpts, is_dfui_detector = sys.argv[1:]
+source, output, init, root, kind, epochs, save_best, max_keep_ckpts, is_dfui_detector, dynamic_classes, classes_file = sys.argv[1:]
 source = Path(source)
 output = Path(output)
 root = Path(root)
 is_dfui_detector = is_dfui_detector == '1'
+dynamic_classes = dynamic_classes == '1'
 cfg = Config.fromfile(source)
 
 if is_dfui_detector:
@@ -129,6 +161,24 @@ else:
 classes = (
     'holothurian', 'echinus', 'scallop', 'starfish', 'fish', 'corals',
     'diver', 'cuttlefish', 'turtle', 'jellyfish', 'waterweeds')
+if is_dfui_detector and dynamic_classes:
+    train_ann = json.loads((root / 'annotations/instances_train.json').read_text(encoding='utf-8'))
+    val_ann = json.loads((root / 'annotations/instances_val.json').read_text(encoding='utf-8'))
+    train_categories = sorted(train_ann.get('categories', []), key=lambda item: item['id'])
+    val_categories = sorted(val_ann.get('categories', []), key=lambda item: item['id'])
+    if [(item['id'], item['name']) for item in train_categories] != [(item['id'], item['name']) for item in val_categories]:
+        raise SystemExit('SFUI train/val category definitions differ')
+    if classes_file:
+        class_data = json.loads(Path(classes_file).read_text(encoding='utf-8'))
+        if isinstance(class_data, dict):
+            class_data = class_data.get('classes')
+        if not isinstance(class_data, list) or not all(isinstance(name, str) and name for name in class_data):
+            raise SystemExit('class names file must contain a JSON string array or {"classes": [...]}')
+        classes = tuple(class_data)
+    else:
+        classes = tuple(item['name'] for item in train_categories)
+    if not classes or len(classes) != len(train_categories) or len(set(classes)) != len(classes):
+        raise SystemExit('class names must be unique and match the annotation category count')
 
 def configure_dataset(dataset, ann_file, image_prefix):
     """Reach the leaf COCO dataset even when it is wrapped by a sampler."""
@@ -212,9 +262,13 @@ run_train() {
   fi
   train_config="$config"
   if [ "$is_dfui_detector" = 1 ]; then
-    train_config="$work/dfui_11class_config.py"
+    if [ "$DFUI_DYNAMIC_CLASSES" = 1 ]; then
+      train_config="$work/sfui_dynamic_classes_config.py"
+    else
+      train_config="$work/dfui_11class_config.py"
+    fi
     [[ "$name" == *vits* ]] && use_vits_schedule=1
-    prepare_dfui_detector_config "$config" "$train_config" "$use_vits_schedule"
+    prepare_dfui_detector_config "$config" "$train_config" "$use_vits_schedule" "$root"
   fi
   runtime_config="$work/runtime_config.py"
   prepare_runtime_config "$train_config" "$runtime_config" "$init" "$root" "$kind" "$epochs" "$save_best" "$MAX_KEEP_CKPTS" "$is_dfui_detector"
@@ -269,7 +323,7 @@ run_arch() {
       run_train "${prefix}_${branch}_backbone_ruod24e_det" "$det" "$adapted" "$RUOD_ROOT" det "$group" "$((port+11))" 24
     fi
     if [[ ",$DFUI_FOLLOWUPS," == *,mask,* ]]; then
-      run_train "${prefix}_${branch}_backbone_uiis24e_mask" "$mask" "$adapted" "$UIIS_ROOT" mask "$group" "$((port+12))" 24
+      run_train "${prefix}_${branch}_backbone_uiis${UIIS_MASK_EPOCHS}e_mask" "$mask" "$adapted" "$UIIS_ROOT" mask "$group" "$((port+12))" "$UIIS_MASK_EPOCHS"
     fi
     port=$((port+20))
   done

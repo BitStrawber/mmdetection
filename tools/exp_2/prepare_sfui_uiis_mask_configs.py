@@ -136,6 +136,7 @@ def prepare_sfui(args) -> None:
         root=Path(args.data_root).resolve(),
         ann_file=test_ann,
         image_prefix=args.test_prefix or args.train_prefix,
+        classes=classes,
     )
     _set_evaluator(cfg, "test_evaluator", test_ann)
     Path(args.output).parent.mkdir(parents=True, exist_ok=True)

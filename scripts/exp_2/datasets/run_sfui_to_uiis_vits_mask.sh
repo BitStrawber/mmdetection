@@ -5,6 +5,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"
+export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 OUTPUT_ROOT="${OUTPUT_ROOT:?set OUTPUT_ROOT to a new experiment directory}"
 SFUI_DATA_ROOT="${SFUI_DATA_ROOT:-}"
@@ -39,7 +40,8 @@ MIN_FREE_MIB="${MIN_FREE_MIB:-8192}"
 WAIT_FOR_GPU="${WAIT_FOR_GPU:-1}"
 GPU_WAIT_INTERVAL="${GPU_WAIT_INTERVAL:-60}"
 MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"
-RUN_TEST="${RUN_TEST:-1}"
+SFUI_RUN_TEST="${SFUI_RUN_TEST:-0}"
+UIIS_RUN_TEST="${UIIS_RUN_TEST:-1}"
 CHECK_ONLY="${CHECK_ONLY:-0}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 WORK_ROOT="$OUTPUT_ROOT/work_dirs"
@@ -146,7 +148,7 @@ guard_or_install_config() {
 }
 
 train_stage() {
-  local stage="$1" runtime="$2" work="$3" group="$4" port="$5" metric="$6"
+  local stage="$1" runtime="$2" work="$3" group="$4" port="$5" metric="$6" run_test="$7"
   local train_log="$LOG_ROOT/${stage}_train.log" best test_log
   best="$(best_checkpoint "$work" || true)"
   if [[ -s "$work/epoch_${SFUI_EPOCHS}.pth" && "$stage" == sfui ]]; then
@@ -171,7 +173,7 @@ train_stage() {
     [[ -n "$best" ]] || best="$work/epoch_${UIIS_EPOCHS}.pth"
   fi
   [[ -s "$best" ]] || die "$stage checkpoint not found: $best"
-  if [[ "$RUN_TEST" == 1 ]]; then
+  if [[ "$run_test" == 1 ]]; then
     test_log="$LOG_ROOT/${stage}_test.log"
     wait_for_gpus "$group" "$stage-test"
     set +e
@@ -217,7 +219,7 @@ if [[ "$RUN_SFUI" == 1 ]]; then
   sfui_runtime="$sfui_work/runtime_config.py"
   mkdir -p "$sfui_work"
   write_sfui_config "$vits_init" "$sfui_work"
-  train_stage sfui "$sfui_runtime" "$sfui_work" "$SFUI_GPUS" "$BASE_PORT" coco/segm_mAP
+  train_stage sfui "$sfui_runtime" "$sfui_work" "$SFUI_GPUS" "$BASE_PORT" coco/segm_mAP "$SFUI_RUN_TEST"
   SFUI_CHECKPOINT="$RESULT_CHECKPOINT"
 fi
 
@@ -231,7 +233,7 @@ if [[ "$RUN_UIIS" == 1 ]]; then
   uiis_runtime="$uiis_work/runtime_config.py"
   mkdir -p "$uiis_work"
   write_uiis_config "$adapted" "$uiis_work"
-  train_stage uiis "$uiis_runtime" "$uiis_work" "$UIIS_GPUS" "$((BASE_PORT + 10))" coco/segm_mAP
+  train_stage uiis "$uiis_runtime" "$uiis_work" "$UIIS_GPUS" "$((BASE_PORT + 10))" coco/segm_mAP "$UIIS_RUN_TEST"
   uiis_checkpoint="$RESULT_CHECKPOINT"
   echo "COMPLETE SFUI_CHECKPOINT=$SFUI_CHECKPOINT UIIS_CHECKPOINT=$uiis_checkpoint BACKBONE=$adapted"
 else

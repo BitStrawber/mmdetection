@@ -130,6 +130,19 @@ write_uiis_config() {
   guard_or_install_config "$candidate" "$runtime" "$work"
 }
 
+configs_equivalent() {
+  "$PYTHON_BIN" - "$1" "$2" <<'PY'
+import sys
+from mmengine.config import Config
+
+configs = [Config.fromfile(path).to_dict() for path in sys.argv[1:]]
+for config in configs:
+    config.pop("launcher", None)
+    config.pop("work_dir", None)
+raise SystemExit(0 if configs[0] == configs[1] else 1)
+PY
+}
+
 guard_or_install_config() {
   local candidate="$1" runtime="$2" work="$3"
   if find "$work" -maxdepth 1 -type f \( -name 'latest.pth' -o -name 'epoch_*.pth' \) -print -quit | grep -q .; then
@@ -137,7 +150,7 @@ guard_or_install_config() {
       rm -f "$candidate"
       die "checkpoints exist without a saved runtime config; refusing unverifiable resume: $work"
     }
-    if ! cmp -s "$candidate" "$runtime"; then
+    if ! configs_equivalent "$candidate" "$runtime"; then
       rm -f "$candidate"
       die "config differs from a run that already has checkpoints; use a fresh OUTPUT_ROOT/work directory to change settings: $work"
     fi
@@ -159,7 +172,9 @@ train_stage() {
     wait_for_gpus "$group" "$stage-train"
     echo "START stage=$stage gpus=$group runtime=$runtime work=$work"
     local -a resume_args=()
-    [[ -s "$work/latest.pth" ]] && resume_args+=(--resume)
+    if [[ -s "$work/latest.pth" || -s "$work/last_checkpoint" ]]; then
+      resume_args+=(--resume)
+    fi
     CUDA_VISIBLE_DEVICES="$group" PORT="$port" \
       bash tools/dist_train.sh "$runtime" "$(gpu_count "$group")" --work-dir "$work" "${resume_args[@]}" \
       2>&1 | tee "$train_log"

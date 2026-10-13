@@ -10,7 +10,8 @@ export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 OUTPUT_ROOT="${OUTPUT_ROOT:?set OUTPUT_ROOT to a new experiment directory}"
 SFUI_DATA_ROOT="${SFUI_DATA_ROOT:-}"
 SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-}"
-VITS_RAW="${VITS_RAW:-/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ViTS_100e/checkpoint.pth}"
+MODEL_TAG="${MODEL_TAG:-vits}"
+DINO_RAW="${DINO_RAW:-${VITS_RAW:-/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ViTS_100e/checkpoint.pth}}"
 SFUI_CONFIG="${SFUI_CONFIG:-configs/exp_2/tri_pretrain/mask-rcnn_vit-small_dino_fpn_24e_uiis10k_control100k.py}"
 UIIS_CONFIG="${UIIS_CONFIG:-$SFUI_CONFIG}"
 UIIS_ROOT="${UIIS_ROOT:-/media/HDD0/XCX/exp_2/UIIS10K/coco}"
@@ -60,7 +61,7 @@ best_checkpoint() {
 [[ "$RUN_SFUI$RUN_UIIS" != "00" ]] || die "at least one stage must be enabled"
 if [[ "$RUN_SFUI" == 1 ]]; then
   [[ -d "$SFUI_DATA_ROOT" && -s "$SFUI_TRAIN_ANN" ]] || die "SFUI data root or annotation is missing"
-  [[ -s "$VITS_RAW" ]] || die "missing ViT-S DINO checkpoint: $VITS_RAW"
+  [[ -s "$DINO_RAW" ]] || die "missing DINO checkpoint: $DINO_RAW"
   [[ -s "$SFUI_CONFIG" && -s "$CONVERTER" ]] || die "missing SFUI base config or DINO converter"
 fi
 [[ -s "$HELPER" ]] || die "missing config helper: $HELPER"
@@ -91,13 +92,13 @@ wait_for_gpus() {
   done
 }
 
-prepare_raw_vits() {
-  local output="$CONVERTED_ROOT/imagenet_vits_dino_teacher_backbone.pth"
+prepare_raw_backbone() {
+  local output="$CONVERTED_ROOT/imagenet_${MODEL_TAG}_dino_teacher_backbone.pth"
   if [[ ! -s "$output" ]]; then
     local partial="$output.partial.$$"
-    "$PYTHON_BIN" "$CONVERTER" --checkpoint "$VITS_RAW" --source teacher --prepend backbone. --out "$partial" \
-      2>&1 | tee "$LOG_ROOT/convert_imagenet_vits.log"
-    [[ -s "$partial" ]] || die "ViT-S conversion did not produce weights"
+    "$PYTHON_BIN" "$CONVERTER" --checkpoint "$DINO_RAW" --source teacher --prepend backbone. --out "$partial" \
+      2>&1 | tee "$LOG_ROOT/convert_imagenet_${MODEL_TAG}.log"
+    [[ -s "$partial" ]] || die "DINO backbone conversion did not produce weights"
     mv "$partial" "$output"
   fi
 }
@@ -204,7 +205,7 @@ train_stage() {
   RESULT_CHECKPOINT="$best"
 }
 
-echo "SFUI->UIIS ViT-S Mask R-CNN pipeline"
+echo "SFUI->UIIS Mask R-CNN pipeline model=$MODEL_TAG"
 echo "output_root=$OUTPUT_ROOT sfui_gpus=$SFUI_GPUS uiis_gpus=$UIIS_GPUS"
 echo "sfui_epochs=$SFUI_EPOCHS sfui_lr=${SFUI_LR:-CONFIG_DEFAULT} uiis_epochs=$UIIS_EPOCHS uiis_lr=${UIIS_LR:-CONFIG_DEFAULT}"
 echo "sfui_train_ann=${SFUI_TRAIN_ANN:-NOT_USED} sfui_val_ann=${SFUI_VAL_ANN:-DISABLED} uiis_root=$UIIS_ROOT"
@@ -213,14 +214,14 @@ echo "pipeline_log=$PIPELINE_LOG"
 if [[ "$CHECK_ONLY" == 1 ]]; then
   "$PYTHON_BIN" -m py_compile "$HELPER"
   if [[ "$RUN_SFUI" == 1 ]]; then
-    sfui_work="$WORK_ROOT/sfui_vits_maskrcnn_${SFUI_EPOCHS}e"
+    sfui_work="$WORK_ROOT/sfui_${MODEL_TAG}_maskrcnn_${SFUI_EPOCHS}e"
     mkdir -p "$sfui_work"
-    write_sfui_config "$CONVERTED_ROOT/imagenet_vits_dino_teacher_backbone.pth" "$sfui_work"
+    write_sfui_config "$CONVERTED_ROOT/imagenet_${MODEL_TAG}_dino_teacher_backbone.pth" "$sfui_work"
   fi
   if [[ "$RUN_UIIS" == 1 ]]; then
-    uiis_work="$WORK_ROOT/uiis_vits_maskrcnn_${UIIS_EPOCHS}e"
+    uiis_work="$WORK_ROOT/uiis_${MODEL_TAG}_maskrcnn_${UIIS_EPOCHS}e"
     mkdir -p "$uiis_work"
-    uiis_init="$BACKBONE_ROOT/sfui_vits_maskrcnn_backbone.pth"
+    uiis_init="$BACKBONE_ROOT/sfui_${MODEL_TAG}_maskrcnn_backbone.pth"
     write_uiis_config "$uiis_init" "$uiis_work"
   fi
   echo "CHECK_ONLY=1 passed; no training or evaluation was started"
@@ -228,23 +229,23 @@ if [[ "$CHECK_ONLY" == 1 ]]; then
 fi
 
 if [[ "$RUN_SFUI" == 1 ]]; then
-  prepare_raw_vits
-  vits_init="$CONVERTED_ROOT/imagenet_vits_dino_teacher_backbone.pth"
-  sfui_work="$WORK_ROOT/sfui_vits_maskrcnn_${SFUI_EPOCHS}e"
+  prepare_raw_backbone
+  model_init="$CONVERTED_ROOT/imagenet_${MODEL_TAG}_dino_teacher_backbone.pth"
+  sfui_work="$WORK_ROOT/sfui_${MODEL_TAG}_maskrcnn_${SFUI_EPOCHS}e"
   sfui_runtime="$sfui_work/runtime_config.py"
   mkdir -p "$sfui_work"
-  write_sfui_config "$vits_init" "$sfui_work"
+  write_sfui_config "$model_init" "$sfui_work"
   train_stage sfui "$sfui_runtime" "$sfui_work" "$SFUI_GPUS" "$BASE_PORT" coco/segm_mAP "$SFUI_RUN_TEST"
   SFUI_CHECKPOINT="$RESULT_CHECKPOINT"
 fi
 
 if [[ "$RUN_UIIS" == 1 ]]; then
   [[ -s "$SFUI_CHECKPOINT" ]] || die "SFUI checkpoint is missing: $SFUI_CHECKPOINT"
-  adapted="$BACKBONE_ROOT/sfui_vits_maskrcnn_backbone.pth"
+  adapted="$BACKBONE_ROOT/sfui_${MODEL_TAG}_maskrcnn_backbone.pth"
   if [[ ! -s "$adapted" ]]; then
     "$PYTHON_BIN" "$HELPER" export-backbone --checkpoint "$SFUI_CHECKPOINT" --output "$adapted"
   fi
-  uiis_work="$WORK_ROOT/uiis_vits_maskrcnn_${UIIS_EPOCHS}e"
+  uiis_work="$WORK_ROOT/uiis_${MODEL_TAG}_maskrcnn_${UIIS_EPOCHS}e"
   uiis_runtime="$uiis_work/runtime_config.py"
   mkdir -p "$uiis_work"
   write_uiis_config "$adapted" "$uiis_work"

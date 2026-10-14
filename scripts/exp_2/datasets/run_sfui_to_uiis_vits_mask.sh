@@ -92,15 +92,74 @@ wait_for_gpus() {
   done
 }
 
+check_dist_ports() {
+  command -v ss >/dev/null 2>&1 || die "ss is required to check distributed-training ports"
+  local port
+  for port in "$BASE_PORT" "$((BASE_PORT + 10))" "$((BASE_PORT + 100))" "$((BASE_PORT + 110))"; do
+    if ss -H -ltn | awk -v suffix=":$port" '$4 ~ (suffix "$") { found=1 } END { exit !found }'; then
+      die "distributed port $port is already in use; set a different BASE_PORT"
+    fi
+  done
+}
+
+validate_raw_backbone() {
+  local checkpoint="$1"
+  MODEL_CONFIG="$SFUI_CONFIG" CHECKPOINT_PATH="$checkpoint" "$PYTHON_BIN" - <<'PY'
+import os
+import torch
+from mmengine.config import Config
+from mmdet.utils import register_all_modules
+from mmdet.registry import MODELS
+
+register_all_modules(init_default_scope=True)
+cfg = Config.fromfile(os.environ['MODEL_CONFIG'])
+model = MODELS.build(cfg.model)
+expected = model.backbone.state_dict()
+
+checkpoint = torch.load(
+    os.environ['CHECKPOINT_PATH'], map_location='cpu', weights_only=False)
+state = checkpoint.get('state_dict', checkpoint)
+state = {key.removeprefix('module.'): value for key, value in state.items()}
+matched = set(expected) & set(state)
+missing = set(expected) - set(state)
+unexpected = set(state) - set(expected)
+shape_mismatches = [
+    key for key in matched
+    if tuple(expected[key].shape) != tuple(state[key].shape)
+]
+
+print(f'backbone_model_tensors={len(expected)}')
+print(f'checkpoint_tensors={len(state)}')
+print(f'matched_backbone_tensors={len(matched)}')
+print(f'missing_backbone_tensors={len(missing)}')
+print(f'unexpected_checkpoint_tensors={len(unexpected)}')
+print(f'shape_mismatches={len(shape_mismatches)}')
+if missing or unexpected or shape_mismatches:
+    print('missing_examples:', sorted(missing)[:10])
+    print('unexpected_examples:', sorted(unexpected)[:10])
+    print('shape_mismatch_examples:', shape_mismatches[:10])
+    raise SystemExit('RESULT=FAIL_BACKBONE_WEIGHT_MATCH')
+print('RESULT=PASS_BACKBONE_WEIGHT_MATCH')
+PY
+}
+
 prepare_raw_backbone() {
   local output="$CONVERTED_ROOT/imagenet_${MODEL_TAG}_dino_teacher_backbone.pth"
-  if [[ ! -s "$output" ]]; then
-    local partial="$output.partial.$$"
-    "$PYTHON_BIN" "$CONVERTER" --checkpoint "$DINO_RAW" --source teacher --prepend backbone. --out "$partial" \
-      2>&1 | tee "$LOG_ROOT/convert_imagenet_${MODEL_TAG}.log"
-    [[ -s "$partial" ]] || die "DINO backbone conversion did not produce weights"
-    mv "$partial" "$output"
+  local partial="$output.partial.$$"
+  if [[ -s "$output" ]] && validate_raw_backbone "$output"; then
+    echo "Validated existing DINO backbone checkpoint: $output"
+    return
   fi
+
+  echo "Converting DINO checkpoint with backbone-module key names"
+  "$PYTHON_BIN" "$CONVERTER" --checkpoint "$DINO_RAW" --source teacher --prepend "" --out "$partial" \
+    2>&1 | tee "$LOG_ROOT/convert_imagenet_${MODEL_TAG}.log"
+  [[ -s "$partial" ]] || die "DINO backbone conversion did not produce weights"
+  if ! validate_raw_backbone "$partial"; then
+    rm -f -- "$partial"
+    die "converted DINO checkpoint does not exactly match the configured backbone"
+  fi
+  mv "$partial" "$output"
 }
 
 write_sfui_config() {
@@ -210,10 +269,12 @@ echo "output_root=$OUTPUT_ROOT sfui_gpus=$SFUI_GPUS uiis_gpus=$UIIS_GPUS"
 echo "sfui_epochs=$SFUI_EPOCHS sfui_lr=${SFUI_LR:-CONFIG_DEFAULT} uiis_epochs=$UIIS_EPOCHS uiis_lr=${UIIS_LR:-CONFIG_DEFAULT}"
 echo "sfui_train_ann=${SFUI_TRAIN_ANN:-NOT_USED} sfui_val_ann=${SFUI_VAL_ANN:-DISABLED} uiis_root=$UIIS_ROOT"
 echo "pipeline_log=$PIPELINE_LOG"
+check_dist_ports
 
 if [[ "$CHECK_ONLY" == 1 ]]; then
   "$PYTHON_BIN" -m py_compile "$HELPER"
   if [[ "$RUN_SFUI" == 1 ]]; then
+    prepare_raw_backbone
     sfui_work="$WORK_ROOT/sfui_${MODEL_TAG}_maskrcnn_${SFUI_EPOCHS}e"
     mkdir -p "$sfui_work"
     write_sfui_config "$CONVERTED_ROOT/imagenet_${MODEL_TAG}_dino_teacher_backbone.pth" "$sfui_work"

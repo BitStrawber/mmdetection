@@ -22,7 +22,7 @@ UIIS_EPOCHS="${UIIS_EPOCHS:-24}"
 SFUI_GPUS="${SFUI_GPUS:-6,7}"
 UIIS_GPUS="${UIIS_GPUS:-6,7}"
 MIN_FREE_MIB="${MIN_FREE_MIB:-8192}"
-BASE_PORT="${BASE_PORT:-39600}"
+BASE_PORT="${BASE_PORT:-39800}"
 RUN_NAME="${RUN_NAME:-imagenet_r50_aquaov255_thr070_easy_uiis_$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/sfui_uiis_runs/$RUN_NAME}"
 

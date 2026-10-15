@@ -23,7 +23,8 @@ SYNTHETIC5_R50_RAW="${SYNTHETIC5_R50_RAW:?set full Synthetic5 DINO ResNet-50 che
 SYNTHETIC5_VITS_RAW="${SYNTHETIC5_VITS_RAW:?set full Synthetic5 DINO ViT-S checkpoint}"
 
 R50_GPUS="${R50_GPUS:-4,5}"
-VITS_GPUS="${VITS_GPUS:-6,7}"
+VITS_GPUS="${VITS_GPUS:-4,5}"
+PARALLEL_ARCHITECTURES="${PARALLEL_ARCHITECTURES:-0}"
 BASE_PORT="${BASE_PORT:-30600}"
 DFUI_EPOCHS="${DFUI_EPOCHS:-48}"
 UIIS_EPOCHS="${UIIS_EPOCHS:-24}"
@@ -40,6 +41,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ "$SFUI_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || die "SFUI_NAME may contain only letters, digits, dot, underscore, and hyphen"
 [[ "$CHECK_ONLY" =~ ^[01]$ ]] || die "CHECK_ONLY must be 0 or 1"
 [[ "$RUN_TEST" =~ ^[01]$ ]] || die "RUN_TEST must be 0 or 1"
+[[ "$PARALLEL_ARCHITECTURES" =~ ^[01]$ ]] || die "PARALLEL_ARCHITECTURES must be 0 or 1"
 [[ "$DFUI_EPOCHS" =~ ^[1-9][0-9]*$ ]] || die "DFUI_EPOCHS must be a positive integer"
 [[ "$UIIS_EPOCHS" =~ ^[1-9][0-9]*$ ]] || die "UIIS_EPOCHS must be a positive integer"
 [[ "$MIN_FREE_MIB" =~ ^[0-9]+$ ]] || die "MIN_FREE_MIB must be a non-negative integer"
@@ -188,6 +190,7 @@ PROVENANCE="$OUTPUT_ROOT/run_provenance.tsv"
   printf 'uiis_root\t%s\n' "$UIIS_ROOT"
   printf 'r50_gpus\t%s\n' "$R50_GPUS"
   printf 'vits_gpus\t%s\n' "$VITS_GPUS"
+  printf 'parallel_architectures\t%s\n' "$PARALLEL_ARCHITECTURES"
   printf 'dfui_epochs\t%s\n' "$DFUI_EPOCHS"
   printf 'uiis_epochs\t%s\n' "$UIIS_EPOCHS"
   printf 'check_only\t%s\n' "$CHECK_ONLY"
@@ -202,7 +205,7 @@ PROVENANCE="$OUTPUT_ROOT/run_provenance.tsv"
 echo "SFUI -> UIIS full-pretraining comparison"
 echo "sfui_name=$SFUI_NAME sfui_root=$SFUI_ROOT"
 echo "three sources x two backbones; SFUI detector=${DFUI_EPOCHS}e -> UIIS Mask R-CNN=${UIIS_EPOCHS}e"
-echo "R50_GPUS=$R50_GPUS VITS_GPUS=$VITS_GPUS check_only=$CHECK_ONLY"
+echo "R50_GPUS=$R50_GPUS VITS_GPUS=$VITS_GPUS parallel_architectures=$PARALLEL_ARCHITECTURES check_only=$CHECK_ONLY"
 echo "output_root=$OUTPUT_ROOT"
 
 source_index=0
@@ -230,6 +233,7 @@ for source in imagenet realuw synthetic5; do
   DFUI_EPOCHS="$DFUI_EPOCHS" \
   R50_GPUS="$R50_GPUS" \
   VITS_GPUS="$VITS_GPUS" \
+  PARALLEL_ARCHITECTURES="$PARALLEL_ARCHITECTURES" \
   BASE_PORT="$port" \
   OUTPUT_ROOT="$source_output" \
   WORK_ROOT="$source_output/work_dirs" \

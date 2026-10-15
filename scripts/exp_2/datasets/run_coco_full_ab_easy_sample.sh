@@ -9,6 +9,7 @@ COCO_ANN="${COCO_ANN:-$COCO_ROOT/annotations/instances_train2017.json}"
 IMAGE_ROOT="${IMAGE_ROOT:-$COCO_ROOT/train2017}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/coco_easy_runs/coco_full_ab_easy_$(date +%Y%m%d_%H%M%S)}"
 CONFIG="${CONFIG:-configs/cascade_rcnn/cascade-rcnn_r50_fpn_1x_coco.py}"
+SELF_EVAL_CONFIG="${SELF_EVAL_CONFIG:-configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py}"
 GPUS="${GPUS:-6,7}"
 NUM_GPUS="${NUM_GPUS:-2}"
 BASE_PORT="${BASE_PORT:-39860}"
@@ -18,6 +19,10 @@ LR="${LR:-0.015}"
 WARMUP_ITERS="${WARMUP_ITERS:-500}"
 LR_MILESTONES="${LR_MILESTONES:-16,22}"
 LR_GAMMA="${LR_GAMMA:-0.1}"
+SELF_EVAL_EPOCHS="${SELF_EVAL_EPOCHS:-96}"
+SELF_EVAL_BATCH_SIZE="${SELF_EVAL_BATCH_SIZE:-4}"
+SELF_EVAL_MILESTONES="${SELF_EVAL_MILESTONES:-64,88}"
+SELF_EVAL_NUM_WORKERS="${SELF_EVAL_NUM_WORKERS:-2}"
 THRESHOLD="${THRESHOLD:-0.60}"
 AB_SEED="${AB_SEED:-42}"
 SAMPLE_SEED="${SAMPLE_SEED:-20261016}"
@@ -32,6 +37,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ -s "$COCO_ANN" && -d "$IMAGE_ROOT" ]] || die "missing COCO train2017 annotation or image directory"
 [[ -s tools/exp_2/coco_cross_easy.py ]] || die "missing COCO cross-filter helper"
 [[ -s "$CONFIG" ]] || die "missing detector config: $CONFIG"
+[[ -s "$SELF_EVAL_CONFIG" ]] || die "missing Faster R-CNN self-eval config: $SELF_EVAL_CONFIG"
 [[ "$NUM_GPUS" -eq 2 && "$GPUS" == "6,7" ]] || die "this launch profile is fixed to GPUs 6,7"
 [[ "$SAMPLE_COUNT" -eq $((TRAIN_COUNT + VAL_COUNT)) ]] || die "sample/train/val counts do not add up"
 [[ "$EPOCHS" -eq 24 ]] || die "RUOD-compatible COCO Easy schedule requires EPOCHS=24"
@@ -84,6 +90,19 @@ assert milestones == [16, 22], milestones
 print(f"base_config={path}")
 print(f"model={cfg.model.type} classes={len(classes)}")
 print(f"schedule={epochs}e batch_size_per_gpu={batch_size} lr={lr} warmup_iters={warmup} milestones={milestones} gamma={gamma}")
+PY
+  "$PYTHON_BIN" - "$SELF_EVAL_CONFIG" "$SELF_EVAL_EPOCHS" "$SELF_EVAL_BATCH_SIZE" "$SELF_EVAL_MILESTONES" <<'PY'
+import sys
+from mmengine.config import Config
+
+path, epochs, batch_size, milestones = sys.argv[1:]
+cfg = Config.fromfile(path)
+assert cfg.model.type == "FasterRCNN", cfg.model.type
+milestones = [int(value) for value in milestones.split(",")]
+assert int(epochs) == 96 and milestones == [64, 88], (epochs, milestones)
+print(f"self_eval_config={path}")
+print(f"self_eval_model={cfg.model.type} epochs={epochs} batch_size_per_gpu={batch_size} milestones={milestones} metric=bbox")
+print("self_eval_protocol=train and evaluate on the same sampled COCO-Easy set; not an independent generalization estimate")
 PY
   echo "CHECK_ONLY=1 passed; no data was written and no training was started"
   exit 0
@@ -185,9 +204,88 @@ PY
   --train-count "$TRAIN_COUNT" --val-count "$VAL_COUNT" --seed "$SAMPLE_SEED" \
   2>&1 | tee "$OUTPUT_ROOT/logs/sample.log"
 
-printf 'threshold\t%s\nab_seed\t%s\nsample_seed\t%s\neasy_pool\t%s\nsample_root\t%s\n' \
-  "$THRESHOLD" "$AB_SEED" "$SAMPLE_SEED" "$EASY_ROOT/instances_easy_merged.json" "$SAMPLE_ROOT" \
+SELF_EVAL_ANN="$SAMPLE_ROOT/annotations/instances_all.json"
+SELF_EVAL_WORK="$OUTPUT_ROOT/work_dirs/faster_rcnn_cocoeasy_self_eval"
+SELF_EVAL_TEST_WORK="$OUTPUT_ROOT/work_dirs/faster_rcnn_cocoeasy_self_eval_test"
+"$PYTHON_BIN" - "$SAMPLE_ROOT" "$SELF_EVAL_ANN" "$SAMPLE_COUNT" <<'PY'
+import json, sys
+from pathlib import Path
+
+root, output = Path(sys.argv[1]), Path(sys.argv[2])
+parts = [json.loads((root / "annotations" / f"instances_{split}.json").read_text()) for split in ("train", "val")]
+categories = parts[0].get("categories", [])
+if any(part.get("categories", []) != categories for part in parts[1:]):
+    raise SystemExit("COCO Easy train/val category definitions differ")
+images, annotations, image_ids, annotation_ids = [], [], set(), set()
+for part in parts:
+    for image in part.get("images", []):
+        image_id = int(image["id"])
+        if image_id in image_ids:
+            raise SystemExit(f"Duplicate image id in sampled self-eval set: {image_id}")
+        image_ids.add(image_id)
+        images.append(image)
+    for ann in part.get("annotations", []):
+        ann_id = int(ann["id"])
+        if ann_id in annotation_ids:
+            raise SystemExit(f"Duplicate annotation id in sampled self-eval set: {ann_id}")
+        annotation_ids.add(ann_id)
+        annotations.append(ann)
+output.parent.mkdir(parents=True, exist_ok=True)
+output.write_text(json.dumps({"images": images, "annotations": annotations, "categories": categories}), encoding="utf-8")
+print(f"self_eval_images={len(images)} self_eval_annotations={len(annotations)} output={output}")
+if len(images) != int(sys.argv[3]):
+    raise SystemExit("Unexpected self-eval image count")
+PY
+
+mkdir -p "$SELF_EVAL_WORK" "$SELF_EVAL_TEST_WORK"
+"$PYTHON_BIN" - "$SELF_EVAL_CONFIG" "$SAMPLE_ROOT" "$SELF_EVAL_ANN" "$SELF_EVAL_WORK" "$SELF_EVAL_EPOCHS" "$SELF_EVAL_BATCH_SIZE" "$SELF_EVAL_NUM_WORKERS" "$SELF_EVAL_MILESTONES" <<'PY'
+import sys
+from mmengine.config import Config
+from mmdet.datasets import CocoDataset
+
+config, root, annotation, work, epochs, batch_size, workers, milestones = sys.argv[1:]
+cfg = Config.fromfile(config)
+if cfg.model.type != "FasterRCNN":
+    raise SystemExit(f"Expected FasterRCNN config; got {cfg.model.type}")
+classes = CocoDataset.METAINFO["classes"]
+if len(classes) != 80:
+    raise SystemExit(f"Expected 80 built-in COCO classes; got {len(classes)}")
+dataset = dict(type="CocoDataset", data_root=root.rstrip("/") + "/",
+               ann_file=annotation, data_prefix=dict(img="images/"),
+               metainfo=dict(classes=classes))
+for key in ("train_dataloader", "val_dataloader", "test_dataloader"):
+    cfg[key].dataset = dict(dataset)
+    cfg[key].num_workers = int(workers)
+cfg.train_dataloader.batch_size = int(batch_size)
+cfg.val_dataloader.batch_size = 1
+cfg.train_cfg.max_epochs = int(epochs)
+cfg.train_cfg.val_interval = 1
+milestones = [int(value) for value in milestones.split(",")]
+cfg.param_scheduler[1].end = int(epochs)
+cfg.param_scheduler[1].milestones = milestones
+for key in ("val_evaluator", "test_evaluator"):
+    cfg[key].ann_file = annotation
+    cfg[key].metric = "bbox"
+cfg.default_hooks.checkpoint.save_best = "coco/bbox_mAP"
+cfg.default_hooks.checkpoint.max_keep_ckpts = 5
+cfg.load_from = None
+cfg.work_dir = work
+cfg.dump(work + "/runtime_config.py")
+print(f"self_eval_runtime_config={work}/runtime_config.py classes={len(classes)} epochs={epochs} batch_size_per_gpu={batch_size} milestones={milestones}")
+PY
+SELF_TRAIN_PORT="$((BASE_PORT + 2))"
+SELF_TEST_PORT="$((BASE_PORT + 3))"
+PORT="$SELF_TRAIN_PORT" CUDA_VISIBLE_DEVICES="$GPUS" bash tools/dist_train.sh "$SELF_EVAL_WORK/runtime_config.py" "$NUM_GPUS" \
+  --work-dir "$SELF_EVAL_WORK" 2>&1 | tee "$OUTPUT_ROOT/logs/faster_rcnn_self_eval_train.log"
+SELF_CKPT="$(find "$SELF_EVAL_WORK" -maxdepth 1 -type f -name 'best_coco_bbox_mAP*.pth' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+[[ -s "$SELF_CKPT" ]] || die "Faster R-CNN self-eval did not produce a best bbox mAP checkpoint"
+printf '%s\n' "$SELF_CKPT" > "$SELF_EVAL_WORK/best_checkpoint.txt"
+PORT="$SELF_TEST_PORT" CUDA_VISIBLE_DEVICES="$GPUS" bash tools/dist_test.sh "$SELF_EVAL_WORK/runtime_config.py" "$SELF_CKPT" "$NUM_GPUS" \
+  --work-dir "$SELF_EVAL_TEST_WORK" 2>&1 | tee "$OUTPUT_ROOT/logs/faster_rcnn_self_eval_test.log"
+
+printf 'threshold\t%s\nab_seed\t%s\nsample_seed\t%s\neasy_pool\t%s\nsample_root\t%s\nself_eval_checkpoint\t%s\nself_eval_annotation\t%s\nself_eval_protocol\ttrain_and_test_on_same_sampled_easy_images_not_independent_test\n' \
+  "$THRESHOLD" "$AB_SEED" "$SAMPLE_SEED" "$EASY_ROOT/instances_easy_merged.json" "$SAMPLE_ROOT" "$SELF_CKPT" "$SELF_EVAL_ANN" \
   > "$OUTPUT_ROOT/run_provenance.tsv"
 touch "$OUTPUT_ROOT/.complete"
-echo "RESULT=PASS_COCO_FULL_AB_EASY_AND_DFUI_SAMPLE"
+echo "RESULT=PASS_COCO_FULL_AB_EASY_DFUI_SAMPLE_AND_FASTER_SELF_EVAL"
 echo "OUTPUT_ROOT=$OUTPUT_ROOT"

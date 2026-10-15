@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# Cross-filter the full COCO train2017 set, then sample a DFUI-sized COCO-Easy dataset.
+set -Eeuo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
+
+COCO_ROOT="${COCO_ROOT:-/media/HDD2/XCX/exp_2/COCO2017}"
+COCO_ANN="${COCO_ANN:-$COCO_ROOT/annotations/instances_train2017.json}"
+IMAGE_ROOT="${IMAGE_ROOT:-$COCO_ROOT/train2017}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/coco_easy_runs/coco_full_ab_easy_$(date +%Y%m%d_%H%M%S)}"
+CONFIG="${CONFIG:-configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_coco.py}"
+GPUS="${GPUS:-6,7}"
+NUM_GPUS="${NUM_GPUS:-2}"
+BASE_PORT="${BASE_PORT:-39860}"
+EPOCHS="${EPOCHS:-24}"
+THRESHOLD="${THRESHOLD:-0.60}"
+AB_SEED="${AB_SEED:-42}"
+SAMPLE_SEED="${SAMPLE_SEED:-20261016}"
+SAMPLE_COUNT="${SAMPLE_COUNT:-11494}"
+TRAIN_COUNT="${TRAIN_COUNT:-9770}"
+VAL_COUNT="${VAL_COUNT:-1724}"
+MIN_FREE_MIB="${MIN_FREE_MIB:-8192}"
+CHECK_ONLY="${CHECK_ONLY:-0}"
+PYTHON_BIN="${PYTHON_BIN:-python}"
+
+die() { echo "ERROR: $*" >&2; exit 1; }
+[[ -s "$COCO_ANN" && -d "$IMAGE_ROOT" ]] || die "missing COCO train2017 annotation or image directory"
+[[ -s tools/exp_2/coco_cross_easy.py ]] || die "missing COCO cross-filter helper"
+[[ -s "$CONFIG" ]] || die "missing detector config: $CONFIG"
+[[ "$NUM_GPUS" -eq 2 && "$GPUS" == "6,7" ]] || die "this launch profile is fixed to GPUs 6,7"
+[[ "$SAMPLE_COUNT" -eq $((TRAIN_COUNT + VAL_COUNT)) ]] || die "sample/train/val counts do not add up"
+"$PYTHON_BIN" - "$THRESHOLD" <<'PY'
+import sys
+try:
+    value = float(sys.argv[1])
+except ValueError:
+    raise SystemExit("THRESHOLD must be numeric")
+if not 0.0 <= value <= 1.0:
+    raise SystemExit("THRESHOLD must be in [0, 1]")
+PY
+[[ ! -e "$OUTPUT_ROOT" ]] || die "output already exists: $OUTPUT_ROOT"
+
+echo "===== COCO source counts ====="
+"$PYTHON_BIN" - "$COCO_ANN" "$IMAGE_ROOT" <<'PY'
+import json, sys
+from pathlib import Path
+ann = json.loads(Path(sys.argv[1]).read_text())
+root = Path(sys.argv[2])
+images = ann.get('images', [])
+missing = sum(not (root / image['file_name']).is_file() for image in images)
+print(f"images={len(images)} annotations={len(ann.get('annotations', []))} categories={len(ann.get('categories', []))} missing_images={missing}")
+if missing:
+    raise SystemExit("COCO image validation failed")
+PY
+
+if command -v nvidia-smi >/dev/null 2>&1; then
+  nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits |
+  awk -F', *' -v min="$MIN_FREE_MIB" '($1==6 || $1==7) {print "GPU=" $1 " free_MiB=" $2; if ($2<min) bad=1; seen[$1]=1} END {if (!seen[6] || !seen[7] || bad) exit 1}' \
+    || die "GPU 6 and GPU 7 must each have at least ${MIN_FREE_MIB} MiB free"
+fi
+
+if [[ "$CHECK_ONLY" == 1 ]]; then
+  echo "CHECK_ONLY=1 passed; no data was written and no training was started"
+  exit 0
+fi
+
+mkdir -p "$OUTPUT_ROOT" "$OUTPUT_ROOT/logs" "$OUTPUT_ROOT/work_dirs"
+AB_ROOT="$OUTPUT_ROOT/ab_split"
+EASY_ROOT="$OUTPUT_ROOT/easy_full"
+SAMPLE_ROOT="$OUTPUT_ROOT/DFUI_COCOEasy"
+"$PYTHON_BIN" tools/exp_2/coco_cross_easy.py split --annotation "$COCO_ANN" --output "$AB_ROOT" --seed "$AB_SEED" \
+  2>&1 | tee "$OUTPUT_ROOT/logs/split.log"
+
+write_runtime_config() {
+  local fold="$1" ann_train="$2" ann_val="$3" work="$4" port="$5"
+  "$PYTHON_BIN" - "$CONFIG" "$COCO_ROOT" "$ann_train" "$ann_val" "$work" "$EPOCHS" <<'PY'
+import sys
+from mmengine.config import Config
+cfg = Config.fromfile(sys.argv[1])
+root, train_ann, val_ann, work, epochs = sys.argv[2:]
+for key, ann in (("train_dataloader", train_ann), ("val_dataloader", val_ann), ("test_dataloader", val_ann)):
+    ds = cfg[key].dataset
+    ds.data_root = root.rstrip('/') + '/'
+    ds.ann_file = ann
+    ds.data_prefix = dict(img='train2017/')
+for key in ("val_evaluator", "test_evaluator"):
+    cfg[key].ann_file = val_ann
+cfg.train_cfg.max_epochs = int(epochs)
+cfg.train_cfg.val_interval = 1
+cfg.default_hooks.checkpoint.save_best = "coco/bbox_mAP"
+cfg.default_hooks.checkpoint.max_keep_ckpts = 3
+cfg.load_from = None
+cfg.work_dir = work
+cfg.dump(work + "/runtime_config.py")
+PY
+}
+
+train_fold() {
+  local train_fold="$1" val_fold="$2" stage="train_${1}_val_${2}"
+  local work="$OUTPUT_ROOT/work_dirs/$stage" port
+  if [[ "$train_fold" == A ]]; then port="$BASE_PORT"; else port="$((BASE_PORT + 1))"; fi
+  mkdir -p "$work"
+  write_runtime_config "$train_fold" "$AB_ROOT/train_${train_fold}.json" "$AB_ROOT/train_${val_fold}.json" "$work" "$port"
+  PORT="$port" CUDA_VISIBLE_DEVICES="$GPUS" bash tools/dist_train.sh "$work/runtime_config.py" "$NUM_GPUS" \
+    --work-dir "$work" 2>&1 | tee "$OUTPUT_ROOT/logs/$stage.log"
+  local ckpt
+  ckpt="$(find "$work" -maxdepth 1 -type f -name 'best_coco_bbox_mAP*.pth' -printf '%T@ %p\n' | sort -nr | head -n1 | cut -d' ' -f2-)"
+  [[ -s "$ckpt" ]] || die "no best bbox mAP checkpoint produced for $stage"
+  printf '%s\n' "$ckpt" > "$work/best_checkpoint.txt"
+}
+
+filter_fold() {
+  local train_fold="$1" target_fold="$2" work="$OUTPUT_ROOT/work_dirs/train_${train_fold}_val_${target_fold}"
+  local ckpt
+  ckpt="$(cat "$work/best_checkpoint.txt")"
+  CUDA_VISIBLE_DEVICES="${GPUS%%,*}" "$PYTHON_BIN" tools/exp_2/coco_cross_easy.py filter \
+    --annotation "$AB_ROOT/train_${target_fold}.json" --image-root "$IMAGE_ROOT" \
+    --config "$work/runtime_config.py" --checkpoint "$ckpt" --output "$EASY_ROOT/easy_${target_fold}" \
+    --threshold "$THRESHOLD" --device cuda:0 2>&1 | tee "$OUTPUT_ROOT/logs/filter_${target_fold}.log"
+}
+
+train_fold A B
+filter_fold A B
+train_fold B A
+filter_fold B A
+
+"$PYTHON_BIN" - "$EASY_ROOT/easy_A/instances_easy.json" "$EASY_ROOT/easy_B/instances_easy.json" "$EASY_ROOT/instances_easy_merged.json" <<'PY'
+import json, sys
+from pathlib import Path
+a, b = [json.loads(Path(p).read_text()) for p in sys.argv[1:3]]
+ids_a = {int(x['id']) for x in a['images']}
+ids_b = {int(x['id']) for x in b['images']}
+if ids_a & ids_b:
+    raise SystemExit('A/B easy outputs overlap')
+merged = dict(a)
+merged['images'] = a['images'] + b['images']
+merged['annotations'] = a['annotations'] + b['annotations']
+Path(sys.argv[3]).parent.mkdir(parents=True, exist_ok=True)
+Path(sys.argv[3]).write_text(json.dumps(merged), encoding='utf-8')
+print(f"easy_images={len(merged['images'])} easy_annotations={len(merged['annotations'])}")
+PY
+
+"$PYTHON_BIN" tools/exp_2/coco_cross_easy.py sample --easy-annotation "$EASY_ROOT/instances_easy_merged.json" \
+  --image-root "$IMAGE_ROOT" --output "$SAMPLE_ROOT" --count "$SAMPLE_COUNT" \
+  --train-count "$TRAIN_COUNT" --val-count "$VAL_COUNT" --seed "$SAMPLE_SEED" \
+  2>&1 | tee "$OUTPUT_ROOT/logs/sample.log"
+
+printf 'threshold\t%s\nab_seed\t%s\nsample_seed\t%s\neasy_pool\t%s\nsample_root\t%s\n' \
+  "$THRESHOLD" "$AB_SEED" "$SAMPLE_SEED" "$EASY_ROOT/instances_easy_merged.json" "$SAMPLE_ROOT" \
+  > "$OUTPUT_ROOT/run_provenance.tsv"
+touch "$OUTPUT_ROOT/.complete"
+echo "RESULT=PASS_COCO_FULL_AB_EASY_AND_DFUI_SAMPLE"
+echo "OUTPUT_ROOT=$OUTPUT_ROOT"

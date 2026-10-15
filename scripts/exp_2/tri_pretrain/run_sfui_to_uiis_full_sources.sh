@@ -175,7 +175,7 @@ if [ "$MIN_FREE_MIB" -gt 0 ]; then
   nvidia-smi --query-gpu=index,memory.free --format=csv,noheader,nounits |
   awk -F', *' -v r50="$R50_GPUS" -v vits="$VITS_GPUS" -v min="$MIN_FREE_MIB" '
     BEGIN { n=split(r50,a,","); for(i=1;i<=n;i++) wanted[a[i]]=1; n=split(vits,b,","); for(i=1;i<=n;i++) wanted[b[i]]=1 }
-    wanted[$1] { print "GPU=" $1 " free_MiB=" $2; if ($2 < min) failed=1; seen[$1]=1 }
+    ($1 in wanted) { print "GPU=" $1 " free_MiB=" $2; if ($2 < min) failed=1; seen[$1]=1 }
     END { for (gpu in wanted) if (!seen[gpu]) failed=1; exit failed }
   ' || die "selected GPUs do not meet MIN_FREE_MIB=$MIN_FREE_MIB"
 fi

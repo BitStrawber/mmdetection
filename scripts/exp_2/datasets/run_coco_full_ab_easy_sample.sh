@@ -8,11 +8,16 @@ COCO_ROOT="${COCO_ROOT:-/media/HDD2/XCX/exp_2/COCO2017}"
 COCO_ANN="${COCO_ANN:-$COCO_ROOT/annotations/instances_train2017.json}"
 IMAGE_ROOT="${IMAGE_ROOT:-$COCO_ROOT/train2017}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/coco_easy_runs/coco_full_ab_easy_$(date +%Y%m%d_%H%M%S)}"
-CONFIG="${CONFIG:-configs/cascade_rcnn/cascade-rcnn_r50_fpn_2x_coco.py}"
+CONFIG="${CONFIG:-configs/cascade_rcnn/cascade-rcnn_r50_fpn_1x_coco.py}"
 GPUS="${GPUS:-6,7}"
 NUM_GPUS="${NUM_GPUS:-2}"
 BASE_PORT="${BASE_PORT:-39860}"
 EPOCHS="${EPOCHS:-24}"
+TRAIN_BATCH_SIZE="${TRAIN_BATCH_SIZE:-6}"
+LR="${LR:-0.015}"
+WARMUP_ITERS="${WARMUP_ITERS:-500}"
+LR_MILESTONES="${LR_MILESTONES:-16,22}"
+LR_GAMMA="${LR_GAMMA:-0.1}"
 THRESHOLD="${THRESHOLD:-0.60}"
 AB_SEED="${AB_SEED:-42}"
 SAMPLE_SEED="${SAMPLE_SEED:-20261016}"
@@ -29,6 +34,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ -s "$CONFIG" ]] || die "missing detector config: $CONFIG"
 [[ "$NUM_GPUS" -eq 2 && "$GPUS" == "6,7" ]] || die "this launch profile is fixed to GPUs 6,7"
 [[ "$SAMPLE_COUNT" -eq $((TRAIN_COUNT + VAL_COUNT)) ]] || die "sample/train/val counts do not add up"
+[[ "$EPOCHS" -eq 24 ]] || die "RUOD-compatible COCO Easy schedule requires EPOCHS=24"
 "$PYTHON_BIN" - "$THRESHOLD" <<'PY'
 import sys
 try:
@@ -60,6 +66,25 @@ if command -v nvidia-smi >/dev/null 2>&1; then
 fi
 
 if [[ "$CHECK_ONLY" == 1 ]]; then
+  "$PYTHON_BIN" - "$CONFIG" "$EPOCHS" "$TRAIN_BATCH_SIZE" "$LR" "$WARMUP_ITERS" "$LR_MILESTONES" "$LR_GAMMA" <<'PY'
+import sys
+from mmengine.config import Config
+from mmdet.datasets import CocoDataset
+
+path, epochs, batch_size, lr, warmup, milestones, gamma = sys.argv[1:]
+cfg = Config.fromfile(path)
+classes = cfg.train_dataloader.dataset.get("metainfo", {}).get(
+    "classes", CocoDataset.METAINFO["classes"])
+assert cfg.model.type == "CascadeRCNN", cfg.model.type
+assert len(classes) == 80, f"Expected 80 COCO classes, got {len(classes)}"
+assert int(epochs) == 24
+assert int(batch_size) == 6
+milestones = [int(value) for value in milestones.split(",")]
+assert milestones == [16, 22], milestones
+print(f"base_config={path}")
+print(f"model={cfg.model.type} classes={len(classes)}")
+print(f"schedule={epochs}e batch_size_per_gpu={batch_size} lr={lr} warmup_iters={warmup} milestones={milestones} gamma={gamma}")
+PY
   echo "CHECK_ONLY=1 passed; no data was written and no training was started"
   exit 0
 fi
@@ -73,25 +98,40 @@ SAMPLE_ROOT="$OUTPUT_ROOT/DFUI_COCOEasy"
 
 write_runtime_config() {
   local fold="$1" ann_train="$2" ann_val="$3" work="$4" port="$5"
-  "$PYTHON_BIN" - "$CONFIG" "$COCO_ROOT" "$ann_train" "$ann_val" "$work" "$EPOCHS" <<'PY'
+  "$PYTHON_BIN" - "$CONFIG" "$COCO_ROOT" "$ann_train" "$ann_val" "$work" "$EPOCHS" "$TRAIN_BATCH_SIZE" "$LR" "$WARMUP_ITERS" "$LR_MILESTONES" "$LR_GAMMA" <<'PY'
 import sys
 from mmengine.config import Config
+from mmdet.datasets import CocoDataset
 cfg = Config.fromfile(sys.argv[1])
-root, train_ann, val_ann, work, epochs = sys.argv[2:]
+root, train_ann, val_ann, work, epochs, batch_size, lr, warmup, milestones, gamma = sys.argv[2:]
+classes = cfg.train_dataloader.dataset.get("metainfo", {}).get(
+    "classes", CocoDataset.METAINFO["classes"])
+if cfg.model.type != "CascadeRCNN" or len(classes) != 80:
+    raise SystemExit(f"Expected an 80-class CascadeRCNN COCO config; got {cfg.model.type} with {len(classes)} classes")
 for key, ann in (("train_dataloader", train_ann), ("val_dataloader", val_ann), ("test_dataloader", val_ann)):
     ds = cfg[key].dataset
     ds.data_root = root.rstrip('/') + '/'
     ds.ann_file = ann
     ds.data_prefix = dict(img='train2017/')
+    ds.metainfo = dict(classes=classes)
+cfg.train_dataloader.batch_size = int(batch_size)
 for key in ("val_evaluator", "test_evaluator"):
     cfg[key].ann_file = val_ann
 cfg.train_cfg.max_epochs = int(epochs)
 cfg.train_cfg.val_interval = 1
+cfg.optim_wrapper.optimizer.lr = float(lr)
+milestones = [int(value) for value in milestones.split(',')]
+cfg.param_scheduler = [
+    dict(type='LinearLR', start_factor=0.001, by_epoch=False, begin=0, end=int(warmup)),
+    dict(type='MultiStepLR', begin=0, end=int(epochs), by_epoch=True,
+         milestones=milestones, gamma=float(gamma)),
+]
 cfg.default_hooks.checkpoint.save_best = "coco/bbox_mAP"
 cfg.default_hooks.checkpoint.max_keep_ckpts = 3
 cfg.load_from = None
 cfg.work_dir = work
 cfg.dump(work + "/runtime_config.py")
+print(f"runtime_config={work}/runtime_config.py classes={len(classes)} epochs={epochs} batch_size_per_gpu={batch_size} lr={lr} warmup_iters={warmup} milestones={milestones} gamma={gamma}")
 PY
 }
 

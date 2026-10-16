@@ -2,8 +2,10 @@
 set -Eeuo pipefail
 
 # Generic serial launcher for six pretrained-source -> DFUI -> RUOD runs.
-# The underlying R50/ViT runners must honor at least one checkpoint variable
-# passed below; the launcher supplies common aliases for older runners.
+# The underlying R50/ViT runners expose architecture-specific raw checkpoint
+# variables. Keep the generic aliases below for older runners, but always pass
+# the architecture-specific variables so the selected manifest checkpoint is
+# actually used.
 
 die() {
   echo "ERROR: $*" >&2
@@ -113,10 +115,10 @@ check_dataset "$RUOD_ROOT"
 require_file "$R50_SCRIPT"
 require_file "$VITS_SCRIPT"
 
-if ! grep -qE 'PRETRAIN_CKPT|S1_CKPT|DINO_RAW|SOURCE_CKPT|CHECKPOINT' "$R50_SCRIPT"; then
+if ! grep -qE 'R50_RAW|PRETRAIN_CKPT|S1_CKPT|DINO_RAW|SOURCE_CKPT|CHECKPOINT' "$R50_SCRIPT"; then
   die "R50 runner does not expose a recognizable pretrained-checkpoint variable: $R50_SCRIPT"
 fi
-if ! grep -qE 'PRETRAIN_CKPT|S1_CKPT|DINO_RAW|SOURCE_CKPT|CHECKPOINT' "$VITS_SCRIPT"; then
+if ! grep -qE 'VITS_RAW|PRETRAIN_CKPT|S1_CKPT|DINO_RAW|SOURCE_CKPT|CHECKPOINT' "$VITS_SCRIPT"; then
   die "ViT-S runner does not expose a recognizable pretrained-checkpoint variable: $VITS_SCRIPT"
 fi
 
@@ -203,6 +205,8 @@ run_one() {
     DFUI_ROOT="$DFUI_ROOT" \
     DFUI_RUOD_ROOT="$DFUI_ROOT" \
     RUOD_ROOT="$RUOD_ROOT" \
+    R50_RAW="$checkpoint" \
+    VITS_RAW="$checkpoint" \
     PRETRAIN_CKPT="$checkpoint" \
     S1_CKPT="$checkpoint" \
     DINO_RAW="$checkpoint" \

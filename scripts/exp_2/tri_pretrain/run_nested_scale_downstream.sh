@@ -330,7 +330,10 @@ run_arch() {
   return 0
 }
 
-for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$R50_MASK_CONFIG" "$VITS_DET_CONFIG" "$VITS_MASK_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$VITS_DET_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+if [ "$RUN_DIRECT" = 1 ] && [[ ",$DIRECT_TASKS," == *,uiis,* ]]; then
+  for file in "$R50_MASK_CONFIG" "$VITS_MASK_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+fi
 
 # Validate only datasets used by the requested branches.  RUOD-only runs must
 # not depend on UIIS paths that are irrelevant to the experiment.
@@ -341,7 +344,10 @@ if [ "$RUN_DIRECT" = 1 ] && [[ ",$DIRECT_TASKS," == *,uiis,* ]]; then
   [ -f "$UIIS_ROOT/annotations/instances_train.json" ] && [ -f "$UIIS_ROOT/annotations/instances_val.json" ] || die "invalid dataset: $UIIS_ROOT"
 fi
 if [ "$RUN_DFUI" = 1 ]; then
-  for file in "$R50_DFUI_RUOD_CONFIG" "$R50_DFUI_RUOD_UIIS_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+  for file in "$R50_DFUI_RUOD_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+  if [[ ",$VARIANTS," == *,dfui_ruod_uiis,* ]]; then
+    [ -s "$R50_DFUI_RUOD_UIIS_CONFIG" ] || die "missing required file: $R50_DFUI_RUOD_UIIS_CONFIG"
+  fi
   [ -f "$DFUI_RUOD_ROOT/annotations/instances_train.json" ] && [ -f "$DFUI_RUOD_ROOT/annotations/instances_val.json" ] || die "invalid dataset: $DFUI_RUOD_ROOT"
   if [[ ",$VARIANTS," == *,dfui_ruod_uiis,* ]] || [[ ",$DFUI_FOLLOWUPS," == *,mask,* ]]; then
     [ -f "$DFUI_RUOD_UIIS_ROOT/annotations/instances_train.json" ] && [ -f "$DFUI_RUOD_UIIS_ROOT/annotations/instances_val.json" ] || die "invalid dataset: $DFUI_RUOD_UIIS_ROOT"

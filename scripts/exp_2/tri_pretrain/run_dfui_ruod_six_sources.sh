@@ -33,6 +33,8 @@ RUOD_LR="${RUOD_LR:-0.005}"
 RUN_TEST="${RUN_TEST:-1}"
 CHECK_ONLY="${CHECK_ONLY:-0}"
 SOURCES="${SOURCES:-all}"
+DFUI_DYNAMIC_CLASSES="${DFUI_DYNAMIC_CLASSES:-1}"
+DFUI_CLASS_NAMES_FILE="${DFUI_CLASS_NAMES_FILE:-}"
 
 R50_ARGS="${R50_ARGS:-}"
 VITS_ARGS="${VITS_ARGS:-}"
@@ -136,6 +138,8 @@ printf 'dfui_root\t%s\nruod_root\t%s\npretrain_root\t%s\n' \
   "$DFUI_ROOT" "$RUOD_ROOT" "$PRETRAIN_ROOT" >> "$PROVENANCE_TSV"
 printf 'dfui_epochs\t%s\nruod_epochs\t%s\ndfui_lr\t%s\nruod_lr\t%s\n' \
   "$DFUI_EPOCHS" "$RUOD_EPOCHS" "$DFUI_LR" "$RUOD_LR" >> "$PROVENANCE_TSV"
+printf 'dfui_dynamic_classes\t%s\ndfui_class_names_file\t%s\n' \
+  "$DFUI_DYNAMIC_CLASSES" "$DFUI_CLASS_NAMES_FILE" >> "$PROVENANCE_TSV"
 
 if [ "$CHECK_ONLY" = "1" ]; then
   echo "===== CHECK_ONLY manifest ====="
@@ -227,6 +231,8 @@ run_one() {
     RUOD_EPOCHS="$RUOD_EPOCHS" \
     DFUI_LR="$DFUI_LR" \
     RUOD_LR="$RUOD_LR" \
+    DFUI_DYNAMIC_CLASSES="$DFUI_DYNAMIC_CLASSES" \
+    DFUI_CLASS_NAMES_FILE="$DFUI_CLASS_NAMES_FILE" \
     RUN_TEST="$RUN_TEST" \
     CHECK_ONLY=0 \
     bash -c "bash \"$runner\" $runner_args" \

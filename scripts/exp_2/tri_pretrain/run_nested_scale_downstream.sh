@@ -153,24 +153,32 @@ is_dfui_detector = is_dfui_detector == '1'
 dynamic_classes = dynamic_classes == '1'
 cfg = Config.fromfile(source)
 
-if is_dfui_detector:
-    # DFUI variants may store either bare filenames (with the dataset's
-    # images/ directory supplied by data_prefix) or paths that already start
-    # with images/. Infer the prefix from the annotation instead of blindly
-    # producing images/images/... paths.
-    def infer_image_prefix(ann_name):
-        ann_path = root / 'annotations' / ann_name
-        data = json.loads(ann_path.read_text(encoding='utf-8'))
-        names = [str(item.get('file_name', '')) for item in data.get('images', [])]
-        sample = [name for name in names if name][:32]
-        if sample and all((root / name).is_file() for name in sample):
-            return ''
-        return 'images/'
+def resolve_annotation(ann_name, default_prefix):
+    """Return an annotation path and image prefix matching the files on disk."""
+    source = root / 'annotations' / ann_name
+    if not is_dfui_detector:
+        return str(source), default_prefix
 
-    train_images = infer_image_prefix('instances_train.json')
-    val_images = infer_image_prefix('instances_val.json')
-else:
-    train_images, val_images = 'train/', 'val/'
+    data = json.loads(source.read_text(encoding='utf-8'))
+    names = [str(item.get('file_name', '')) for item in data.get('images', [])]
+    sample = [name for name in names if name][:64]
+
+    if sample and all((root / name).is_file() for name in sample):
+        return str(source), ''
+
+    if sample and all((root / 'images' / Path(name).name).is_file() for name in sample):
+        for item in data.get('images', []):
+            item['file_name'] = Path(str(item['file_name'])).name
+        normalized = output.parent / f'{Path(ann_name).stem}_basename.json'
+        normalized.write_text(json.dumps(data), encoding='utf-8')
+        return str(normalized), 'images/'
+
+    raise SystemExit(
+        f'Cannot resolve image paths for {source}; expected either '
+        f'root/file_name or root/images/basename')
+
+train_ann_path, train_images = resolve_annotation('instances_train.json', 'train/')
+val_ann_path, val_images = resolve_annotation('instances_val.json', 'val/')
 
 classes = (
     'holothurian', 'echinus', 'scallop', 'starfish', 'fish', 'corals',
@@ -209,17 +217,17 @@ def configure_dataset(dataset, ann_file, image_prefix):
     if is_dfui_detector:
         dataset['metainfo'] = dict(classes=classes)
 
-configure_dataset(cfg.train_dataloader['dataset'], 'instances_train.json', train_images)
-configure_dataset(cfg.val_dataloader['dataset'], 'instances_val.json', val_images)
-configure_dataset(cfg.test_dataloader['dataset'], 'instances_val.json', val_images)
+configure_dataset(cfg.train_dataloader['dataset'], train_ann_path, train_images)
+configure_dataset(cfg.val_dataloader['dataset'], val_ann_path, val_images)
+configure_dataset(cfg.test_dataloader['dataset'], val_ann_path, val_images)
 
 for evaluator_name in ('val_evaluator', 'test_evaluator'):
     evaluator = cfg.get(evaluator_name)
     if isinstance(evaluator, (list, tuple)):
         for item in evaluator:
-            item['ann_file'] = str(root / 'annotations' / 'instances_val.json')
+            item['ann_file'] = val_ann_path
     elif evaluator is not None:
-        evaluator['ann_file'] = str(root / 'annotations' / 'instances_val.json')
+        evaluator['ann_file'] = val_ann_path
 
 cfg.model.backbone['init_cfg'] = dict(type='Pretrained', checkpoint=init)
 cfg['load_from'] = None

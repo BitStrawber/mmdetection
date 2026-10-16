@@ -154,7 +154,21 @@ dynamic_classes = dynamic_classes == '1'
 cfg = Config.fromfile(source)
 
 if is_dfui_detector:
-    train_images = val_images = 'images/'
+    # DFUI variants may store either bare filenames (with the dataset's
+    # images/ directory supplied by data_prefix) or paths that already start
+    # with images/. Infer the prefix from the annotation instead of blindly
+    # producing images/images/... paths.
+    def infer_image_prefix(ann_name):
+        ann_path = root / 'annotations' / ann_name
+        data = json.loads(ann_path.read_text(encoding='utf-8'))
+        names = [str(item.get('file_name', '')) for item in data.get('images', [])]
+        sample = [name for name in names if name][:32]
+        if sample and all((root / name).is_file() for name in sample):
+            return ''
+        return 'images/'
+
+    train_images = infer_image_prefix('instances_train.json')
+    val_images = infer_image_prefix('instances_val.json')
 else:
     train_images, val_images = 'train/', 'val/'
 

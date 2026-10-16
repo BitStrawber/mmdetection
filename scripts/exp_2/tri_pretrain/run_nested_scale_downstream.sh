@@ -330,9 +330,20 @@ run_arch() {
   return 0
 }
 
-for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py "$R50_RAW" "$VITS_RAW" "$R50_DET_CONFIG" "$VITS_DET_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+for file in tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py; do [ -s "$file" ] || die "missing required file: $file"; done
+if [[ ",$ARCHITECTURES," == *,resnet50,* ]]; then
+  for file in "$R50_RAW" "$R50_DET_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+fi
+if [[ ",$ARCHITECTURES," == *,vits,* ]]; then
+  for file in "$VITS_RAW" "$VITS_DET_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+fi
 if [ "$RUN_DIRECT" = 1 ] && [[ ",$DIRECT_TASKS," == *,uiis,* ]]; then
-  for file in "$R50_MASK_CONFIG" "$VITS_MASK_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+  if [[ ",$ARCHITECTURES," == *,resnet50,* ]]; then
+    [ -s "$R50_MASK_CONFIG" ] || die "missing required file: $R50_MASK_CONFIG"
+  fi
+  if [[ ",$ARCHITECTURES," == *,vits,* ]]; then
+    [ -s "$VITS_MASK_CONFIG" ] || die "missing required file: $VITS_MASK_CONFIG"
+  fi
 fi
 
 # Validate only datasets used by the requested branches.  RUOD-only runs must
@@ -344,7 +355,12 @@ if [ "$RUN_DIRECT" = 1 ] && [[ ",$DIRECT_TASKS," == *,uiis,* ]]; then
   [ -f "$UIIS_ROOT/annotations/instances_train.json" ] && [ -f "$UIIS_ROOT/annotations/instances_val.json" ] || die "invalid dataset: $UIIS_ROOT"
 fi
 if [ "$RUN_DFUI" = 1 ]; then
-  for file in "$R50_DFUI_RUOD_CONFIG" "$VITS_DFUI_CONFIG"; do [ -s "$file" ] || die "missing required file: $file"; done
+  if [[ ",$ARCHITECTURES," == *,resnet50,* ]]; then
+    [ -s "$R50_DFUI_RUOD_CONFIG" ] || die "missing required file: $R50_DFUI_RUOD_CONFIG"
+  fi
+  if [[ ",$ARCHITECTURES," == *,vits,* ]]; then
+    [ -s "$VITS_DFUI_CONFIG" ] || die "missing required file: $VITS_DFUI_CONFIG"
+  fi
   if [[ ",$VARIANTS," == *,dfui_ruod_uiis,* ]]; then
     [ -s "$R50_DFUI_RUOD_UIIS_CONFIG" ] || die "missing required file: $R50_DFUI_RUOD_UIIS_CONFIG"
   fi
@@ -353,7 +369,12 @@ if [ "$RUN_DFUI" = 1 ]; then
     [ -f "$DFUI_RUOD_UIIS_ROOT/annotations/instances_train.json" ] && [ -f "$DFUI_RUOD_UIIS_ROOT/annotations/instances_val.json" ] || die "invalid dataset: $DFUI_RUOD_UIIS_ROOT"
   fi
 fi
-validate_raw "$R50_RAW" resnet50; validate_raw "$VITS_RAW" vit_small
+if [[ ",$ARCHITECTURES," == *,resnet50,* ]]; then
+  validate_raw "$R50_RAW" resnet50
+fi
+if [[ ",$ARCHITECTURES," == *,vits,* ]]; then
+  validate_raw "$VITS_RAW" vit_small
+fi
 IFS=',' read -r -a ARCHITECTURE_LIST <<< "$ARCHITECTURES"
 [ "${#ARCHITECTURE_LIST[@]}" -gt 0 ] || die "ARCHITECTURES must contain resnet50 and/or vits"
 for arch in "${ARCHITECTURE_LIST[@]}"; do

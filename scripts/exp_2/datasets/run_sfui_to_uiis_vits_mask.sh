@@ -10,6 +10,11 @@ export PYTHONPATH="$REPO_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 OUTPUT_ROOT="${OUTPUT_ROOT:?set OUTPUT_ROOT to a new experiment directory}"
 SFUI_DATA_ROOT="${SFUI_DATA_ROOT:-}"
 SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-}"
+SFUI_SPLIT_ROOT="${SFUI_SPLIT_ROOT:-}"
+if [[ -n "$SFUI_SPLIT_ROOT" ]]; then
+  SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-$SFUI_SPLIT_ROOT/annotations/instances_train.json}"
+  SFUI_VAL_ANN="${SFUI_VAL_ANN:-$SFUI_SPLIT_ROOT/annotations/instances_val.json}"
+fi
 MODEL_TAG="${MODEL_TAG:-vits}"
 DINO_RAW="${DINO_RAW:-${VITS_RAW:-/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ViTS_100e/checkpoint.pth}}"
 SFUI_CONFIG="${SFUI_CONFIG:-configs/exp_2/tri_pretrain/mask-rcnn_vit-small_dino_fpn_24e_uiis10k_control100k.py}"
@@ -22,7 +27,7 @@ RUN_SFUI="${RUN_SFUI:-1}"
 RUN_UIIS="${RUN_UIIS:-1}"
 SFUI_CHECKPOINT="${SFUI_CHECKPOINT:-}"
 SFUI_VAL_ANN="${SFUI_VAL_ANN:-}"
-SFUI_TEST_ANN="${SFUI_TEST_ANN:-}"
+SFUI_TEST_ANN="${SFUI_TEST_ANN:-${SFUI_VAL_ANN:-}}"
 SFUI_TRAIN_PREFIX="${SFUI_TRAIN_PREFIX:-train/images/}"
 SFUI_VAL_PREFIX="${SFUI_VAL_PREFIX:-train/images/}"
 SFUI_TEST_PREFIX="${SFUI_TEST_PREFIX:-$SFUI_TRAIN_PREFIX}"
@@ -106,6 +111,7 @@ validate_raw_backbone() {
   local checkpoint="$1"
   MODEL_CONFIG="$SFUI_CONFIG" CHECKPOINT_PATH="$checkpoint" "$PYTHON_BIN" - <<'PY'
 import os
+import re
 import torch
 from mmengine.config import Config
 from mmdet.utils import register_all_modules
@@ -128,13 +134,29 @@ shape_mismatches = [
     if tuple(expected[key].shape) != tuple(state[key].shape)
 ]
 
+# DINO ViT-S and detector ViTDet intentionally differ in these parameters:
+# DINO stores the classification token and final norm, while ViTDet adds
+# detector-only relative-position parameters that remain model-initialized.
+allowed_missing = {
+    key for key in missing
+    if re.fullmatch(r'blocks\.\d+\.attn\.rel_pos_[hw]', key)
+}
+allowed_unexpected = {
+    key for key in unexpected
+    if key in {'cls_token', 'norm.weight', 'norm.bias'}
+}
+effective_missing = missing - allowed_missing
+effective_unexpected = unexpected - allowed_unexpected
+
 print(f'backbone_model_tensors={len(expected)}')
 print(f'checkpoint_tensors={len(state)}')
 print(f'matched_backbone_tensors={len(matched)}')
 print(f'missing_backbone_tensors={len(missing)}')
 print(f'unexpected_checkpoint_tensors={len(unexpected)}')
 print(f'shape_mismatches={len(shape_mismatches)}')
-if missing or unexpected or shape_mismatches:
+print(f'allowed_detector_init_missing={len(allowed_missing)}')
+print(f'allowed_dino_only_unexpected={len(allowed_unexpected)}')
+if effective_missing or effective_unexpected or shape_mismatches:
     print('missing_examples:', sorted(missing)[:10])
     print('unexpected_examples:', sorted(unexpected)[:10])
     print('shape_mismatch_examples:', shape_mismatches[:10])

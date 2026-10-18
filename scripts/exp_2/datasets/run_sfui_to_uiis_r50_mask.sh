@@ -10,8 +10,9 @@ cd "$REPO_ROOT"
 
 BASE_RUN="${AQUA_EASY_RUN:-}"
 SFUI_DATA_ROOT="${SFUI_DATA_ROOT:-${BASE_RUN:+$BASE_RUN/aquaov255_instance_coco}}"
-SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-${BASE_RUN:+$BASE_RUN/aquaov255_easy/annotations/instances_train.json}}"
-SFUI_VAL_ANN="${SFUI_VAL_ANN:-${BASE_RUN:+$BASE_RUN/aquaov255_easy/annotations/instances_val.json}}"
+SFUI_SPLIT_ROOT="${SFUI_SPLIT_ROOT:-${BASE_RUN:+$BASE_RUN/aquaov255_easy_dfui_split85_15_seed42}}"
+SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-${SFUI_SPLIT_ROOT:+$SFUI_SPLIT_ROOT/annotations/instances_train.json}}"
+SFUI_VAL_ANN="${SFUI_VAL_ANN:-${SFUI_SPLIT_ROOT:+$SFUI_SPLIT_ROOT/annotations/instances_val.json}}"
 SFUI_TEST_ANN="${SFUI_TEST_ANN:-$SFUI_VAL_ANN}"
 
 DINO_RAW="${DINO_RAW:-/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ResNet50_100e/checkpoint.pth}"

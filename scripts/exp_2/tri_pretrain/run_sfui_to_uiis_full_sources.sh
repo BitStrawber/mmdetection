@@ -10,11 +10,26 @@ cd "$REPO_ROOT"
 SFUI_NAME="${SFUI_NAME:?set SFUI_NAME, e.g. dfui_realuw}"
 SFUI_ROOT="${SFUI_ROOT:?set SFUI_ROOT to the SFUI COCO dataset root}"
 OUTPUT_ROOT="${OUTPUT_ROOT:?set OUTPUT_ROOT}"
+SFUI_SPLIT_ROOT="${SFUI_SPLIT_ROOT:-}"
+if [ -n "$SFUI_SPLIT_ROOT" ]; then
+  SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-$SFUI_SPLIT_ROOT/annotations/instances_train.json}"
+  SFUI_VAL_ANN="${SFUI_VAL_ANN:-$SFUI_SPLIT_ROOT/annotations/instances_val.json}"
+else
+  SFUI_TRAIN_ANN="${SFUI_TRAIN_ANN:-$SFUI_ROOT/annotations/instances_train.json}"
+  SFUI_VAL_ANN="${SFUI_VAL_ANN:-}"
+fi
+SFUI_TEST_ANN="${SFUI_TEST_ANN:-${SFUI_VAL_ANN:-$SFUI_TRAIN_ANN}}"
+# Most reusable SFUI datasets store images under images/. AquaOV255's
+# historical instance layout is train/images/; pass those prefixes explicitly.
+SFUI_TRAIN_PREFIX="${SFUI_TRAIN_PREFIX:-images/}"
+SFUI_VAL_PREFIX="${SFUI_VAL_PREFIX:-images/}"
+SFUI_TEST_PREFIX="${SFUI_TEST_PREFIX:-images/}"
 
 DATA_ROOT="${DATA_ROOT:-/media/HDD0/XCX/exp_2}"
 UIIS_ROOT="${UIIS_ROOT:-$DATA_ROOT/UIIS10K/coco}"
 RUOD_ROOT="${RUOD_ROOT:-$DATA_ROOT/RUOD/coco}"
 SFUI_CLASS_NAMES_FILE="${SFUI_CLASS_NAMES_FILE:-}"
+SFUI_EXPECTED_CLASSES="${SFUI_EXPECTED_CLASSES:-}"
 IMAGENET_R50_RAW="${IMAGENET_R50_RAW:?set full ImageNet DINO ResNet-50 checkpoint}"
 IMAGENET_VITS_RAW="${IMAGENET_VITS_RAW:?set full ImageNet DINO ViT-S checkpoint}"
 REALUW_R50_RAW="${REALUW_R50_RAW:?set full RealUW DINO ResNet-50 checkpoint}"
@@ -46,6 +61,7 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ "$DFUI_EPOCHS" =~ ^[1-9][0-9]*$ ]] || die "DFUI_EPOCHS must be a positive integer"
 [[ "$UIIS_EPOCHS" =~ ^[1-9][0-9]*$ ]] || die "UIIS_EPOCHS must be a positive integer"
 [[ "$MIN_FREE_MIB" =~ ^[0-9]+$ ]] || die "MIN_FREE_MIB must be a non-negative integer"
+[[ -z "$SFUI_EXPECTED_CLASSES" || "$SFUI_EXPECTED_CLASSES" =~ ^[1-9][0-9]*$ ]] || die "SFUI_EXPECTED_CLASSES must be a positive integer"
 
 for file in \
   "$R50_RUNNER" \
@@ -60,17 +76,24 @@ for root in "$UIIS_ROOT"; do
   [ -s "$root/annotations/instances_val.json" ] || die "missing UIIS annotations: $root"
 done
 
-python - "$SFUI_ROOT" "$SFUI_CLASS_NAMES_FILE" "$UIIS_ROOT" <<'PY'
+python - "$SFUI_ROOT" "$SFUI_CLASS_NAMES_FILE" "$SFUI_EXPECTED_CLASSES" "$UIIS_ROOT" \
+  "$SFUI_TRAIN_ANN" "$SFUI_VAL_ANN" \
+  "$SFUI_TRAIN_PREFIX" "$SFUI_VAL_PREFIX" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 sfui_root = Path(sys.argv[1])
 class_file = Path(sys.argv[2]) if sys.argv[2] else None
-uiis_root = Path(sys.argv[3])
+expected_classes = int(sys.argv[3]) if sys.argv[3] else None
+uiis_root = Path(sys.argv[4])
+sfui_train_ann = Path(sys.argv[5])
+sfui_val_ann = Path(sys.argv[6]) if sys.argv[6] else None
+sfui_train_prefix = sys.argv[7]
+sfui_val_prefix = sys.argv[8]
 
-def load_split(root, split, prefix):
-    ann_path = root / "annotations" / f"instances_{split}.json"
+def load_split(root, split, prefix, ann_path=None):
+    ann_path = Path(ann_path) if ann_path else root / "annotations" / f"instances_{split}.json"
     if not ann_path.is_file():
         raise SystemExit(f"MISSING annotation: {ann_path}")
     data = json.loads(ann_path.read_text(encoding="utf-8"))
@@ -95,14 +118,18 @@ def load_split(root, split, prefix):
         raise SystemExit(f"{split}: {len(missing)} image files missing under {image_root}; e.g. {missing[:3]}")
     return data, [(item["id"], item["name"]) for item in categories]
 
-train, train_categories = load_split(sfui_root, "train", "images")
-val, val_categories = load_split(sfui_root, "val", "images")
-if train_categories != val_categories:
+train, train_categories = load_split(sfui_root, "train", sfui_train_prefix, sfui_train_ann)
+val = None
+val_categories = train_categories
+if sfui_val_ann is not None:
+    val, val_categories = load_split(sfui_root, "val", sfui_val_prefix, sfui_val_ann)
+if val is not None and train_categories != val_categories:
     raise SystemExit("SFUI train/val category IDs and names differ")
 train_names = {image["file_name"] for image in train["images"]}
-val_names = {image["file_name"] for image in val["images"]}
-if train_names & val_names:
-    raise SystemExit(f"SFUI train/val filename overlap: {len(train_names & val_names)}")
+if val is not None:
+    val_names = {image["file_name"] for image in val["images"]}
+    if train_names & val_names:
+        raise SystemExit(f"SFUI train/val filename overlap: {len(train_names & val_names)}")
 
 if class_file is not None:
     names_data = json.loads(class_file.read_text(encoding="utf-8"))
@@ -115,6 +142,10 @@ if class_file is not None:
     classes = names_data
 else:
     classes = [name for _, name in train_categories]
+if expected_classes is not None and len(classes) != expected_classes:
+    raise SystemExit(
+        f"SFUI category count mismatch: expected {expected_classes}, got {len(classes)}"
+    )
 
 uiis_counts = {}
 for split in ("train", "val"):
@@ -122,8 +153,8 @@ for split in ("train", "val"):
     uiis_counts[split] = len(data["images"])
 
 print(f"SFUI_ROOT={sfui_root}")
-print(f"SFUI_train_images={len(train['images'])} SFUI_val_images={len(val['images'])}")
-print(f"SFUI_train_annotations={len(train.get('annotations', []))} SFUI_val_annotations={len(val.get('annotations', []))}")
+print(f"SFUI_train_images={len(train['images'])} SFUI_val_images={len(val['images']) if val is not None else 0}")
+print(f"SFUI_train_annotations={len(train.get('annotations', []))} SFUI_val_annotations={len(val.get('annotations', [])) if val is not None else 0}")
 print(f"SFUI_categories={len(classes)} class_names={classes}")
 print(f"UIIS_train_images={uiis_counts['train']} UIIS_val_images={uiis_counts['val']}")
 print("RESULT=PASS_SFUI_AND_UIIS_DATA_PREFLIGHT")
@@ -183,6 +214,14 @@ PROVENANCE="$OUTPUT_ROOT/run_provenance.tsv"
   printf 'field\tvalue\n'
   printf 'sfui_name\t%s\n' "$SFUI_NAME"
   printf 'sfui_root\t%s\n' "$SFUI_ROOT"
+  printf 'sfui_train_ann\t%s\n' "$SFUI_TRAIN_ANN"
+  printf 'sfui_val_ann\t%s\n' "${SFUI_VAL_ANN:-DISABLED}"
+  printf 'sfui_test_ann\t%s\n' "${SFUI_TEST_ANN:-DISABLED}"
+  printf 'sfui_split_root\t%s\n' "${SFUI_SPLIT_ROOT:-ANNOTATION_PATHS}"
+  printf 'sfui_train_prefix\t%s\n' "$SFUI_TRAIN_PREFIX"
+  printf 'sfui_val_prefix\t%s\n' "$SFUI_VAL_PREFIX"
+  printf 'sfui_test_prefix\t%s\n' "$SFUI_TEST_PREFIX"
+  printf 'sfui_expected_classes\t%s\n' "${SFUI_EXPECTED_CLASSES:-AUTO}"
   printf 'sfui_class_names_file\t%s\n' "${SFUI_CLASS_NAMES_FILE:-ANNOTATION_CATEGORIES}"
   printf 'uiis_root\t%s\n' "$UIIS_ROOT"
   printf 'r50_gpus\t%s\n' "$R50_GPUS"
@@ -232,12 +271,12 @@ for source in imagenet realuw synthetic5; do
       MODEL_TAG="$model_tag" \
       DINO_RAW="$raw" \
       SFUI_DATA_ROOT="$SFUI_ROOT" \
-      SFUI_TRAIN_ANN="$SFUI_ROOT/annotations/instances_train.json" \
-      SFUI_VAL_ANN="$SFUI_ROOT/annotations/instances_val.json" \
-      SFUI_TEST_ANN="$SFUI_ROOT/annotations/instances_val.json" \
-      SFUI_TRAIN_PREFIX=images/ \
-      SFUI_VAL_PREFIX=images/ \
-      SFUI_TEST_PREFIX=images/ \
+      SFUI_TRAIN_ANN="$SFUI_TRAIN_ANN" \
+      SFUI_VAL_ANN="$SFUI_VAL_ANN" \
+      SFUI_TEST_ANN="$SFUI_TEST_ANN" \
+      SFUI_TRAIN_PREFIX="$SFUI_TRAIN_PREFIX" \
+      SFUI_VAL_PREFIX="$SFUI_VAL_PREFIX" \
+      SFUI_TEST_PREFIX="$SFUI_TEST_PREFIX" \
       UIIS_ROOT="$UIIS_ROOT" \
       SFUI_EPOCHS="$DFUI_EPOCHS" \
       UIIS_EPOCHS="$UIIS_EPOCHS" \

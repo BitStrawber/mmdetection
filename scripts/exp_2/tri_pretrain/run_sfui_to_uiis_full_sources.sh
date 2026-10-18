@@ -208,7 +208,7 @@ if [ "$MIN_FREE_MIB" -gt 0 ]; then
   ' || die "selected GPUs do not meet MIN_FREE_MIB=$MIN_FREE_MIB"
 fi
 
-mkdir -p "$OUTPUT_ROOT"
+mkdir -p "$OUTPUT_ROOT" "$OUTPUT_ROOT/logs"
 PROVENANCE="$OUTPUT_ROOT/run_provenance.tsv"
 {
   printf 'field\tvalue\n'

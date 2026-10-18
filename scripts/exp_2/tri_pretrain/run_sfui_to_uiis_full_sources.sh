@@ -34,7 +34,8 @@ MAX_KEEP_CKPTS="${MAX_KEEP_CKPTS:-5}"
 CHECK_ONLY="${CHECK_ONLY:-1}"
 MIN_FREE_MIB="${MIN_FREE_MIB:-0}"
 
-PIPELINE="$SCRIPT_DIR/run_pretrained_dfui_then_uiis_mask.sh"
+R50_RUNNER="$REPO_ROOT/scripts/exp_2/datasets/run_sfui_to_uiis_r50_mask.sh"
+VITS_RUNNER="$REPO_ROOT/scripts/exp_2/datasets/run_sfui_to_uiis_vits_mask.sh"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -47,20 +48,16 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 [[ "$MIN_FREE_MIB" =~ ^[0-9]+$ ]] || die "MIN_FREE_MIB must be a non-negative integer"
 
 for file in \
-  "$PIPELINE" \
-  scripts/exp_2/tri_pretrain/run_nested_scale_downstream.sh \
-  tools/dist_train.sh tools/dist_test.sh tools/convert_ssl_backbone_to_mmdet.py \
-  configs/exp_2/dfui_imagenet1k_stage_configs/r50_dfui_ruod/cascade-rcnn_r50_dino-official_fpn_2x_dfui_ruod_easy_j10_scheme_c_s1.py \
-  configs/exp_2/dfui_imagenet1k_stage_configs/r50_dfui_ruod_uiis/cascade-rcnn_r50_dino-official_fpn_2x_dfui_ruod_uiis_easy_j10_scheme_c_s1.py \
-  configs/exp_2/tri_pretrain/cascade-rcnn_vit-small_dino_fpn_24e_ruod_control100k.py \
-  configs/exp_2/mask-rcnn_r50_dino_fpn_2x_uiis10k_j4_mask.py \
-  configs/exp_2/tri_pretrain/mask-rcnn_vit-small_dino_fpn_24e_uiis10k_control100k.py; do
+  "$R50_RUNNER" \
+  "$VITS_RUNNER" \
+  tools/exp_2/prepare_sfui_uiis_mask_configs.py \
+  tools/convert_ssl_backbone_to_mmdet.py; do
   [ -s "$file" ] || die "required repository file is missing: $file"
 done
 
-for root in "$RUOD_ROOT" "$UIIS_ROOT"; do
+for root in "$UIIS_ROOT"; do
   [ -s "$root/annotations/instances_train.json" ] &&
-  [ -s "$root/annotations/instances_val.json" ] || die "missing downstream dataset annotations: $root"
+  [ -s "$root/annotations/instances_val.json" ] || die "missing UIIS annotations: $root"
 done
 
 python - "$SFUI_ROOT" "$SFUI_CLASS_NAMES_FILE" "$UIIS_ROOT" <<'PY'
@@ -202,54 +199,60 @@ PROVENANCE="$OUTPUT_ROOT/run_provenance.tsv"
   done
 } > "$PROVENANCE"
 
-echo "SFUI -> UIIS full-pretraining comparison"
+echo "Original SFUI -> UIIS Mask R-CNN full-pretraining comparison"
 echo "sfui_name=$SFUI_NAME sfui_root=$SFUI_ROOT"
-echo "three sources x two backbones; SFUI detector=${DFUI_EPOCHS}e -> UIIS Mask R-CNN=${UIIS_EPOCHS}e"
+echo "three sources x two backbones; SFUI Mask R-CNN=${DFUI_EPOCHS}e -> UIIS Mask R-CNN=${UIIS_EPOCHS}e"
 echo "R50_GPUS=$R50_GPUS VITS_GPUS=$VITS_GPUS parallel_architectures=$PARALLEL_ARCHITECTURES check_only=$CHECK_ONLY"
 echo "output_root=$OUTPUT_ROOT"
 
 source_index=0
 for source in imagenet realuw synthetic5; do
-  model_prefix="${SFUI_NAME}_${source}_full"
-  source_output="$OUTPUT_ROOT/$source"
-  port="$((BASE_PORT + source_index * 1000))"
-  echo "START_SOURCE=$source MODEL_PREFIX=$model_prefix PORT=$port"
+  for backbone in r50 vits; do
+    if [[ "$backbone" == r50 ]]; then
+      raw="${RAW_R50[$source]}"
+      runner="$R50_RUNNER"
+      gpu_group="$R50_GPUS"
+      model_tag=r50
+    else
+      raw="${RAW_VITS[$source]}"
+      runner="$VITS_RUNNER"
+      gpu_group="$VITS_GPUS"
+      model_tag=vits
+    fi
 
-  MODEL_PREFIX="$model_prefix" \
-  SOURCE_LABEL="$source" \
-  SCALE_LABEL=full \
-  R50_RAW="${RAW_R50[$source]}" \
-  VITS_RAW="${RAW_VITS[$source]}" \
-  DATA_ROOT="$DATA_ROOT" \
-  RUOD_ROOT="$RUOD_ROOT" \
-  UIIS_ROOT="$UIIS_ROOT" \
-  DFUI_RUOD_ROOT="$SFUI_ROOT" \
-  DFUI_RUOD_UIIS_ROOT="$SFUI_ROOT" \
-  DFUI_DYNAMIC_CLASSES=1 \
-  DFUI_CLASS_NAMES_FILE="$SFUI_CLASS_NAMES_FILE" \
-  VARIANTS=dfui_ruod \
-  DFUI_FOLLOWUPS=mask \
-  ALLOW_TARGET_DOMAIN_UIIS=0 \
-  DFUI_EPOCHS="$DFUI_EPOCHS" \
-  R50_GPUS="$R50_GPUS" \
-  VITS_GPUS="$VITS_GPUS" \
-  PARALLEL_ARCHITECTURES="$PARALLEL_ARCHITECTURES" \
-  BASE_PORT="$port" \
-  OUTPUT_ROOT="$source_output" \
-  WORK_ROOT="$source_output/work_dirs" \
-  BACKBONE_ROOT="$source_output/backbones" \
-  CONVERTED_ROOT="$source_output/converted" \
-  LOG_ROOT="$source_output/logs" \
-  RUN_TEST="$RUN_TEST" \
-  SKIP_COMPLETED="$SKIP_COMPLETED" \
-  MAX_KEEP_CKPTS="$MAX_KEEP_CKPTS" \
-  UIIS_MASK_EPOCHS="$UIIS_EPOCHS" \
-  CHECK_ONLY="$CHECK_ONLY" \
-  RUN_DIRECT=0 \
-  RUN_DFUI=1 \
-  bash "$PIPELINE"
+    model_prefix="${SFUI_NAME}_${source}_${model_tag}_maskrcnn"
+    stage_output="$OUTPUT_ROOT/$model_prefix"
+    port="$((BASE_PORT + source_index * 10))"
+    log="$OUTPUT_ROOT/logs/${model_prefix}.log"
+    source_index=$((source_index + 1))
 
-  source_index=$((source_index + 1))
+    echo "START name=$model_prefix runner=$runner gpu_group=$gpu_group port=$port"
+    env \
+      OUTPUT_ROOT="$stage_output" \
+      MODEL_TAG="$model_tag" \
+      DINO_RAW="$raw" \
+      SFUI_DATA_ROOT="$SFUI_ROOT" \
+      SFUI_TRAIN_ANN="$SFUI_ROOT/annotations/instances_train.json" \
+      SFUI_VAL_ANN="$SFUI_ROOT/annotations/instances_val.json" \
+      SFUI_TEST_ANN="$SFUI_ROOT/annotations/instances_val.json" \
+      SFUI_TRAIN_PREFIX=images/ \
+      SFUI_VAL_PREFIX=images/ \
+      SFUI_TEST_PREFIX=images/ \
+      UIIS_ROOT="$UIIS_ROOT" \
+      SFUI_EPOCHS="$DFUI_EPOCHS" \
+      UIIS_EPOCHS="$UIIS_EPOCHS" \
+      SFUI_GPUS="$gpu_group" \
+      UIIS_GPUS="$gpu_group" \
+      MIN_FREE_MIB="$MIN_FREE_MIB" \
+      BASE_PORT="$port" \
+      SFUI_RUN_TEST=0 \
+      UIIS_RUN_TEST="$RUN_TEST" \
+      MAX_KEEP_CKPTS="$MAX_KEEP_CKPTS" \
+      CHECK_ONLY="$CHECK_ONLY" \
+      bash "$runner" 2>&1 | tee "$log"
+
+    echo "COMPLETE name=$model_prefix"
+  done
 done
 
 if [ "$CHECK_ONLY" = 1 ]; then

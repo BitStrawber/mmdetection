@@ -21,6 +21,56 @@ GROUPS = {
 }
 
 
+def validate_provenance(feature_root: Path, mapping: dict, variant: str) -> dict:
+    records = {}
+    all_ids = None
+    manifest_hash = None
+    pooling = None
+    for backbone, models in mapping.items():
+        config_hash = None
+        missing_hash = None
+        for source, model_id in models.items():
+            record = read_json(
+                feature_root / 'metadata' / model_id / 'extraction_provenance.json')
+            report = record['model_load_report']
+            ids = load_ids(feature_root, model_id, variant)
+            if all_ids is None:
+                all_ids = ids
+            elif not np.array_equal(all_ids, ids):
+                raise ValueError(f'{model_id}: RUOD image IDs or order differ')
+            if manifest_hash is None:
+                manifest_hash = record['manifest_sha256']
+                pooling = record['pooling']
+            elif (manifest_hash != record['manifest_sha256'] or
+                  pooling != record['pooling']):
+                raise ValueError(f'{model_id}: manifest or pooling method differs')
+            if config_hash is None:
+                config_hash = record['config_sha256']
+            elif config_hash != record['config_sha256']:
+                raise ValueError(f'{backbone}/{source}: model config differs')
+            if report.get('checkpoint_epoch') != 100:
+                raise ValueError(f'{model_id}: not a 100e checkpoint')
+            if report.get('required_match_ratio') != 1.0:
+                raise ValueError(f'{model_id}: incomplete required backbone weights')
+            allowed = report.get('allowed_missing_keys', [])
+            if backbone == 'resnet50' and allowed:
+                raise ValueError(f'{model_id}: unexpected missing R50 weights')
+            if backbone == 'vit_small':
+                if len(allowed) != 24 or report.get('initialization_seed') is None:
+                    raise ValueError(f'{model_id}: unexpected ViT-S initialization')
+                digest = report.get('allowed_missing_sha256')
+                if not digest:
+                    raise ValueError(f'{model_id}: missing initialization digest')
+                if missing_hash is None:
+                    missing_hash = digest
+                elif missing_hash != digest:
+                    raise ValueError(
+                        f'{backbone}/{source}: relative-position initialization differs')
+            records[model_id] = record
+    return {'manifest_sha256': manifest_hash, 'pooling': pooling,
+            'image_count': len(all_ids), 'model_records': records}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--feature-root', required=True)
@@ -36,6 +86,7 @@ def main() -> None:
     mapping = read_json(args.models_config)
     if set(mapping) != set(GROUPS):
         raise ValueError(f'Model mapping must contain {sorted(GROUPS)}')
+    provenance = validate_provenance(feature_root, mapping, args.variant)
 
     rows = []
     for backbone, layers in GROUPS.items():
@@ -66,6 +117,9 @@ def main() -> None:
                     'linear_cka': float(np.sum(ka * kb) / (na * nb)),
                     'samples': len(first),
                 })
+                if not np.isfinite(rows[-1]['linear_cka']) or not (
+                        -1e-8 <= rows[-1]['linear_cka'] <= 1 + 1e-8):
+                    raise ValueError(f'Invalid CKA for {backbone}/{layer}/{left}-{right}')
 
     out_dir = ensure_empty_or_create(Path(args.out_dir), args.overwrite)
     fields = ('backbone', 'layer', 'source_a', 'source_b', 'linear_cka', 'samples')
@@ -78,6 +132,7 @@ def main() -> None:
         'variant': args.variant, 'layers': GROUPS,
         'method': 'linear CKA on centered pooled features',
         'sample_ids_verified': True,
+        'provenance': provenance,
     })
     print(f'CKA results: {out_dir / "pretraining_cka.tsv"}')
 

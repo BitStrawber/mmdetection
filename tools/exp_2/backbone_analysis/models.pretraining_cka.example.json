@@ -5,7 +5,8 @@
       "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
       "checkpoint": "work_dirs/tri_pretrain/imagenet_dino_resnet50_100e/checkpoint.pth",
       "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.95,
+      "minimum_match_ratio": 1.0, "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 0,
       "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
     },
     {
@@ -13,7 +14,8 @@
       "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
       "checkpoint": "work_dirs/tri_pretrain/synthetic5_corrected_watergan_dino_resnet50_100e/checkpoint.pth",
       "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.95,
+      "minimum_match_ratio": 1.0, "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 0,
       "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
     },
     {
@@ -21,7 +23,8 @@
       "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
       "checkpoint": "work_dirs/tri_pretrain/j7_realuw_dino_resnet50_ssd100e/checkpoint.pth",
       "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.95,
+      "minimum_match_ratio": 1.0, "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 0,
       "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
     },
     {
@@ -29,7 +32,10 @@
       "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
       "checkpoint": "work_dirs/tri_pretrain/imagenet_dino_vits_100e/checkpoint.pth",
       "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.95, "feature_layout": "channels_last",
+      "minimum_match_ratio": 1.0, "feature_layout": "channels_last",
+      "initialization_seed": 42, "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 24,
+      "allowed_missing_key_patterns": ["blocks.*.attn.rel_pos_h", "blocks.*.attn.rel_pos_w"],
       "layers": {"block1": "blocks.0", "block4": "blocks.3", "block8": "blocks.7", "block12": "blocks.11"}
     },
     {
@@ -37,7 +43,10 @@
       "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
       "checkpoint": "work_dirs/tri_pretrain/synthetic5_corrected_watergan_dino_vits_100e/checkpoint.pth",
       "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.95, "feature_layout": "channels_last",
+      "minimum_match_ratio": 1.0, "feature_layout": "channels_last",
+      "initialization_seed": 42, "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 24,
+      "allowed_missing_key_patterns": ["blocks.*.attn.rel_pos_h", "blocks.*.attn.rel_pos_w"],
       "layers": {"block1": "blocks.0", "block4": "blocks.3", "block8": "blocks.7", "block12": "blocks.11"}
     },
     {
@@ -45,7 +54,10 @@
       "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
       "checkpoint": "work_dirs/tri_pretrain/j14_realuw_dino_vits_100e/checkpoint.pth",
       "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
-      "minimum_match_ratio": 0.95, "feature_layout": "channels_last",
+      "minimum_match_ratio": 1.0, "feature_layout": "channels_last",
+      "initialization_seed": 42, "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 24,
+      "allowed_missing_key_patterns": ["blocks.*.attn.rel_pos_h", "blocks.*.attn.rel_pos_w"],
       "layers": {"block1": "blocks.0", "block4": "blocks.3", "block8": "blocks.7", "block12": "blocks.11"}
     }
   ]

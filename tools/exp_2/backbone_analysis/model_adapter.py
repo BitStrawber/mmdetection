@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import gc
+import hashlib
+from fnmatch import fnmatchcase
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Tuple
@@ -119,6 +121,17 @@ def resolve_module(root: Any, dotted_name: str) -> Any:
     return current
 
 
+def state_digest(state: Mapping[str, torch.Tensor], keys: list[str]) -> str:
+    digest = hashlib.sha256()
+    for key in sorted(keys):
+        value = state[key].detach().cpu().contiguous()
+        digest.update(key.encode('utf-8'))
+        digest.update(str(tuple(value.shape)).encode('ascii'))
+        digest.update(str(value.dtype).encode('ascii'))
+        digest.update(value.numpy().tobytes())
+    return digest.hexdigest()
+
+
 def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
     from mmengine.config import Config
     from mmengine.runner.checkpoint import _load_checkpoint
@@ -147,22 +160,65 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
             'loader': 'mmdet.apis.init_detector',
         }
     elif checkpoint_path is not None:
-        model = init_detector(config, checkpoint=None, device=device)
+        initialization_seed = spec.get('initialization_seed')
+        if initialization_seed is None:
+            model = init_detector(config, checkpoint=None, device=device)
+        else:
+            devices = list(range(torch.cuda.device_count())) if torch.cuda.is_available() else []
+            with torch.random.fork_rng(devices=devices):
+                torch.manual_seed(int(initialization_seed))
+                model = init_detector(config, checkpoint=None, device=device)
         checkpoint = _load_checkpoint(str(checkpoint_path), map_location='cpu')
+        expected_epoch = spec.get('expected_checkpoint_epoch')
+        if expected_epoch is not None and (
+                not isinstance(checkpoint, Mapping) or
+                checkpoint.get('epoch') != expected_epoch):
+            raise RuntimeError(
+                f'{model_id}: expected checkpoint epoch {expected_epoch}, '
+                f'got {checkpoint.get("epoch") if isinstance(checkpoint, Mapping) else None}')
         state = state_dict_from_checkpoint(checkpoint, spec.get('state_dict_key'))
         matched, matching_report = select_backbone_state(
             state, model.backbone.state_dict(), spec.get('checkpoint_prefix'))
         result = model.backbone.load_state_dict(matched, strict=False)
-        minimum_ratio = float(spec.get('minimum_match_ratio', 0.5))
-        if matching_report['match_ratio'] < minimum_ratio:
+        allowed_patterns = spec.get('allowed_missing_key_patterns', [])
+        missing_unexpected = [
+            key for key in result.missing_keys
+            if not any(fnmatchcase(key, pattern) for pattern in allowed_patterns)
+        ]
+        matching_report['allowed_missing_keys'] = [
+            key for key in result.missing_keys if key not in missing_unexpected
+        ]
+        expected_missing_count = spec.get('expected_allowed_missing_count')
+        if (expected_missing_count is not None and
+                len(matching_report['allowed_missing_keys']) !=
+                int(expected_missing_count)):
             raise RuntimeError(
-                f'{model_id}: checkpoint match ratio '
-                f'{matching_report["match_ratio"]:.3f} is below {minimum_ratio:.3f}')
+                f'{model_id}: expected {expected_missing_count} allowed missing '
+                f'keys, got {len(matching_report["allowed_missing_keys"])}')
+        matching_report['required_match_ratio'] = (
+            matching_report['matched_tensors'] /
+            max(matching_report['target_tensors'] -
+                len(matching_report['allowed_missing_keys']), 1)
+        )
+        minimum_ratio = float(spec.get('minimum_match_ratio', 0.5))
+        if missing_unexpected or result.unexpected_keys or (
+                matching_report['required_match_ratio'] < minimum_ratio):
+            raise RuntimeError(
+                f'{model_id}: required checkpoint match ratio '
+                f'{matching_report["required_match_ratio"]:.3f} is below '
+                f'{minimum_ratio:.3f}; unexpected missing keys: '
+                f'{missing_unexpected[:10]}; unexpected loaded keys: '
+                f'{result.unexpected_keys[:10]}')
         load_report = {
             'kind': kind,
             'config': str(config_path),
             'checkpoint': str(checkpoint_path),
+            'checkpoint_epoch': checkpoint.get('epoch'),
             'state_dict_key': spec.get('state_dict_key'),
+            'initialization_seed': initialization_seed,
+            'allowed_missing_sha256': state_digest(
+                model.backbone.state_dict(),
+                matching_report['allowed_missing_keys']),
             **matching_report,
             'missing_keys': list(result.missing_keys),
             'unexpected_keys': list(result.unexpected_keys),

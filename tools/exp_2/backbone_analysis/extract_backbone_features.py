@@ -41,6 +41,8 @@ def parse_args() -> argparse.Namespace:
         help='Comma-separated manifest variants; clean uses image_path when absent')
     parser.add_argument('--layers', default='', help='Optional comma-separated layer IDs')
     parser.add_argument('--device', default='cuda:0')
+    parser.add_argument('--batch-size', type=int, default=0,
+                        help='0 selects 8 for ResNet-50 and 4 for ViT-S')
     parser.add_argument(
         '--pooling', choices=('avg', 'max', 'avgmax'), default='avg')
     parser.add_argument(
@@ -127,6 +129,15 @@ def variant_path(row: Mapping[str, Any], variant: str) -> Path:
     return existing_file(variants[variant]['image_path'])
 
 
+def batch_predictions(model: Any, pipeline: Any, paths: List[Path]) -> list[Any]:
+    from mmengine.dataset import pseudo_collate
+
+    data = [pipeline({'img_path': str(path), 'img_id': index})
+            for index, path in enumerate(paths)]
+    with torch.no_grad():
+        return model.test_step(pseudo_collate(data))
+
+
 def main() -> None:
     args = parse_args()
     rows = read_jsonl(args.manifest)
@@ -161,10 +172,14 @@ def main() -> None:
     extraction_reports = {}
     shared_initializations = {}
 
-    from mmdet.apis import inference_detector
-
     for spec in specs:
+        batch_size = args.batch_size or (4 if 'vits' in str(spec['id']) else 8)
+        if batch_size < 1:
+            raise ValueError('--batch-size must be positive')
         loaded = load_model(spec, args.device)
+        from mmcv.transforms import Compose
+        from mmdet.utils import get_test_pipeline_cfg
+        pipeline = Compose(get_test_pipeline_cfg(loaded.model.cfg))
         digest = loaded.load_report.get('allowed_missing_sha256')
         if loaded.load_report.get('allowed_missing_keys'):
             group = (str(spec['config']), spec.get('initialization_seed'))
@@ -212,75 +227,81 @@ def main() -> None:
                 }
                 metadata_rows = []
                 started_at = time.monotonic()
-                for position, row in enumerate(rows):
+                for start in range(0, len(rows), batch_size):
+                    batch_rows = rows[start:start + batch_size]
                     captures.clear()
-                    image_path = variant_path(row, variant)
-                    prediction = inference_detector(loaded.model, str(image_path))
+                    image_paths = [variant_path(row, variant) for row in batch_rows]
+                    predictions = batch_predictions(loaded.model, pipeline, image_paths)
+                    if len(predictions) != len(batch_rows):
+                        raise RuntimeError('Prediction count differs from batch size')
                     missing_layers = set(layer_ids) - set(captures)
                     if missing_layers:
                         raise RuntimeError(
                             f'{loaded.model_id}: hooks captured no outputs for '
                             f'{sorted(missing_layers)}')
-                    metadata = prediction.metainfo
-                    img_shape = shape_pair(metadata.get('img_shape'), (1, 1))
-                    pad_shape = shape_pair(
-                        metadata.get('pad_shape', metadata.get('batch_input_shape')),
-                        img_shape)
-                    layer_shapes = {}
-                    for layer_id in layer_ids:
-                        valid, _ = crop_valid_feature(
-                            captures[layer_id], img_shape, pad_shape,
-                            feature_layout)
-                        pooled = pool_feature(valid, args.pooling)
-                        pooled_by_layer[layer_id].append(
-                            pooled.numpy().astype(np.float32, copy=False))
-                        norm_by_layer[layer_id].append(float(torch.linalg.vector_norm(valid)))
-                        layer_shapes[layer_id] = {
-                            'full': list(captures[layer_id].shape),
-                            'valid': list(valid.shape),
-                        }
-                        save_this_spatial = args.save_spatial and (
-                            args.spatial_samples <= 0 or position < args.spatial_samples)
-                        if save_this_spatial:
-                            spatial_path = (
-                                out_dir / 'spatial' / loaded.model_id / variant /
-                                f'{position:05d}_{int(row["image_id"])}' /
-                                f'{layer_id}.npz')
-                            spatial_path.parent.mkdir(parents=True, exist_ok=True)
-                            dtype = np.float16 if args.spatial_dtype == 'float16' else np.float32
-                            np.savez_compressed(
-                                spatial_path,
-                                feature=valid.numpy().astype(dtype),
-                                img_shape=np.asarray(img_shape, dtype=np.int32),
-                                pad_shape=np.asarray(pad_shape, dtype=np.int32),
-                                sample_index=np.int64(position),
-                                image_id=np.int64(row['image_id']))
-                    metadata_rows.append({
-                        'sample_index': position,
-                        'image_id': int(row['image_id']),
-                        'image_path': str(image_path),
-                        'variant': variant,
-                        'feature_layout': feature_layout,
-                        'img_shape': list(img_shape),
-                        'pad_shape': list(pad_shape),
-                        'ori_shape': list(shape_pair(
-                            metadata.get('ori_shape'),
-                            (int(row['height']), int(row['width'])))),
-                        'scale_factor': [float(value) for value in np.asarray(
-                            metadata.get('scale_factor', [1.0, 1.0])).reshape(-1)],
-                        'layer_shapes': layer_shapes,
-                    })
-                    done = position + 1
-                    if done == 1 or done % 10 == 0 or done == len(rows):
-                        elapsed = time.monotonic() - started_at
-                        eta = elapsed / done * (len(rows) - done)
-                        filled = int(30 * done / len(rows))
-                        print(
-                            f'[{loaded.model_id}:{variant}] '
-                            f'[{"#" * filled}{"-" * (30 - filled)}] '
-                            f'{done}/{len(rows)} '
-                            f'elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m',
-                            file=sys.stderr, flush=True)
+                    for offset, (row, image_path, prediction) in enumerate(
+                            zip(batch_rows, image_paths, predictions)):
+                        position = start + offset
+                        metadata = prediction.metainfo
+                        img_shape = shape_pair(metadata.get('img_shape'), (1, 1))
+                        pad_shape = shape_pair(
+                            metadata.get('pad_shape', metadata.get('batch_input_shape')),
+                            img_shape)
+                        layer_shapes = {}
+                        for layer_id in layer_ids:
+                            valid, _ = crop_valid_feature(
+                                captures[layer_id][offset:offset + 1], img_shape, pad_shape,
+                                feature_layout)
+                            pooled = pool_feature(valid, args.pooling)
+                            pooled_by_layer[layer_id].append(
+                                pooled.numpy().astype(np.float32, copy=False))
+                            norm_by_layer[layer_id].append(float(torch.linalg.vector_norm(valid)))
+                            layer_shapes[layer_id] = {
+                                'full': list(captures[layer_id][offset:offset + 1].shape),
+                                'valid': list(valid.shape),
+                            }
+                            save_this_spatial = args.save_spatial and (
+                                args.spatial_samples <= 0 or position < args.spatial_samples)
+                            if save_this_spatial:
+                                spatial_path = (
+                                    out_dir / 'spatial' / loaded.model_id / variant /
+                                    f'{position:05d}_{int(row["image_id"])}' /
+                                    f'{layer_id}.npz')
+                                spatial_path.parent.mkdir(parents=True, exist_ok=True)
+                                dtype = np.float16 if args.spatial_dtype == 'float16' else np.float32
+                                np.savez_compressed(
+                                    spatial_path,
+                                    feature=valid.numpy().astype(dtype),
+                                    img_shape=np.asarray(img_shape, dtype=np.int32),
+                                    pad_shape=np.asarray(pad_shape, dtype=np.int32),
+                                    sample_index=np.int64(position),
+                                    image_id=np.int64(row['image_id']))
+                        metadata_rows.append({
+                            'sample_index': position,
+                            'image_id': int(row['image_id']),
+                            'image_path': str(image_path),
+                            'variant': variant,
+                            'feature_layout': feature_layout,
+                            'img_shape': list(img_shape),
+                            'pad_shape': list(pad_shape),
+                            'ori_shape': list(shape_pair(
+                                metadata.get('ori_shape'),
+                                (int(row['height']), int(row['width'])))),
+                            'scale_factor': [float(value) for value in np.asarray(
+                                metadata.get('scale_factor', [1.0, 1.0])).reshape(-1)],
+                            'layer_shapes': layer_shapes,
+                        })
+                        done = position + 1
+                        if done == 1 or done % 10 == 0 or done == len(rows):
+                            elapsed = time.monotonic() - started_at
+                            eta = elapsed / done * (len(rows) - done)
+                            filled = int(30 * done / len(rows))
+                            print(
+                                f'[{loaded.model_id}:{variant}] '
+                                f'[{"#" * filled}{"-" * (30 - filled)}] '
+                                f'{done}/{len(rows)} '
+                                f'elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m',
+                                file=sys.stderr, flush=True)
 
                 destination = out_dir / 'features' / loaded.model_id / variant
                 destination.mkdir(parents=True, exist_ok=True)

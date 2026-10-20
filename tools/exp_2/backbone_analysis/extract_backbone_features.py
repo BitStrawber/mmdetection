@@ -38,6 +38,7 @@ def parse_args() -> argparse.Namespace:
         help='Comma-separated manifest variants; clean uses image_path when absent')
     parser.add_argument('--layers', default='', help='Optional comma-separated layer IDs')
     parser.add_argument('--device', default='cuda:0')
+    parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument(
         '--pooling', choices=('avg', 'max', 'avgmax'), default='avg')
     parser.add_argument(
@@ -71,12 +72,17 @@ def crop_valid_feature(
     feature: torch.Tensor,
     img_shape: Tuple[int, int],
     pad_shape: Tuple[int, int],
+    layout: str = 'channels_first',
 ) -> Tuple[torch.Tensor, Tuple[int, int]]:
-    value = feature.detach().float().cpu()
+    value = feature.detach().float()
     if value.ndim == 4:
         if value.shape[0] != 1:
             raise ValueError(f'Expected batch size 1, got {tuple(value.shape)}')
         value = value[0]
+    if layout == 'channels_last' and value.ndim == 3:
+        value = value.permute(2, 0, 1).contiguous()
+    elif layout not in ('channels_first', 'channels_last'):
+        raise ValueError(f'Unknown feature layout: {layout}')
     if value.ndim == 3:
         feature_h, feature_w = int(value.shape[-2]), int(value.shape[-1])
         img_h, img_w = img_shape
@@ -121,6 +127,8 @@ def variant_path(row: Mapping[str, Any], variant: str) -> Path:
 
 def main() -> None:
     args = parse_args()
+    if args.batch_size < 1:
+        raise ValueError('--batch-size must be at least 1')
     rows = read_jsonl(args.manifest)
     validate_sample_order(rows)
     models_config = read_json(args.models_config)
@@ -145,6 +153,7 @@ def main() -> None:
         'models': [str(spec['id']) for spec in specs],
         'variants': variants,
         'pooling': args.pooling,
+        'batch_size': args.batch_size,
         'save_spatial': args.save_spatial,
         'spatial_samples': args.spatial_samples,
     })
@@ -155,6 +164,9 @@ def main() -> None:
 
     for spec in specs:
         loaded = load_model(spec, args.device)
+        feature_layout = str(spec.get('feature_layout', 'channels_first'))
+        if feature_layout not in ('channels_first', 'channels_last'):
+            raise ValueError(f'{loaded.model_id}: invalid feature_layout')
         extraction_reports[loaded.model_id] = loaded.load_report
         layer_ids = list(loaded.layers)
         if selected_layers:
@@ -179,65 +191,81 @@ def main() -> None:
                     layer: [] for layer in layer_ids
                 }
                 metadata_rows = []
-                for position, row in enumerate(rows):
+                for batch_start in range(0, len(rows), args.batch_size):
                     captures.clear()
-                    image_path = variant_path(row, variant)
-                    prediction = inference_detector(loaded.model, str(image_path))
+                    batch_rows = rows[batch_start:batch_start + args.batch_size]
+                    image_paths = [str(variant_path(row, variant)) for row in batch_rows]
+                    predictions = inference_detector(loaded.model, image_paths)
+                    if len(predictions) != len(batch_rows):
+                        raise RuntimeError('Inference result count differs from batch size')
                     missing_layers = set(layer_ids) - set(captures)
                     if missing_layers:
                         raise RuntimeError(
                             f'{loaded.model_id}: hooks captured no outputs for '
                             f'{sorted(missing_layers)}')
-                    metadata = prediction.metainfo
-                    img_shape = shape_pair(metadata.get('img_shape'), (1, 1))
-                    pad_shape = shape_pair(
-                        metadata.get('pad_shape', metadata.get('batch_input_shape')),
-                        img_shape)
-                    layer_shapes = {}
-                    for layer_id in layer_ids:
-                        valid, valid_shape = crop_valid_feature(
-                            captures[layer_id], img_shape, pad_shape)
-                        pooled = pool_feature(valid, args.pooling)
-                        pooled_by_layer[layer_id].append(
-                            pooled.numpy().astype(np.float32, copy=False))
-                        norm_by_layer[layer_id].append(float(torch.linalg.vector_norm(valid)))
-                        layer_shapes[layer_id] = {
-                            'full': list(captures[layer_id].shape),
-                            'valid': list(valid.shape),
-                        }
-                        save_this_spatial = args.save_spatial and (
-                            args.spatial_samples <= 0 or position < args.spatial_samples)
-                        if save_this_spatial:
-                            spatial_path = (
-                                out_dir / 'spatial' / loaded.model_id / variant /
-                                f'{position:05d}_{int(row["image_id"])}' /
-                                f'{layer_id}.npz')
-                            spatial_path.parent.mkdir(parents=True, exist_ok=True)
-                            dtype = np.float16 if args.spatial_dtype == 'float16' else np.float32
-                            np.savez_compressed(
-                                spatial_path,
-                                feature=valid.numpy().astype(dtype),
-                                img_shape=np.asarray(img_shape, dtype=np.int32),
-                                pad_shape=np.asarray(pad_shape, dtype=np.int32),
-                                sample_index=np.int64(position),
-                                image_id=np.int64(row['image_id']))
-                    metadata_rows.append({
-                        'sample_index': position,
-                        'image_id': int(row['image_id']),
-                        'image_path': str(image_path),
-                        'variant': variant,
-                        'img_shape': list(img_shape),
-                        'pad_shape': list(pad_shape),
-                        'ori_shape': list(shape_pair(
-                            metadata.get('ori_shape'),
-                            (int(row['height']), int(row['width'])))),
-                        'scale_factor': [float(value) for value in np.asarray(
-                            metadata.get('scale_factor', [1.0, 1.0])).reshape(-1)],
-                        'layer_shapes': layer_shapes,
-                    })
-                    print(
-                        f'[{loaded.model_id}:{variant}] '
-                        f'{position + 1}/{len(rows)} {row["file_name"]}', flush=True)
+                    for batch_index, (row, image_path, prediction) in enumerate(
+                            zip(batch_rows, image_paths, predictions)):
+                        position = batch_start + batch_index
+                        metadata = prediction.metainfo
+                        img_shape = shape_pair(metadata.get('img_shape'), (1, 1))
+                        pad_shape = shape_pair(
+                            metadata.get('batch_input_shape', metadata.get('pad_shape')),
+                            img_shape)
+                        layer_shapes = {}
+                        for layer_id in layer_ids:
+                            batch_feature = captures[layer_id]
+                            if batch_feature.ndim < 3 or batch_feature.shape[0] != len(batch_rows):
+                                raise RuntimeError(
+                                    f'{loaded.model_id}/{layer_id}: hook output '
+                                    f'{tuple(batch_feature.shape)} does not match batch '
+                                    f'size {len(batch_rows)}')
+                            valid, _ = crop_valid_feature(
+                                batch_feature[batch_index], img_shape, pad_shape,
+                                feature_layout)
+                            pooled = pool_feature(valid, args.pooling)
+                            pooled_by_layer[layer_id].append(
+                                pooled.cpu().numpy().astype(np.float32, copy=False))
+                            norm_by_layer[layer_id].append(
+                                float(torch.linalg.vector_norm(valid).item()))
+                            layer_shapes[layer_id] = {
+                                'full': list(batch_feature[batch_index].shape),
+                                'valid': list(valid.shape),
+                            }
+                            save_this_spatial = args.save_spatial and (
+                                args.spatial_samples <= 0 or position < args.spatial_samples)
+                            if save_this_spatial:
+                                spatial_path = (
+                                    out_dir / 'spatial' / loaded.model_id / variant /
+                                    f'{position:05d}_{int(row["image_id"])}' /
+                                    f'{layer_id}.npz')
+                                spatial_path.parent.mkdir(parents=True, exist_ok=True)
+                                dtype = np.float16 if args.spatial_dtype == 'float16' else np.float32
+                                np.savez_compressed(
+                                    spatial_path,
+                                    feature=valid.cpu().numpy().astype(dtype),
+                                    img_shape=np.asarray(img_shape, dtype=np.int32),
+                                    pad_shape=np.asarray(pad_shape, dtype=np.int32),
+                                    sample_index=np.int64(position),
+                                    image_id=np.int64(row['image_id']))
+                        metadata_rows.append({
+                            'sample_index': position,
+                            'image_id': int(row['image_id']),
+                            'image_path': image_path,
+                            'variant': variant,
+                            'feature_layout': feature_layout,
+                            'img_shape': list(img_shape),
+                            'pad_shape': list(pad_shape),
+                            'ori_shape': list(shape_pair(
+                                metadata.get('ori_shape'),
+                                (int(row['height']), int(row['width'])))),
+                            'scale_factor': [float(value) for value in np.asarray(
+                                metadata.get('scale_factor', [1.0, 1.0])).reshape(-1)],
+                            'layer_shapes': layer_shapes,
+                        })
+                        print(
+                            f'[{loaded.model_id}:{variant}] '
+                            f'{position + 1}/{len(rows)} {row["file_name"]}', flush=True)
+                    captures.clear()
 
                 destination = out_dir / 'features' / loaded.model_id / variant
                 destination.mkdir(parents=True, exist_ok=True)

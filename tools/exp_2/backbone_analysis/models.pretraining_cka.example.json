@@ -1,0 +1,52 @@
+{
+  "models": [
+    {
+      "id": "imagenet_r50", "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
+      "checkpoint": "work_dirs/tri_pretrain/imagenet_dino_resnet50_100e/checkpoint.pth",
+      "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "synthetic5_r50", "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
+      "checkpoint": "work_dirs/tri_pretrain/synthetic5_corrected_watergan_dino_resnet50_100e/checkpoint.pth",
+      "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "realuw_r50", "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_r50_dino-official_fpn_2x_ruod.py",
+      "checkpoint": "work_dirs/tri_pretrain/j7_realuw_dino_resnet50_ssd100e/checkpoint.pth",
+      "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95,
+      "layers": {"res2": "layer1", "res3": "layer2", "res4": "layer3", "res5": "layer4"}
+    },
+    {
+      "id": "imagenet_vits", "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
+      "checkpoint": "work_dirs/tri_pretrain/imagenet_dino_vits_100e/checkpoint.pth",
+      "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95, "feature_layout": "channels_last",
+      "layers": {"block1": "blocks.0", "block4": "blocks.3", "block8": "blocks.7", "block12": "blocks.11"}
+    },
+    {
+      "id": "synthetic5_vits", "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
+      "checkpoint": "work_dirs/tri_pretrain/synthetic5_corrected_watergan_dino_vits_100e/checkpoint.pth",
+      "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95, "feature_layout": "channels_last",
+      "layers": {"block1": "blocks.0", "block4": "blocks.3", "block8": "blocks.7", "block12": "blocks.11"}
+    },
+    {
+      "id": "realuw_vits", "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
+      "checkpoint": "work_dirs/tri_pretrain/j14_realuw_dino_vits_100e/checkpoint.pth",
+      "state_dict_key": "teacher", "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.95, "feature_layout": "channels_last",
+      "layers": {"block1": "blocks.0", "block4": "blocks.3", "block8": "blocks.7", "block12": "blocks.11"}
+    }
+  ]
+}

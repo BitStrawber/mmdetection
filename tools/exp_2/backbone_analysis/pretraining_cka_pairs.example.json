@@ -1,0 +1,12 @@
+{
+  "resnet50": {
+    "ImageNet": "imagenet_r50",
+    "Synthetic5": "synthetic5_r50",
+    "RealUW": "realuw_r50"
+  },
+  "vit_small": {
+    "ImageNet": "imagenet_vits",
+    "Synthetic5": "synthetic5_vits",
+    "RealUW": "realuw_vits"
+  }
+}

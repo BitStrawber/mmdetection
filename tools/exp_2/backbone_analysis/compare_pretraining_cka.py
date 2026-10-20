@@ -19,6 +19,25 @@ GROUPS = {
     'resnet50': ('res2', 'res3', 'res4', 'res5'),
     'vit_small': ('block1', 'block4', 'block8', 'block12'),
 }
+MODEL_IDS = {
+    'resnet50': {'ImageNet': 'imagenet_r50',
+                 'Synthetic5': 'synthetic5_r50', 'RealUW': 'realuw_r50'},
+    'vit_small': {'ImageNet': 'imagenet_vits',
+                  'Synthetic5': 'synthetic5_vits', 'RealUW': 'realuw_vits'},
+}
+
+
+def resolve_mapping(config: dict) -> dict:
+    if set(config) == set(GROUPS):
+        return config
+    if set(config) == {'models'} and isinstance(config['models'], list):
+        ids = [str(model['id']) for model in config['models']]
+        expected = {model_id for group in MODEL_IDS.values()
+                    for model_id in group.values()}
+        if len(ids) != len(expected) or set(ids) != expected:
+            raise ValueError('Six-model config must contain exactly the expected model IDs')
+        return MODEL_IDS
+    raise ValueError(f'Model mapping must contain {sorted(GROUPS)}')
 
 
 def validate_provenance(feature_root: Path, mapping: dict, variant: str) -> dict:
@@ -75,7 +94,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--feature-root', required=True)
     parser.add_argument('--models-config', required=True,
-                        help='JSON mapping backbone -> source -> extracted model ID')
+                        help='Pairwise mapping JSON or six-model extraction config')
     parser.add_argument('--variant', default='clean')
     parser.add_argument('--out-dir', required=True)
     parser.add_argument('--eps', type=float, default=1e-12)
@@ -83,9 +102,7 @@ def main() -> None:
     args = parser.parse_args()
 
     feature_root = Path(args.feature_root).expanduser().resolve()
-    mapping = read_json(args.models_config)
-    if set(mapping) != set(GROUPS):
-        raise ValueError(f'Model mapping must contain {sorted(GROUPS)}')
+    mapping = resolve_mapping(read_json(args.models_config))
     provenance = validate_provenance(feature_root, mapping, args.variant)
 
     rows = []

@@ -6,11 +6,19 @@ from pathlib import Path
 import numpy as np
 
 from .common import write_json
-from .compare_pretraining_cka import GROUPS, validate_provenance
+from .compare_pretraining_cka import GROUPS, MODEL_IDS, resolve_mapping, validate_provenance
 from .compute_cka import centered_gram
 
 
 class PretrainingCkaTests(unittest.TestCase):
+    def test_resolve_both_config_formats(self):
+        self.assertEqual(resolve_mapping(MODEL_IDS), MODEL_IDS)
+        models = [{'id': model_id} for group in MODEL_IDS.values()
+                  for model_id in group.values()]
+        self.assertEqual(resolve_mapping({'models': models}), MODEL_IDS)
+        with self.assertRaisesRegex(ValueError, 'exactly'):
+            resolve_mapping({'models': models[:-1]})
+
     def test_centered_gram_self_similarity(self):
         features = np.array([[1., 2.], [3., 5.], [5., 4.]])
         gram, norm = centered_gram(features, 1e-12)

@@ -7,6 +7,8 @@ import argparse
 import csv
 import gc
 import math
+import sys
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Tuple
 
@@ -209,6 +211,7 @@ def main() -> None:
                     layer: [] for layer in layer_ids
                 }
                 metadata_rows = []
+                started_at = time.monotonic()
                 for position, row in enumerate(rows):
                     captures.clear()
                     image_path = variant_path(row, variant)
@@ -267,9 +270,17 @@ def main() -> None:
                             metadata.get('scale_factor', [1.0, 1.0])).reshape(-1)],
                         'layer_shapes': layer_shapes,
                     })
-                    print(
-                        f'[{loaded.model_id}:{variant}] '
-                        f'{position + 1}/{len(rows)} {row["file_name"]}', flush=True)
+                    done = position + 1
+                    if done == 1 or done % 10 == 0 or done == len(rows):
+                        elapsed = time.monotonic() - started_at
+                        eta = elapsed / done * (len(rows) - done)
+                        filled = int(30 * done / len(rows))
+                        print(
+                            f'[{loaded.model_id}:{variant}] '
+                            f'[{"#" * filled}{"-" * (30 - filled)}] '
+                            f'{done}/{len(rows)} '
+                            f'elapsed={elapsed / 60:.1f}m ETA={eta / 60:.1f}m',
+                            file=sys.stderr, flush=True)
 
                 destination = out_dir / 'features' / loaded.model_id / variant
                 destination.mkdir(parents=True, exist_ok=True)

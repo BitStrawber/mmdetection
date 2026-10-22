@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Train on every cross-filtered COCO-Easy image, then test on that same set.
+# Train and test Faster R-CNN on the same sampled DFUI_COCOEasy set.
 set -Eeuo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/../../.."
 
 SOURCE_RUN="${SOURCE_RUN:-/media/HDD2/XCX/exp_2/coco_easy_runs/coco_full_ab_easy_sample_selfeval_gpu67_restart_20261016_132628}"
-EASY_ANN="${EASY_ANN:-$SOURCE_RUN/easy_full/instances_easy_merged.json}"
-COCO_ROOT="${COCO_ROOT:-/media/HDD2/XCX/exp_2/COCO2017}"
+SAMPLE_ROOT="${SAMPLE_ROOT:-$SOURCE_RUN/DFUI_COCOEasy}"
+TRAIN_ANN="$SAMPLE_ROOT/annotations/instances_train.json"
+VAL_ANN="$SAMPLE_ROOT/annotations/instances_val.json"
 CONFIG="${CONFIG:-configs/faster_rcnn/faster-rcnn_r50_fpn_1x_coco.py}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/coco_easy_runs/faster_rcnn_full_easy_$(date +%Y%m%d_%H%M%S)}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-/media/HDD2/XCX/exp_2/coco_easy_runs/faster_rcnn_dfui_cocoeasy_all_$(date +%Y%m%d_%H%M%S)}"
 GPUS="${GPUS:-0,1}"
 EPOCHS="${EPOCHS:-96}"
 BATCH_SIZE="${BATCH_SIZE:-4}"
@@ -20,42 +21,50 @@ CHECK_ONLY="${CHECK_ONLY:-0}"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 
 die() { echo "ERROR: $*" >&2; exit 1; }
-[[ -s "$EASY_ANN" && -d "$COCO_ROOT/train2017" && -s "$CONFIG" ]] ||
-  die "missing Easy annotation, COCO images, or Faster R-CNN config"
+[[ -s "$TRAIN_ANN" && -s "$VAL_ANN" && -d "$SAMPLE_ROOT/images" && -s "$CONFIG" ]] ||
+  die "missing sampled train/val annotations, images, or Faster R-CNN config"
 [[ -x tools/dist_train.sh && -x tools/dist_test.sh ]] || die "missing distributed train/test scripts"
 [[ "$GPUS" =~ ^[0-9]+,[0-9]+$ ]] || die "GPUS must contain two GPU indices, e.g. 0,1"
 IFS=, read -r GPU_A GPU_B <<< "$GPUS"
 [[ "$GPU_A" != "$GPU_B" ]] || die "GPU indices must differ"
 [[ "$EPOCHS" -gt 0 && "$BATCH_SIZE" -gt 0 ]] || die "epochs and batch size must be positive"
 
-"$PYTHON_BIN" - "$EASY_ANN" "$COCO_ROOT/train2017" "$CONFIG" <<'PY'
+"$PYTHON_BIN" - "$TRAIN_ANN" "$VAL_ANN" "$SAMPLE_ROOT/images" "$CONFIG" <<'PY'
 import json
 import sys
 from pathlib import Path
 from mmengine.config import Config
 from mmdet.datasets import CocoDataset
 
-annotation, image_root, config = map(Path, sys.argv[1:])
-data = json.loads(annotation.read_text(encoding='utf-8'))
-images, annotations, categories = (data[key] for key in ('images', 'annotations', 'categories'))
+train_ann, val_ann, image_root, config = map(Path, sys.argv[1:])
+train = json.loads(train_ann.read_text(encoding='utf-8'))
+val = json.loads(val_ann.read_text(encoding='utf-8'))
+categories = train['categories']
+if categories != val['categories']:
+    raise SystemExit('Sampled train/val categories differ')
+images = train['images'] + val['images']
+annotations = train['annotations'] + val['annotations']
+if len(train['images']) != 9770 or len(val['images']) != 1724:
+    raise SystemExit('Expected the 9770/1724-image sampled DFUI_COCOEasy split')
 ids = {int(image['id']) for image in images}
 if len(ids) != len(images) or len(categories) != 80:
-    raise SystemExit('Expected unique image IDs and 80 COCO categories')
+    raise SystemExit('Expected disjoint image IDs and 80 COCO categories')
 if tuple(category['name'] for category in categories) != CocoDataset.METAINFO['classes']:
     raise SystemExit('Easy category names or order differ from COCO metainfo')
 if len({int(ann['id']) for ann in annotations}) != len(annotations):
-    raise SystemExit('Duplicate annotation IDs in Easy pool')
+    raise SystemExit('Duplicate annotation IDs across sampled train/val')
 if any(int(ann['image_id']) not in ids for ann in annotations):
-    raise SystemExit('Annotation references an image outside the Easy pool')
+    raise SystemExit('Annotation references an image outside sampled DFUI_COCOEasy')
 missing = [image['file_name'] for image in images
            if not (image_root / image['file_name']).is_file()]
 if missing:
-    raise SystemExit(f'Missing COCO images: {missing[:5]}')
+    raise SystemExit(f'Missing sampled images: {missing[:5]}')
 cfg = Config.fromfile(str(config))
 if cfg.model.type != 'FasterRCNN':
     raise SystemExit(f'Expected FasterRCNN, got {cfg.model.type}')
-print(f'easy_images={len(images)} annotations={len(annotations)} categories={len(categories)}')
-print('protocol=train_all_easy_no_validation_test_same_all_easy')
+print(f'train_images={len(train["images"])} val_images={len(val["images"])} '
+      f'all_images={len(images)} annotations={len(annotations)} categories={len(categories)}')
+print('protocol=train_all_sampled_no_validation_test_same_all_sampled')
 PY
 
 if command -v nvidia-smi >/dev/null 2>&1; then
@@ -77,24 +86,40 @@ if [[ "$CHECK_ONLY" == 1 ]]; then
 fi
 
 [[ ! -e "$OUTPUT_ROOT" ]] || die "output already exists: $OUTPUT_ROOT"
-WORK="$OUTPUT_ROOT/work_dirs/faster_rcnn_full_easy_${EPOCHS}e"
-TEST_WORK="$OUTPUT_ROOT/work_dirs/faster_rcnn_full_easy_test"
-mkdir -p "$WORK" "$TEST_WORK" "$OUTPUT_ROOT/logs"
+WORK="$OUTPUT_ROOT/work_dirs/faster_rcnn_dfui_cocoeasy_${EPOCHS}e"
+TEST_WORK="$OUTPUT_ROOT/work_dirs/faster_rcnn_dfui_cocoeasy_test"
+ALL_ANN="$OUTPUT_ROOT/annotations/instances_all.json"
+mkdir -p "$WORK" "$TEST_WORK" "$OUTPUT_ROOT/logs" "$OUTPUT_ROOT/annotations"
 
-"$PYTHON_BIN" - "$CONFIG" "$COCO_ROOT" "$EASY_ANN" "$WORK" "$EPOCHS" "$BATCH_SIZE" "$NUM_WORKERS" "$MILESTONES" <<'PY'
+"$PYTHON_BIN" - "$TRAIN_ANN" "$VAL_ANN" "$ALL_ANN" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+train_path, val_path, output_path = map(Path, sys.argv[1:])
+train = json.loads(train_path.read_text(encoding='utf-8'))
+val = json.loads(val_path.read_text(encoding='utf-8'))
+merged = dict(train)
+merged['images'] = train['images'] + val['images']
+merged['annotations'] = train['annotations'] + val['annotations']
+output_path.write_text(json.dumps(merged, ensure_ascii=False), encoding='utf-8')
+print(f'combined_annotation={output_path} images={len(merged["images"])}')
+PY
+
+"$PYTHON_BIN" - "$CONFIG" "$SAMPLE_ROOT" "$ALL_ANN" "$WORK" "$EPOCHS" "$BATCH_SIZE" "$NUM_WORKERS" "$MILESTONES" <<'PY'
 import sys
 from pathlib import Path
 from mmengine.config import Config
 from mmdet.datasets import CocoDataset
 
-config, coco_root, annotation, work, epochs, batch_size, workers, milestones = sys.argv[1:]
+config, sample_root, annotation, work, epochs, batch_size, workers, milestones = sys.argv[1:]
 cfg = Config.fromfile(config)
 classes = CocoDataset.METAINFO['classes']
 for key in ('train_dataloader', 'test_dataloader'):
     dataset = cfg[key].dataset
-    dataset.data_root = str(Path(coco_root).resolve()) + '/'
+    dataset.data_root = str(Path(sample_root).resolve()) + '/'
     dataset.ann_file = str(Path(annotation).resolve())
-    dataset.data_prefix = dict(img='train2017/')
+    dataset.data_prefix = dict(img='images/')
     dataset.metainfo = dict(classes=classes)
 cfg.train_dataloader.batch_size = int(batch_size)
 cfg.train_dataloader.num_workers = int(workers)
@@ -136,14 +161,17 @@ PORT="$((BASE_PORT + 1))" CUDA_VISIBLE_DEVICES="$GPUS" bash tools/dist_test.sh \
 {
   printf 'field\tvalue\n'
   printf 'source_run\t%s\n' "$SOURCE_RUN"
-  printf 'easy_annotation\t%s\n' "$EASY_ANN"
+  printf 'sample_root\t%s\n' "$SAMPLE_ROOT"
+  printf 'sampled_train_annotation\t%s\n' "$TRAIN_ANN"
+  printf 'sampled_val_annotation\t%s\n' "$VAL_ANN"
+  printf 'combined_annotation\t%s\n' "$ALL_ANN"
   printf 'gpu_group\t%s\n' "$GPUS"
   printf 'epochs\t%s\n' "$EPOCHS"
   printf 'final_checkpoint\t%s\n' "$FINAL_CKPT"
   printf 'validation_annotation\tNONE\n'
-  printf 'test_annotation\t%s\n' "$EASY_ANN"
-  printf 'test_protocol\ttrain_and_test_on_same_full_easy_pool_not_independent_generalization\n'
+  printf 'test_annotation\t%s\n' "$ALL_ANN"
+  printf 'test_protocol\ttrain_and_test_on_same_sampled_dfui_cocoeasy_not_independent_generalization\n'
 } > "$OUTPUT_ROOT/run_provenance.tsv"
 touch "$OUTPUT_ROOT/.complete"
-echo "RESULT=PASS_FASTER_RCNN_FULL_EASY_SELF_EVAL"
+echo "RESULT=PASS_FASTER_RCNN_DFUI_COCOEASY_SELF_EVAL"
 echo "OUTPUT_ROOT=$OUTPUT_ROOT"

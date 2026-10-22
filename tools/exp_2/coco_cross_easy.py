@@ -180,6 +180,8 @@ def sample(args: argparse.Namespace) -> None:
     for ann in easy.get("annotations", []):
         annotations_by_image[int(ann["image_id"])].append(ann)
     categories = easy.get("categories", [])
+    info = easy.get("info", {})
+    licenses = easy.get("licenses", [])
     image_dir = args.output / "images"
     image_dir.mkdir()
     for image in chosen:
@@ -195,6 +197,8 @@ def sample(args: argparse.Namespace) -> None:
     for split_name, split_images in (("train", train_images), ("val", val_images)):
         ids = {int(image["id"]) for image in split_images}
         part = {
+            "info": info,
+            "licenses": licenses,
             "images": [dict(image, file_name=Path(image["file_name"]).name) for image in split_images],
             "annotations": [ann for image_id in ids for ann in annotations_by_image[image_id]],
             "categories": categories,

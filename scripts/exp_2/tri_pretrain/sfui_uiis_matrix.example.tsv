@@ -1,0 +1,4 @@
+# name|backbone|pretrain_checkpoint|sfui_root|train_ann|val_ann|train_prefix|val_prefix|test_ann|test_prefix|sfui_config|uiis_config|expected_sfui_classes
+# Paths may be absolute. Empty annotation/config fields use runner defaults.
+sfui_ter_random_imagenet_r50|r50|/path/to/imagenet_r50_dino.pth|/path/to/sfui_ter_random|/path/to/sfui_ter_random/annotations/instances_train.json|/path/to/sfui_ter_random/annotations/instances_val.json|images/train/|images/val/|||||80
+sfui_ter_random_imagenet_vits|vits|/path/to/imagenet_vits_dino.pth|/path/to/sfui_ter_random|/path/to/sfui_ter_random/annotations/instances_train.json|/path/to/sfui_ter_random/annotations/instances_val.json|images/train/|images/val/|||||80

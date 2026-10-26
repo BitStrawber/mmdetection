@@ -354,7 +354,12 @@ def main() -> None:
                             0.0, network_box[0], network_box[1],
                             network_box[2], network_box[3],
                         ]])
-                        bbox_result = model.roi_head._bbox_forward(stage, features, rois)
+                        if num_stages > 1:
+                            bbox_result = model.roi_head._bbox_forward(
+                                stage, features, rois)
+                        else:
+                            bbox_result = model.roi_head._bbox_forward(
+                                features, rois)
                         cls_score = bbox_result['cls_score']
                         if class_label >= cls_score.shape[1] - 1:
                             raise IndexError(

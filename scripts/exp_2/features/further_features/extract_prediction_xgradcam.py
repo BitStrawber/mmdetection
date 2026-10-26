@@ -144,8 +144,8 @@ def mask_target_logit(
     mask_logits: torch.Tensor,
     prediction_label: int,
     predicted_mask: np.ndarray,
-    network_box: Sequence[float],
-    img_shape: Sequence[int],
+    original_box: Sequence[float],
+    original_shape: Sequence[int],
     device: torch.device,
 ) -> torch.Tensor:
     """Return the mean predicted-class mask logit inside the predicted mask."""
@@ -162,14 +162,14 @@ def mask_target_logit(
         raise ValueError(
             f'Expected mask logits as CHW or NCHW, got {tuple(mask_logits.shape)}')
 
-    height, width = int(img_shape[0]), int(img_shape[1])
-    left = max(0, min(width, int(np.floor(network_box[0]))))
-    top = max(0, min(height, int(np.floor(network_box[1]))))
-    right = max(0, min(width, int(np.ceil(network_box[2]))))
-    bottom = max(0, min(height, int(np.ceil(network_box[3]))))
+    height, width = int(original_shape[0]), int(original_shape[1])
+    left = max(0, min(width, int(np.floor(original_box[0]))))
+    top = max(0, min(height, int(np.floor(original_box[1]))))
+    right = max(0, min(width, int(np.ceil(original_box[2]))))
+    bottom = max(0, min(height, int(np.ceil(original_box[3]))))
     if right <= left or bottom <= top:
         raise ValueError(
-            f'Invalid predicted mask crop: {network_box}, image={img_shape}')
+            f'Invalid predicted mask crop: {original_box}, image={original_shape}')
 
     mask_crop = predicted_mask[top:bottom, left:right]
     mask_tensor = torch.as_tensor(
@@ -402,7 +402,12 @@ def main() -> None:
                             0.0, network_box[0], network_box[1],
                             network_box[2], network_box[3],
                         ]])
-                        bbox_result = model.roi_head._bbox_forward(stage, features, rois)
+                        if num_stages > 1:
+                            bbox_result = model.roi_head._bbox_forward(
+                                stage, features, rois)
+                        else:
+                            bbox_result = model.roi_head._bbox_forward(
+                                features, rois)
                         cls_score = bbox_result['cls_score']
                         if prediction_label >= cls_score.shape[1] - 1:
                             raise IndexError(
@@ -430,8 +435,8 @@ def main() -> None:
                                 mask_logits,
                                 prediction_label,
                                 predicted_mask,
-                                network_box,
-                                img_shape,
+                                original_box,
+                                ori_shape,
                                 batch_inputs.device,
                             )
                             recomputed_probability = float(

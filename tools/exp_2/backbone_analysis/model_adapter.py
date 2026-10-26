@@ -334,7 +334,7 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
     layers = {}
     for layer_id, module_name in layer_map.items():
         module_name = str(module_name)
-        if module_name.startswith('backbone_output.'):
+        if module_name == 'backbone' or module_name.startswith('backbone_output.'):
             layers[str(layer_id)] = model.backbone
         else:
             layers[str(layer_id)] = resolve_module(

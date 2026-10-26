@@ -76,6 +76,23 @@ def tensor_from_output(output: Any) -> torch.Tensor:
     raise TypeError(f'Expected one tensor from target layer, got {type(output)}')
 
 
+def activation_from_output(output: Any, feature_layout: str = 'channels_first') -> torch.Tensor:
+    """Normalize hooked backbone activations to BCHW for XGradCAM."""
+    value = tensor_from_output(output)
+    if feature_layout == 'channels_last':
+        if value.ndim != 4:
+            raise ValueError(
+                'channels_last XGradCAM requires a BCHW-encoded tensor with '
+                f'layout BHWC, got {tuple(value.shape)}')
+        value = value.permute(0, 3, 1, 2)
+    elif feature_layout != 'channels_first':
+        raise ValueError(f'Unknown feature layout: {feature_layout}')
+    if value.ndim != 4:
+        raise ValueError(
+            f'XGradCAM requires a BCHW activation, got {tuple(value.shape)}')
+    return value
+
+
 def shape_pair(value: Any, fallback: Tuple[int, int]) -> Tuple[int, int]:
     if value is None:
         return fallback
@@ -274,10 +291,13 @@ def main() -> None:
             label_map, category_names, mapping_method = build_label_mapping(
                 categories, model)
             captures: Dict[str, torch.Tensor] = {}
+            feature_layout = str(
+                spec.get('feature_layout', 'channels_first'))
             handles = []
             for layer_id in selected_layers:
                 def hook(_module, _inputs, output, key=layer_id):
-                    captures[key] = tensor_from_output(output)
+                    captures[key] = activation_from_output(
+                        output, feature_layout)
                 handles.append(loaded.layers[layer_id].register_forward_hook(hook))
             pipeline = Compose(get_test_pipeline_cfg(model.cfg))
             completed = 0

@@ -132,6 +132,87 @@ def state_digest(state: Mapping[str, torch.Tensor], keys: list[str]) -> str:
     return digest.hexdigest()
 
 
+def overlay_pretrained_backbone(
+    model: Any,
+    spec: Mapping[str, Any],
+    model_id: str,
+) -> Dict[str, Any]:
+    """Replace a detector backbone with a separately supplied pretrained state."""
+    from mmengine.runner.checkpoint import _load_checkpoint
+
+    checkpoint_value = spec.get('backbone_checkpoint')
+    if not checkpoint_value:
+        raise ValueError(f'{model_id}: backbone_checkpoint is required')
+    checkpoint_path = existing_file(checkpoint_value)
+    checkpoint = _load_checkpoint(str(checkpoint_path), map_location='cpu')
+
+    expected_epoch = spec.get('backbone_expected_checkpoint_epoch')
+    if expected_epoch is not None and (
+            not isinstance(checkpoint, Mapping) or
+            checkpoint.get('epoch') != expected_epoch):
+        raise RuntimeError(
+            f'{model_id}: expected backbone checkpoint epoch {expected_epoch}, '
+            f'got {checkpoint.get("epoch") if isinstance(checkpoint, Mapping) else None}')
+
+    state = state_dict_from_checkpoint(
+        checkpoint, spec.get('backbone_state_dict_key'))
+    matched, matching_report = select_backbone_state(
+        state,
+        model.backbone.state_dict(),
+        spec.get('backbone_checkpoint_prefix'),
+    )
+    result = model.backbone.load_state_dict(matched, strict=False)
+
+    allowed_patterns = spec.get(
+        'backbone_allowed_missing_key_patterns',
+        spec.get('allowed_missing_key_patterns', []),
+    )
+    missing_unexpected = [
+        key for key in result.missing_keys
+        if not any(fnmatchcase(key, pattern) for pattern in allowed_patterns)
+    ]
+    allowed_missing = [
+        key for key in result.missing_keys if key not in missing_unexpected
+    ]
+    matching_report['allowed_missing_keys'] = allowed_missing
+    matching_report['required_match_ratio'] = (
+        matching_report['matched_tensors'] /
+        max(matching_report['target_tensors'] - len(allowed_missing), 1)
+    )
+
+    expected_missing_count = spec.get(
+        'backbone_expected_allowed_missing_count')
+    if (expected_missing_count is not None and
+            len(allowed_missing) != int(expected_missing_count)):
+        raise RuntimeError(
+            f'{model_id}: expected {expected_missing_count} allowed missing '
+            f'backbone keys, got {len(allowed_missing)}')
+
+    minimum_ratio = float(spec.get('backbone_minimum_match_ratio', 0.9))
+    if missing_unexpected or result.unexpected_keys or (
+            matching_report['required_match_ratio'] < minimum_ratio):
+        raise RuntimeError(
+            f'{model_id}: required backbone match ratio '
+            f'{matching_report["required_match_ratio"]:.3f} is below '
+            f'{minimum_ratio:.3f}; unexpected missing keys: '
+            f'{missing_unexpected[:10]}; unexpected loaded keys: '
+            f'{result.unexpected_keys[:10]}')
+
+    report = {
+        'checkpoint': str(checkpoint_path),
+        'checkpoint_epoch': (
+            checkpoint.get('epoch') if isinstance(checkpoint, Mapping) else None),
+        'state_dict_key': spec.get('backbone_state_dict_key'),
+        'allowed_missing_sha256': state_digest(
+            model.backbone.state_dict(), allowed_missing),
+        **matching_report,
+        'missing_keys': list(result.missing_keys),
+        'unexpected_keys': list(result.unexpected_keys),
+    }
+    del checkpoint, state, matched
+    return report
+
+
 def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
     from mmengine.config import Config
     from mmengine.runner.checkpoint import _load_checkpoint
@@ -159,6 +240,9 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
             'checkpoint': str(checkpoint_path),
             'loader': 'mmdet.apis.init_detector',
         }
+        if spec.get('backbone_checkpoint'):
+            load_report['pretrained_backbone_overlay'] = (
+                overlay_pretrained_backbone(model, spec, model_id))
     elif checkpoint_path is not None:
         initialization_seed = spec.get('initialization_seed')
         if initialization_seed is None:

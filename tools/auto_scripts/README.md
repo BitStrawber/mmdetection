@@ -229,3 +229,41 @@ This script preserves the old protocol: train and val annotations are merged
 into `instances_all.json`; all images are used for training; the same all-image
 set is used for testing; and `epoch_${EPOCHS}.pth` is used instead of a best
 validation checkpoint.
+
+### Cocosyn geometry normalization
+
+`normalize_cocosyn_geometry.py` applies the method-specific geometry policy:
+
+```text
+uwnr      generated 256x256 -> resize to source size, annotations unchanged
+cut       generated 256x256 -> resize to source size, annotations unchanged
+syreanet  original size     -> keep unchanged
+uwdf      original size     -> keep unchanged
+watergan  640x480 crop      -> regenerate bbox/mask in crop coordinates
+```
+
+Example:
+
+```bash
+python tools/auto_scripts/normalize_cocosyn_geometry.py \
+  --method watergan \
+  --annotation /path/to/instances_watergan_train.json \
+  --generated-manifest /path/to/watergan_generated_manifest.jsonl \
+  --generated-root /path/to/watergan/train_10k \
+  --source-image-root /media/SSD1/XCX/coco5w/source/train \
+  --output-root /path/to/normalized/watergan \
+  --target-size 640x480
+```
+
+Rebuild the complete five-method pool from transfer metadata:
+
+```bash
+python tools/auto_scripts/build_corrected_cocosyn.py \
+  --syn-root /media/SSD1/XCX/cocosyn50k_final \
+  --metadata-root /media/SSD1/XCX/cocosyn50k_transfer/cocosyn50k_final/metadata \
+  --output-root /media/SSD1/XCX/dfui_cocosyn_build/cocosyn50k_final_v3_retry01
+```
+
+The builder reads `instances_<method>_train.json` from the metadata directory,
+not the removed staging tree. WaterGAN annotations are transformed into the
+640x480 center-crop coordinate system.

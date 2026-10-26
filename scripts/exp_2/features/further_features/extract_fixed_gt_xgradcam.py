@@ -121,8 +121,13 @@ def build_label_mapping(
 ) -> Tuple[Dict[int, int], Dict[int, str], str]:
     category_names = {int(item['id']): str(item['name']) for item in categories}
     bbox_head = model.roi_head.bbox_head
-    if isinstance(bbox_head, (list, tuple)):
-        bbox_head = bbox_head[-1]
+    if not hasattr(bbox_head, 'num_classes'):
+        try:
+            bbox_head = bbox_head[-1]
+        except (IndexError, KeyError, TypeError) as error:
+            raise TypeError(
+                f'Cannot resolve final bbox head from {type(bbox_head).__name__}'
+            ) from error
     num_classes = int(bbox_head.num_classes)
     model_classes = list((getattr(model, 'dataset_meta', {}) or {}).get('classes', []))
     model_name_to_label = {str(name): index for index, name in enumerate(model_classes)}

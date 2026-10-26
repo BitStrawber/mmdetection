@@ -15,6 +15,7 @@ LAYERS="${LAYERS:-res2,res3,res4,res5}"
 CAM_DEVICES="${CAM_DEVICES:-cuda:0}"
 CAM_PARALLEL_MODELS="${CAM_PARALLEL_MODELS:-1}"
 CAM_SCORE_THRESHOLD="${CAM_SCORE_THRESHOLD:-0.05}"
+CAM_INFERENCE_SCORE_THRESHOLD="${CAM_INFERENCE_SCORE_THRESHOLD:-}"
 CAM_MAX_PREDICTIONS="${CAM_MAX_PREDICTIONS:-30}"
 CAM_TARGET_MODE="${CAM_TARGET_MODE:-bbox}"
 
@@ -28,6 +29,7 @@ echo "Sample:      ${SAMPLE_ROOT}/manifest.jsonl"
 echo "Models:      ${CAM_MODELS_CONFIG}"
 echo "Devices:     ${CAM_DEVICES}"
 echo "Target mode: ${CAM_TARGET_MODE}"
+echo "Inference threshold: ${CAM_INFERENCE_SCORE_THRESHOLD:-<unchanged>}"
 echo "Output:      ${CAM_OUT_ROOT}/jet_per_image_max/panels_5x4/legacy_jet"
 
 env \
@@ -41,6 +43,7 @@ env \
     LOG_ROOT="${CAM_OUT_ROOT}/logs" \
     LAYERS="${LAYERS}" \
     SCORE_THRESHOLD="${CAM_SCORE_THRESHOLD}" \
+    INFERENCE_SCORE_THRESHOLD="${CAM_INFERENCE_SCORE_THRESHOLD}" \
     MAX_PREDICTIONS_PER_IMAGE="${CAM_MAX_PREDICTIONS}" \
     TARGET_MODE="${CAM_TARGET_MODE}" \
     DEVICES="${CAM_DEVICES}" \

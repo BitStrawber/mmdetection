@@ -17,6 +17,7 @@ LOG_ROOT="${LOG_ROOT:-${OUT_ROOT}/logs}"
 LAYERS="${LAYERS:-res2,res3,res4,res5}"
 CASCADE_STAGE="${CASCADE_STAGE:--1}"
 SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.30}"
+INFERENCE_SCORE_THRESHOLD="${INFERENCE_SCORE_THRESHOLD:-}"
 MAX_PREDICTIONS_PER_IMAGE="${MAX_PREDICTIONS_PER_IMAGE:-10}"
 MINIMUM_BOX_AREA="${MINIMUM_BOX_AREA:-4}"
 MATCH_IOU_THRESHOLD="${MATCH_IOU_THRESHOLD:-0.50}"
@@ -70,6 +71,7 @@ echo "Sample:             ${SAMPLE_ROOT}/manifest.jsonl"
 echo "Models:             ${MODEL_IDS[*]}"
 echo "Layers:             ${LAYERS}"
 echo "Score threshold:    ${SCORE_THRESHOLD}"
+echo "Inference threshold:${INFERENCE_SCORE_THRESHOLD:- <unchanged>}"
 echo "Maximum boxes:      ${MAX_PREDICTIONS_PER_IMAGE} per image/model"
 echo "GT match IoU:       ${MATCH_IOU_THRESHOLD}"
 echo "CAM target mode:     ${TARGET_MODE}"
@@ -101,6 +103,9 @@ if [[ "${RUN_EXTRACT}" == 1 ]]; then
             --minimum-box-area "${MINIMUM_BOX_AREA}"
             --match-iou-threshold "${MATCH_IOU_THRESHOLD}"
             --target-mode "${TARGET_MODE}"
+        )
+        [[ -n "${INFERENCE_SCORE_THRESHOLD}" ]] && command+=(
+            --inference-score-threshold "${INFERENCE_SCORE_THRESHOLD}"
         )
         [[ "${RESUME}" == 1 ]] && command+=(--resume)
         echo "START prediction model=${model} device=${device} log=${log}"
@@ -167,6 +172,7 @@ cat > "${OUT_ROOT}/COMPLETE.env" <<EOF
 STATUS=complete
 METHOD=prediction_conditioned_xgradcam
 TARGET_MODE=${TARGET_MODE}
+INFERENCE_SCORE_THRESHOLD=${INFERENCE_SCORE_THRESHOLD}
 CAM_ROOT=${CAM_ROOT}
 RENDER_ROOT=${RENDER_ROOT}
 LEGACY_AGGREGATE_ROOT=${LEGACY_AGGREGATE_ROOT}

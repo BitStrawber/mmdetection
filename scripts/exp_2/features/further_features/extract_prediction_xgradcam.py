@@ -57,6 +57,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--device', default='cuda:0')
     parser.add_argument('--cascade-stage', type=int, default=-1)
     parser.add_argument('--score-threshold', type=float, default=0.30)
+    parser.add_argument(
+        '--inference-score-threshold',
+        type=float,
+        default=None,
+        help='Override test_cfg score_thr values used before post-NMS output.',
+    )
     parser.add_argument('--max-predictions-per-image', type=int, default=10)
     parser.add_argument('--minimum-box-area', type=float, default=4.0)
     parser.add_argument('--match-iou-threshold', type=float, default=0.50)
@@ -138,6 +144,33 @@ def best_gt_match(
         'class_correct': bool(class_correct),
         'tp_at_match_iou': bool(class_correct and iou >= threshold),
     }
+
+
+def override_inference_score_threshold(model: Any, threshold: float) -> int:
+    """Override score_thr values in the detector test configuration."""
+    test_cfg = getattr(model, 'test_cfg', None)
+    if test_cfg is None:
+        raise RuntimeError('Detector model has no test_cfg')
+
+    updates = 0
+
+    def visit(value: Any) -> None:
+        nonlocal updates
+        if isinstance(value, Mapping):
+            if 'score_thr' in value:
+                value['score_thr'] = float(threshold)
+                updates += 1
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, (list, tuple)):
+            for child in value:
+                visit(child)
+
+    visit(test_cfg)
+    if updates == 0:
+        raise RuntimeError(
+            f'No score_thr found in detector test_cfg: {test_cfg}')
+    return updates
 
 
 def mask_target_logit(
@@ -249,6 +282,14 @@ def main() -> None:
             stage = args.cascade_stage if args.cascade_stage >= 0 else num_stages - 1
             if not 0 <= stage < num_stages:
                 raise ValueError(f'{model_id}: invalid Cascade stage {stage}/{num_stages}')
+            if args.inference_score_threshold is not None:
+                updates = override_inference_score_threshold(
+                    model, args.inference_score_threshold)
+                print(
+                    f'[{model_id}] overridden test_cfg score_thr entries: '
+                    f'{updates} -> {args.inference_score_threshold}',
+                    flush=True,
+                )
             label_map, _, mapping_method = build_label_mapping(categories, model)
             label_to_category = {label: category for category, label in label_map.items()}
             model_classes = list((getattr(model, 'dataset_meta', {}) or {}).get('classes', []))
@@ -565,6 +606,7 @@ def main() -> None:
             'layers': selected_layers,
             'device': args.device,
             'target_mode': args.target_mode,
+            'inference_score_threshold': args.inference_score_threshold,
             'model_summaries': summaries,
             'warning': (
                 'Predicted ROIs/classes differ between detectors. Use this branch for '

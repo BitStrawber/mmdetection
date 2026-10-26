@@ -112,14 +112,15 @@ def activation_from_output(
 
 def activation_output_index(spec: Mapping[str, Any], layer_id: str) -> int | None:
     target = str(spec.get('layers', {}).get(layer_id, ''))
-    prefix = 'backbone_output.'
-    if not target.startswith(prefix):
-        return None
-    try:
-        return int(target[len(prefix):])
-    except ValueError as error:
-        raise ValueError(
-            f'Invalid backbone output target for {layer_id}: {target}') from error
+    for prefix in ('backbone_output.', 'neck_output.'):
+        if not target.startswith(prefix):
+            continue
+        try:
+            return int(target[len(prefix):])
+        except ValueError as error:
+            raise ValueError(
+                f'Invalid feature output target for {layer_id}: {target}') from error
+    return None
 
 
 def shape_pair(value: Any, fallback: Tuple[int, int]) -> Tuple[int, int]:

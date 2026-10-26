@@ -336,6 +336,11 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
         module_name = str(module_name)
         if module_name == 'backbone' or module_name.startswith('backbone_output.'):
             layers[str(layer_id)] = model.backbone
+        elif module_name.startswith('neck_output.'):
+            if not hasattr(model, 'neck'):
+                raise AttributeError(
+                    f'{model_id}: neck_output target requested without a neck')
+            layers[str(layer_id)] = model.neck
         else:
             layers[str(layer_id)] = resolve_module(
                 model.backbone, module_name)

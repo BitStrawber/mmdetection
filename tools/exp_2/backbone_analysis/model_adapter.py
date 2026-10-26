@@ -331,9 +331,13 @@ def load_model(spec: Mapping[str, Any], device: str) -> LoadedModel:
     }
     if not isinstance(layer_map, Mapping) or not layer_map:
         raise ValueError(f'{model_id}: layers must be a non-empty mapping')
-    layers = {
-        str(layer_id): resolve_module(model.backbone, str(module_name))
-        for layer_id, module_name in layer_map.items()
-    }
+    layers = {}
+    for layer_id, module_name in layer_map.items():
+        module_name = str(module_name)
+        if module_name.startswith('backbone_output.'):
+            layers[str(layer_id)] = model.backbone
+        else:
+            layers[str(layer_id)] = resolve_module(
+                model.backbone, module_name)
     load_report['layers'] = {str(k): str(v) for k, v in layer_map.items()}
     return LoadedModel(model_id, model, model.backbone, layers, load_report)

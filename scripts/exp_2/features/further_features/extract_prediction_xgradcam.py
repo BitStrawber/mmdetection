@@ -34,6 +34,7 @@ from cam_common import (  # noqa: E402
     read_jsonl,
 )
 from extract_fixed_gt_xgradcam import (  # noqa: E402
+    activation_output_index,
     activation_from_output,
     build_label_mapping,
     crop_valid_map,
@@ -300,9 +301,16 @@ def main() -> None:
                 spec.get('feature_layout', 'channels_first'))
             handles = []
             for layer_id in selected_layers:
-                def hook(_module, _inputs, output, key=layer_id):
+                output_index = activation_output_index(spec, layer_id)
+                def hook(
+                    _module,
+                    _inputs,
+                    output,
+                    key=layer_id,
+                    output_index=output_index,
+                ):
                     captures[key] = activation_from_output(
-                        output, feature_layout)
+                        output, feature_layout, output_index)
                 handles.append(loaded.layers[layer_id].register_forward_hook(hook))
             pipeline = Compose(get_test_pipeline_cfg(model.cfg))
             try:

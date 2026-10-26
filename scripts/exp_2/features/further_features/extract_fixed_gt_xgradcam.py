@@ -66,7 +66,20 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def tensor_from_output(output: Any) -> torch.Tensor:
+def tensor_from_output(
+    output: Any,
+    output_index: int | None = None,
+) -> torch.Tensor:
+    if output_index is not None:
+        if not isinstance(output, (tuple, list)):
+            raise TypeError(
+                f'Expected a feature sequence for output index {output_index}, '
+                f'got {type(output)}')
+        if not 0 <= output_index < len(output):
+            raise IndexError(
+                f'Feature output index {output_index} is invalid for '
+                f'{len(output)} outputs')
+        output = output[output_index]
     if torch.is_tensor(output):
         return output
     if isinstance(output, (tuple, list)):
@@ -76,9 +89,13 @@ def tensor_from_output(output: Any) -> torch.Tensor:
     raise TypeError(f'Expected one tensor from target layer, got {type(output)}')
 
 
-def activation_from_output(output: Any, feature_layout: str = 'channels_first') -> torch.Tensor:
+def activation_from_output(
+    output: Any,
+    feature_layout: str = 'channels_first',
+    output_index: int | None = None,
+) -> torch.Tensor:
     """Normalize hooked backbone activations to BCHW for XGradCAM."""
-    value = tensor_from_output(output)
+    value = tensor_from_output(output, output_index)
     if feature_layout == 'channels_last':
         if value.ndim != 4:
             raise ValueError(
@@ -91,6 +108,18 @@ def activation_from_output(output: Any, feature_layout: str = 'channels_first') 
         raise ValueError(
             f'XGradCAM requires a BCHW activation, got {tuple(value.shape)}')
     return value
+
+
+def activation_output_index(spec: Mapping[str, Any], layer_id: str) -> int | None:
+    target = str(spec.get('layers', {}).get(layer_id, ''))
+    prefix = 'backbone_output.'
+    if not target.startswith(prefix):
+        return None
+    try:
+        return int(target[len(prefix):])
+    except ValueError as error:
+        raise ValueError(
+            f'Invalid backbone output target for {layer_id}: {target}') from error
 
 
 def shape_pair(value: Any, fallback: Tuple[int, int]) -> Tuple[int, int]:
@@ -295,9 +324,16 @@ def main() -> None:
                 spec.get('feature_layout', 'channels_first'))
             handles = []
             for layer_id in selected_layers:
-                def hook(_module, _inputs, output, key=layer_id):
+                output_index = activation_output_index(spec, layer_id)
+                def hook(
+                    _module,
+                    _inputs,
+                    output,
+                    key=layer_id,
+                    output_index=output_index,
+                ):
                     captures[key] = activation_from_output(
-                        output, feature_layout)
+                        output, feature_layout, output_index)
                 handles.append(loaded.layers[layer_id].register_forward_hook(hook))
             pipeline = Compose(get_test_pipeline_cfg(model.cfg))
             completed = 0

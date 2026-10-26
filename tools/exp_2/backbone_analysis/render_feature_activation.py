@@ -659,7 +659,7 @@ def main() -> None:
                     for raw in raw_values
                 ]
             else:
-                low, high = normalize_shared(
+                normalized, low, high = normalize_shared(
                     raw_values, args.low_percentile, args.high_percentile)
             normalization_rows.append({
                 'sample_index': position,

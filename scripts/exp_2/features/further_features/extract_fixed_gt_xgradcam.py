@@ -120,7 +120,10 @@ def build_label_mapping(
     model: Any,
 ) -> Tuple[Dict[int, int], Dict[int, str], str]:
     category_names = {int(item['id']): str(item['name']) for item in categories}
-    num_classes = int(model.roi_head.bbox_head[-1].num_classes)
+    bbox_head = model.roi_head.bbox_head
+    if isinstance(bbox_head, (list, tuple)):
+        bbox_head = bbox_head[-1]
+    num_classes = int(bbox_head.num_classes)
     model_classes = list((getattr(model, 'dataset_meta', {}) or {}).get('classes', []))
     model_name_to_label = {str(name): index for index, name in enumerate(model_classes)}
     if category_names and all(name in model_name_to_label for name in category_names.values()):

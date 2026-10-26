@@ -20,6 +20,7 @@ SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.30}"
 MAX_PREDICTIONS_PER_IMAGE="${MAX_PREDICTIONS_PER_IMAGE:-10}"
 MINIMUM_BOX_AREA="${MINIMUM_BOX_AREA:-4}"
 MATCH_IOU_THRESHOLD="${MATCH_IOU_THRESHOLD:-0.50}"
+TARGET_MODE="${TARGET_MODE:-bbox}"
 REFERENCE_MODEL="${REFERENCE_MODEL:-imagenet_dino100e_ruod_cascade}"
 LOW_PERCENTILE="${LOW_PERCENTILE:-1}"
 HIGH_PERCENTILE="${HIGH_PERCENTILE:-99}"
@@ -71,6 +72,7 @@ echo "Layers:             ${LAYERS}"
 echo "Score threshold:    ${SCORE_THRESHOLD}"
 echo "Maximum boxes:      ${MAX_PREDICTIONS_PER_IMAGE} per image/model"
 echo "GT match IoU:       ${MATCH_IOU_THRESHOLD}"
+echo "CAM target mode:     ${TARGET_MODE}"
 echo "Devices:            ${DEVICE_ARRAY[*]}"
 echo "Output:             ${OUT_ROOT}"
 echo "============================================================"
@@ -98,6 +100,7 @@ if [[ "${RUN_EXTRACT}" == 1 ]]; then
             --max-predictions-per-image "${MAX_PREDICTIONS_PER_IMAGE}"
             --minimum-box-area "${MINIMUM_BOX_AREA}"
             --match-iou-threshold "${MATCH_IOU_THRESHOLD}"
+            --target-mode "${TARGET_MODE}"
         )
         [[ "${RESUME}" == 1 ]] && command+=(--resume)
         echo "START prediction model=${model} device=${device} log=${log}"
@@ -163,6 +166,7 @@ fi
 cat > "${OUT_ROOT}/COMPLETE.env" <<EOF
 STATUS=complete
 METHOD=prediction_conditioned_xgradcam
+TARGET_MODE=${TARGET_MODE}
 CAM_ROOT=${CAM_ROOT}
 RENDER_ROOT=${RENDER_ROOT}
 LEGACY_AGGREGATE_ROOT=${LEGACY_AGGREGATE_ROOT}

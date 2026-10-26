@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract prediction-conditioned XGradCAM from RUOD Cascade R-CNNs."""
+"""Extract bbox- or mask-targeted prediction XGradCAM from detectors."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from mmcv.transforms import Compose
 
 
@@ -59,6 +60,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--max-predictions-per-image', type=int, default=10)
     parser.add_argument('--minimum-box-area', type=float, default=4.0)
     parser.add_argument('--match-iou-threshold', type=float, default=0.50)
+    parser.add_argument(
+        '--target-mode',
+        choices=('bbox', 'mask'),
+        default='bbox',
+        help='Use bbox classification logits or predicted-class mask logits.',
+    )
     parser.add_argument(
         '--resume', action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument('--overwrite', action='store_true')
@@ -131,6 +138,52 @@ def best_gt_match(
         'class_correct': bool(class_correct),
         'tp_at_match_iou': bool(class_correct and iou >= threshold),
     }
+
+
+def mask_target_logit(
+    mask_logits: torch.Tensor,
+    prediction_label: int,
+    predicted_mask: np.ndarray,
+    network_box: Sequence[float],
+    img_shape: Sequence[int],
+    device: torch.device,
+) -> torch.Tensor:
+    """Return the mean predicted-class mask logit inside the predicted mask."""
+    if mask_logits.ndim == 4:
+        channel = 0 if mask_logits.shape[1] == 1 else prediction_label
+        if channel >= mask_logits.shape[1]:
+            raise IndexError(
+                f'Mask channel {channel} is invalid for shape '
+                f'{tuple(mask_logits.shape)}')
+        selected = mask_logits[0, channel]
+    elif mask_logits.ndim == 3:
+        selected = mask_logits[0]
+    else:
+        raise ValueError(
+            f'Expected mask logits as CHW or NCHW, got {tuple(mask_logits.shape)}')
+
+    height, width = int(img_shape[0]), int(img_shape[1])
+    left = max(0, min(width, int(np.floor(network_box[0]))))
+    top = max(0, min(height, int(np.floor(network_box[1]))))
+    right = max(0, min(width, int(np.ceil(network_box[2]))))
+    bottom = max(0, min(height, int(np.ceil(network_box[3]))))
+    if right <= left or bottom <= top:
+        raise ValueError(
+            f'Invalid predicted mask crop: {network_box}, image={img_shape}')
+
+    mask_crop = predicted_mask[top:bottom, left:right]
+    mask_tensor = torch.as_tensor(
+        mask_crop, dtype=torch.float32, device=device)[None, None]
+    mask_tensor = F.interpolate(
+        mask_tensor,
+        size=selected.shape[-2:],
+        mode='nearest',
+    )[0, 0] > 0.5
+
+    values = selected[mask_tensor]
+    if not values.numel():
+        values = selected.reshape(-1)
+    return values.mean()
 
 
 def main() -> None:
@@ -219,6 +272,22 @@ def main() -> None:
                     boxes = predicted.bboxes.numpy().astype(np.float32)
                     scores = predicted.scores.numpy().astype(np.float32)
                     labels = predicted.labels.numpy().astype(np.int64)
+                    predicted_masks = None
+                    if args.target_mode == 'mask':
+                        mask_data = getattr(predicted, 'masks', None)
+                        if mask_data is None:
+                            raise RuntimeError(
+                                f'{model_id}: mask target requested but '
+                                'pred_instances.masks is unavailable')
+                        if hasattr(mask_data, 'numpy'):
+                            predicted_masks = mask_data.numpy()
+                        elif hasattr(mask_data, 'tensor'):
+                            predicted_masks = (
+                                mask_data.tensor.detach().cpu().numpy())
+                        else:
+                            predicted_masks = np.asarray(mask_data)
+                        predicted_masks = np.asarray(
+                            predicted_masks, dtype=np.float32)
                     keep = np.flatnonzero(scores >= args.score_threshold)
                     if keep.size:
                         keep = keep[np.argsort(-scores[keep], kind='stable')]
@@ -228,7 +297,10 @@ def main() -> None:
                         box = clip_box(boxes[index], int(row['width']), int(row['height']))
                         area = max(0.0, box[2] - box[0]) * max(0.0, box[3] - box[1])
                         if area >= args.minimum_box_area:
-                            selected.append((index, box, area))
+                            predicted_mask = (
+                                predicted_masks[index]
+                                if predicted_masks is not None else None)
+                            selected.append((index, box, area, predicted_mask))
 
                     summary_path = (
                         out_dir / 'raw_cam' / clean_name(model_id) /
@@ -257,6 +329,7 @@ def main() -> None:
                             'file_name': str(row['file_name']),
                             'score_threshold': args.score_threshold,
                             'max_predictions_per_image': args.max_predictions_per_image,
+                            'target_mode': args.target_mode,
                             'prediction_count': 0,
                             'predictions': [],
                         })
@@ -298,7 +371,12 @@ def main() -> None:
                     all_gt_boxes = [item['bbox_xyxy'] for item in all_gt]
                     image_prediction_rows: List[Dict[str, Any]] = []
 
-                    for rank, (source_index, original_box, area) in enumerate(selected):
+                    for rank, (
+                            source_index,
+                            original_box,
+                            area,
+                            predicted_mask,
+                    ) in enumerate(selected):
                         prediction_label = int(labels[source_index])
                         prediction_score = float(scores[source_index])
                         category_id = label_to_category.get(prediction_label)
@@ -330,12 +408,37 @@ def main() -> None:
                             raise IndexError(
                                 f'{model_id}: predicted label {prediction_label} is invalid '
                                 f'for cls_score shape {tuple(cls_score.shape)}')
-                        target_logit = cls_score[0, prediction_label]
+                        if args.target_mode == 'bbox':
+                            target_logit = cls_score[0, prediction_label]
+                            recomputed_probability = float(
+                                torch.softmax(cls_score, dim=1)[0, prediction_label])
+                        else:
+                            if not hasattr(model.roi_head, 'mask_head'):
+                                raise RuntimeError(
+                                    f'{model_id}: mask target requested but '
+                                    'roi_head.mask_head is unavailable')
+                            if 'bbox_feats' not in bbox_result:
+                                raise RuntimeError(
+                                    f'{model_id}: _bbox_forward did not return bbox_feats')
+                            mask_logits = tensor_from_output(
+                                model.roi_head.mask_head(
+                                    bbox_result['bbox_feats']))
+                            if predicted_mask is None:
+                                raise RuntimeError(
+                                    f'{model_id}: selected prediction has no mask')
+                            target_logit = mask_target_logit(
+                                mask_logits,
+                                prediction_label,
+                                predicted_mask,
+                                network_box,
+                                img_shape,
+                                batch_inputs.device,
+                            )
+                            recomputed_probability = float(
+                                torch.sigmoid(target_logit))
                         gradients = torch.autograd.grad(
                             target_logit, activations, retain_graph=True,
                             create_graph=False, allow_unused=False)
-                        recomputed_probability = float(
-                            torch.softmax(cls_score, dim=1)[0, prediction_label])
                         layer_records = {}
                         for layer_id, activation, gradient in zip(
                                 selected_layers, activations, gradients):
@@ -371,6 +474,7 @@ def main() -> None:
                             'prediction_category_id': category_id,
                             'prediction_category_name': category_name,
                             'prediction_score': prediction_score,
+                            'target_mode': args.target_mode,
                             'target_logit': float(target_logit.detach().cpu()),
                             'target_probability_recomputed': recomputed_probability,
                             'class_mapping_method': mapping_method,
@@ -401,6 +505,7 @@ def main() -> None:
                         'file_name': str(row['file_name']),
                         'score_threshold': args.score_threshold,
                         'max_predictions_per_image': args.max_predictions_per_image,
+                        'target_mode': args.target_mode,
                         'prediction_count': len(image_prediction_rows),
                         'predictions': [
                             {
@@ -433,6 +538,7 @@ def main() -> None:
                 'max_predictions_per_image': args.max_predictions_per_image,
                 'match_iou_threshold': args.match_iou_threshold,
                 'cascade_stage_zero_based': stage,
+                'target_mode': args.target_mode,
             }
         finally:
             loaded.close()
@@ -453,6 +559,7 @@ def main() -> None:
             'models': [str(spec['id']) for spec in specs],
             'layers': selected_layers,
             'device': args.device,
+            'target_mode': args.target_mode,
             'model_summaries': summaries,
             'warning': (
                 'Predicted ROIs/classes differ between detectors. Use this branch for '

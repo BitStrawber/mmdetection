@@ -15,6 +15,8 @@ VITS_BATCH_SIZE="${VITS_BATCH_SIZE:-1}"
 RENDER_MODEL_WORKERS="${RENDER_MODEL_WORKERS:-3}"
 PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-1}"
 PARALLEL_ARCH="${PARALLEL_ARCH:-1}"
+ACTIVATION_AGGREGATION="${ACTIVATION_AGGREGATION:-eigen}"
+EIGEN_COMPONENTS="${EIGEN_COMPONENTS:-3}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 OUT_ROOT="${OUT_ROOT:-/media/HDD2/XCX/exp_2/backbone_eigen_5plus5_${STAMP}}"
 
@@ -70,7 +72,8 @@ run_arch() {
             --models "${models}" \
             --layers "${layer}" \
             --variant clean \
-            --aggregation eigen \
+            --aggregation "${ACTIVATION_AGGREGATION}" \
+            --eigen-components "${EIGEN_COMPONENTS}" \
             --colormap jet \
             --smooth-sigma 0 \
             --resize-interpolation bilinear \
@@ -137,8 +140,9 @@ SAMPLES_PER_DATASET=${SAMPLES}
 DATASETS=${DATASETS}
 R50_LAYER=res4
 VITS_LAYER=block12
-R50_FEATURE_AGGREGATION=eigen
-VITS_FEATURE_AGGREGATION=eigen
+R50_FEATURE_AGGREGATION=${ACTIVATION_AGGREGATION}
+VITS_FEATURE_AGGREGATION=${ACTIVATION_AGGREGATION}
+EIGEN_COMPONENTS=${EIGEN_COMPONENTS}
 COLORMAP=jet
 SMOOTH_SIGMA=0
 RESIZE_INTERPOLATION=bilinear

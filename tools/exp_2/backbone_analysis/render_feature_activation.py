@@ -54,12 +54,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--variant', default='clean')
     parser.add_argument('--out-dir', required=True)
     parser.add_argument(
-        '--aggregation', choices=('mean-abs', 'l2', 'eigen'),
+        '--aggregation', choices=('mean-abs', 'l2', 'eigen', 'eigen-gt'),
         default='mean-abs',
         help=(
             'Collapse a CHW feature to one spatial map. l2 computes '
             'sqrt(sum_c(feature_c^2)); eigen projects features onto the first '
-            'principal component, the class-agnostic EigenCAM strategy.'))
+            'principal component; eigen-gt selects the principal component '
+            'with the strongest GT foreground/background contrast.'))
+    parser.add_argument(
+        '--eigen-components', type=int, default=3,
+        help='Number of principal components considered by eigen-gt.')
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument(
@@ -126,8 +130,24 @@ def spatial_path(
         f'{sample_index:05d}_{image_id}' / f'{layer}.npz')
 
 
-def eigen_activation(feature: np.ndarray, iterations: int = 20) -> np.ndarray:
-    """Return a deterministic first-principal-component projection."""
+@lru_cache(maxsize=4096)
+def load_feature(path: Path) -> np.ndarray:
+    if not path.is_file():
+        raise FileNotFoundError(
+            f'Missing spatial feature {path}. Re-run extraction with --save-spatial.')
+    with np.load(path, allow_pickle=False) as payload:
+        feature = payload['feature'].astype(np.float32)
+    if feature.ndim != 3 or not np.isfinite(feature).all():
+        raise ValueError(f'Invalid CHW spatial feature: {path}, shape={feature.shape}')
+    return feature
+
+
+def principal_component_maps(
+    feature: np.ndarray,
+    components: int,
+    iterations: int = 20,
+) -> List[np.ndarray]:
+    """Return signed projections for leading spatial principal components."""
     channels = int(feature.shape[0])
     flattened = feature.reshape(channels, -1).astype(np.float32, copy=True)
     flattened -= flattened.mean(axis=1, keepdims=True)
@@ -136,39 +156,90 @@ def eigen_activation(feature: np.ndarray, iterations: int = 20) -> np.ndarray:
     vector_norm = float(np.linalg.norm(vector))
     if vector_norm < 1e-12:
         vector = flattened[:, 0].copy()
+    maps = []
+    residual = flattened
+    for _ in range(max(1, components)):
         vector_norm = float(np.linalg.norm(vector))
-    if vector_norm < 1e-12:
-        return np.zeros(feature.shape[-2:], dtype=np.float32)
-    vector /= vector_norm
-    for _ in range(iterations):
-        updated = flattened @ (flattened.T @ vector)
-        updated_norm = float(np.linalg.norm(updated))
-        if updated_norm < 1e-12:
+        if vector_norm < 1e-12:
             break
-        vector = updated / updated_norm
-    projection = vector @ flattened
-    peak = int(np.argmax(np.abs(projection)))
-    if projection[peak] < 0:
-        projection = -projection
-    projection = np.maximum(projection, 0.0)
-    return projection.reshape(feature.shape[-2:]).astype(np.float32)
+        vector /= vector_norm
+        for _ in range(iterations):
+            updated = residual @ (residual.T @ vector)
+            updated_norm = float(np.linalg.norm(updated))
+            if updated_norm < 1e-12:
+                break
+            vector = updated / updated_norm
+        projection = vector @ residual
+        peak = int(np.argmax(np.abs(projection)))
+        if projection[peak] < 0:
+            projection = -projection
+            vector = -vector
+        maps.append(
+            projection.reshape(feature.shape[-2:]).astype(np.float32))
+        residual = residual - vector[:, None] * (vector @ residual)[None, :]
+        vector = np.linalg.norm(residual, axis=1).astype(np.float32)
+        vector -= float(vector.mean())
+        if float(np.linalg.norm(vector)) < 1e-12:
+            vector = residual[:, int(np.argmax(np.var(residual, axis=0)))].copy()
+    return maps
 
 
-@lru_cache(maxsize=4096)
+def eigen_activation(feature: np.ndarray, iterations: int = 20) -> np.ndarray:
+    """Return a deterministic first-principal-component projection."""
+    maps = principal_component_maps(feature, 1, iterations)
+    if not maps:
+        return np.zeros(feature.shape[-2:], dtype=np.float32)
+    return np.maximum(maps[0], 0.0).astype(np.float32)
+
+
+def gt_eigen_activation(
+    feature: np.ndarray,
+    boxes: Sequence[Sequence[float]],
+    original_width: int,
+    original_height: int,
+    components: int = 3,
+) -> np.ndarray:
+    """Select the leading principal component most aligned with GT objects."""
+    height, width = feature.shape[-2:]
+    foreground = mask_from_boxes(
+        boxes,
+        width,
+        height,
+        original_width,
+        original_height,
+    )
+    background = ~foreground
+    if not foreground.any() or not background.any():
+        return eigen_activation(feature)
+    best_map = None
+    best_score = -float('inf')
+    for component in principal_component_maps(feature, components):
+        foreground_mean = float(component[foreground].mean())
+        background_mean = float(component[background].mean())
+        if foreground_mean < background_mean:
+            component = -component
+        positive = np.maximum(component, 0.0)
+        foreground_response = float(positive[foreground].mean())
+        background_response = float(positive[background].mean())
+        score = foreground_response / max(background_response, 1e-12)
+        if score > best_score:
+            best_score = score
+            best_map = positive
+    if best_map is None:
+        return np.zeros((height, width), dtype=np.float32)
+    return best_map.astype(np.float32)
+
+
 def load_activation(path: Path, aggregation: str = 'mean-abs') -> np.ndarray:
-    if not path.is_file():
-        raise FileNotFoundError(
-            f'Missing spatial feature {path}. Re-run extraction with --save-spatial.')
-    with np.load(path, allow_pickle=False) as payload:
-        feature = payload['feature'].astype(np.float32)
-    if feature.ndim != 3 or not np.isfinite(feature).all():
-        raise ValueError(f'Invalid CHW spatial feature: {path}, shape={feature.shape}')
+    feature = load_feature(path)
     if aggregation == 'mean-abs':
         return np.abs(feature).mean(axis=0).astype(np.float32)
     if aggregation == 'l2':
         return np.sqrt(np.square(feature).sum(axis=0)).astype(np.float32)
     if aggregation == 'eigen':
         return eigen_activation(feature)
+    if aggregation == 'eigen-gt':
+        raise ValueError('eigen-gt requires GT boxes and original image size')
     raise ValueError(f'Unknown activation aggregation: {aggregation}')
 
 
@@ -195,7 +266,7 @@ def normalize_with_bounds(
 def compute_reference_ranges(
     feature_root: Path, rows: Sequence[dict], reference_model: str,
     variant: str, layers: Sequence[str], low_percentile: float,
-    high_percentile: float, aggregation: str,
+    high_percentile: float, aggregation: str, eigen_components: int,
 ) -> Dict[str, Tuple[float, float]]:
     ranges = {}
     for layer in layers:
@@ -204,7 +275,8 @@ def compute_reference_ranges(
             path = spatial_path(
                 feature_root, reference_model, variant, position,
                 int(row['image_id']), layer)
-            flattened.append(load_activation(path, aggregation).reshape(-1))
+            flattened.append(activation_for_row(
+                path, row, aggregation, eigen_components).reshape(-1))
         values = np.concatenate(flattened)
         low = float(np.percentile(values, low_percentile))
         high = float(np.percentile(values, high_percentile))
@@ -328,10 +400,31 @@ def image_path(row: dict) -> Path:
     return path
 
 
+def activation_for_row(
+    path: Path,
+    row: dict,
+    aggregation: str,
+    eigen_components: int,
+) -> np.ndarray:
+    if aggregation != 'eigen-gt':
+        return load_activation(path, aggregation)
+    feature = load_feature(path)
+    source_path = image_path(row)
+    with Image.open(source_path) as opened:
+        original_width, original_height = opened.size
+    return gt_eigen_activation(
+        feature,
+        row.get('boxes_xyxy', []),
+        original_width,
+        original_height,
+        eigen_components,
+    )
+
+
 def compute_per_sample_reference_ranges(
     feature_root: Path, rows: Sequence[dict], reference_model: str,
     variant: str, layers: Sequence[str], low_percentile: float,
-    high_percentile: float, aggregation: str,
+    high_percentile: float, aggregation: str, eigen_components: int,
 ) -> Dict[Tuple[int, str], Tuple[float, float]]:
     ranges = {}
     for position, row in enumerate(rows):
@@ -339,7 +432,8 @@ def compute_per_sample_reference_ranges(
             path = spatial_path(
                 feature_root, reference_model, variant, position,
                 int(row['image_id']), layer)
-            reference = load_activation(path, aggregation)
+            reference = activation_for_row(
+                path, row, aggregation, eigen_components)
             low = float(np.percentile(reference, low_percentile))
             high = float(np.percentile(reference, high_percentile))
             if high <= low:
@@ -378,7 +472,12 @@ def render_model_dataset(config: dict) -> Tuple[str, List[dict], List[dict]]:
             path = spatial_path(
                 feature_root, model, variant, position,
                 int(row['image_id']), layer)
-            raw = load_activation(path, config['aggregation'])
+            raw = activation_for_row(
+                path,
+                row,
+                config['aggregation'],
+                config['eigen_components'],
+            )
             if dataset_ranges:
                 low, high = dataset_ranges[layer]
             else:
@@ -602,6 +701,8 @@ def main() -> None:
         raise ValueError('--model-workers must be at least 1')
     if args.smooth_sigma < 0:
         raise ValueError('--smooth-sigma cannot be negative')
+    if args.eigen_components < 1:
+        raise ValueError('--eigen-components must be positive')
     models = parse_csv(args.models)
     layers = parse_csv(args.layers)
     if not models or not layers:
@@ -626,7 +727,8 @@ def main() -> None:
         if args.normalization_mode == 'reference-dataset-per-layer':
             reference_ranges = compute_reference_ranges(
                 feature_root, rows, reference_model, args.variant, layers,
-                args.low_percentile, args.high_percentile, args.aggregation)
+                args.low_percentile, args.high_percentile, args.aggregation,
+                args.eigen_components)
             write_json(out_dir / 'reference_normalization.json', {
                 'normalization_mode': args.normalization_mode,
                 'reference_model': reference_model,
@@ -649,7 +751,8 @@ def main() -> None:
         if args.normalization_mode == 'reference-per-sample-layer':
             sample_ranges = compute_per_sample_reference_ranges(
                 feature_root, rows, reference_model, args.variant, layers,
-                args.low_percentile, args.high_percentile, args.aggregation)
+                args.low_percentile, args.high_percentile, args.aggregation,
+                args.eigen_components)
         for position, row in enumerate(rows):
             for layer in layers:
                 if reference_ranges:
@@ -679,6 +782,7 @@ def main() -> None:
                     'layers': layers,
                     'variant': args.variant,
                     'aggregation': args.aggregation,
+                    'eigen_components': args.eigen_components,
                     'colormap': args.colormap,
                     'smooth_sigma': args.smooth_sigma,
                     'resize_interpolation': args.resize_interpolation,
@@ -747,7 +851,9 @@ def main() -> None:
                 'mean-abs': 'mean(abs(feature), channel)',
                 'l2': 'sqrt(sum(feature^2, channel))',
                 'eigen': 'first principal component projection',
+                'eigen-gt': 'GT-selected leading principal component',
             }[args.aggregation],
+            'eigen_components': args.eigen_components,
             'foreground_definition': 'union of COCO GT bounding boxes',
             'normalization': args.normalization_mode,
             'normalization_reference_model': reference_model,
@@ -787,7 +893,8 @@ def main() -> None:
                 path = spatial_path(
                     feature_root, model, args.variant, position,
                     int(row['image_id']), layer)
-                raw_values.append(load_activation(path, args.aggregation))
+                raw_values.append(activation_for_row(
+                    path, row, args.aggregation, args.eigen_components))
             if args.normalization_mode == 'reference-dataset-per-layer':
                 low, high = reference_ranges[layer]
                 normalized = [
@@ -955,7 +1062,9 @@ def main() -> None:
             'mean-abs': 'mean(abs(feature), channel)',
             'l2': 'sqrt(sum(feature^2, channel))',
             'eigen': 'first principal component projection',
+            'eigen-gt': 'GT-selected leading principal component',
         }[args.aggregation],
+        'eigen_components': args.eigen_components,
         'foreground_definition': 'union of COCO GT bounding boxes',
         'normalization': args.normalization_mode,
         'normalization_reference_model': (

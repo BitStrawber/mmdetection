@@ -18,8 +18,7 @@
         "blocks.*.attn.rel_pos_w"
       ],
       "layers": {
-        "block12": "blocks.11",
-        "final_norm": "norm"
+        "block12": "blocks.11"
       }
     },
     {
@@ -40,8 +39,7 @@
         "blocks.*.attn.rel_pos_w"
       ],
       "layers": {
-        "block12": "blocks.11",
-        "final_norm": "norm"
+        "block12": "blocks.11"
       }
     },
     {
@@ -62,8 +60,7 @@
         "blocks.*.attn.rel_pos_w"
       ],
       "layers": {
-        "block12": "blocks.11",
-        "final_norm": "norm"
+        "block12": "blocks.11"
       }
     }
   ]

@@ -1,0 +1,67 @@
+{
+  "models": [
+    {
+      "id": "imagenet_vits_backbone",
+      "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/ImageNet/DINO_ViTS_100e/checkpoint.pth",
+      "state_dict_key": "teacher",
+      "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.85,
+      "feature_layout": "channels_last",
+      "feature_stride": 16,
+      "initialization_seed": 42,
+      "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 24,
+      "allowed_missing_key_patterns": [
+        "blocks.*.attn.rel_pos_h",
+        "blocks.*.attn.rel_pos_w"
+      ],
+      "layers": {
+        "block12": "blocks.11"
+      }
+    },
+    {
+      "id": "realuw_vits_backbone",
+      "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/RealUW/DINO_ViTS_100e/checkpoint.pth",
+      "state_dict_key": "teacher",
+      "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.85,
+      "feature_layout": "channels_last",
+      "feature_stride": 16,
+      "initialization_seed": 42,
+      "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 24,
+      "allowed_missing_key_patterns": [
+        "blocks.*.attn.rel_pos_h",
+        "blocks.*.attn.rel_pos_w"
+      ],
+      "layers": {
+        "block12": "blocks.11"
+      }
+    },
+    {
+      "id": "synthetic5_vits_backbone",
+      "kind": "backbone",
+      "config": "configs/exp_2/cascade-rcnn_vit-small_dino-realuw_fpn_2x_ruod_j14.py",
+      "checkpoint": "/media/SSD1/XCX/exp_2/BitStrawber_Output/PRETRAIN/Synthetic5Merged_CorrectedWaterGAN/DINO_ViTS_100e/checkpoint.pth",
+      "state_dict_key": "teacher",
+      "checkpoint_prefix": "module.backbone.",
+      "minimum_match_ratio": 0.85,
+      "feature_layout": "channels_last",
+      "feature_stride": 16,
+      "initialization_seed": 42,
+      "expected_checkpoint_epoch": 100,
+      "expected_allowed_missing_count": 24,
+      "allowed_missing_key_patterns": [
+        "blocks.*.attn.rel_pos_h",
+        "blocks.*.attn.rel_pos_w"
+      ],
+      "layers": {
+        "block12": "blocks.11"
+      }
+    }
+  ]
+}

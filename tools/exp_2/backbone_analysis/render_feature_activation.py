@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
+from functools import lru_cache
 import math
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
@@ -106,6 +107,12 @@ def parse_args() -> argparse.Namespace:
             'Render models in separate processes after reference bounds are '
             'computed. Values greater than 1 require a reference normalization '
             'mode. Set this to the model count for one process per backbone.'))
+    parser.add_argument(
+        '--skip-5x4-panels', action='store_true',
+        help='Do not render layer-row/model-column progression panels.')
+    parser.add_argument(
+        '--skip-layer-evolution-panels', action='store_true',
+        help='Do not render the duplicate one-row panel for every model.')
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -147,6 +154,7 @@ def eigen_activation(feature: np.ndarray, iterations: int = 20) -> np.ndarray:
     return projection.reshape(feature.shape[-2:]).astype(np.float32)
 
 
+@lru_cache(maxsize=4096)
 def load_activation(path: Path, aggregation: str = 'mean-abs') -> np.ndarray:
     if not path.is_file():
         raise FileNotFoundError(
@@ -695,10 +703,12 @@ def main() -> None:
                 item['sample_index'], item['layer'], item['model']))
         render_combined_panels(
             out_dir, rows, models, layers, args.png_compress_level)
-        render_cross_model_5x4_panels(
-            out_dir, rows, models, layers, args.png_compress_level)
-        render_layer_evolution_panels(
-            out_dir, rows, models, layers, args.png_compress_level)
+        if not args.skip_5x4_panels:
+            render_cross_model_5x4_panels(
+                out_dir, rows, models, layers, args.png_compress_level)
+        if not args.skip_layer_evolution_panels:
+            render_layer_evolution_panels(
+                out_dir, rows, models, layers, args.png_compress_level)
 
         with (out_dir / 'activation_statistics.tsv').open(
                 'w', encoding='utf-8', newline='') as handle:
@@ -756,6 +766,9 @@ def main() -> None:
             'cross_model_panels': 'panels/LAYER/IMAGE.png',
             'cross_model_5x4_panels': 'panels_5x4/IMAGE.png',
             'layer_evolution_panels': 'panels_by_model/MODEL/IMAGE.png',
+            'skip_5x4_panels': args.skip_5x4_panels,
+            'skip_layer_evolution_panels': (
+                args.skip_layer_evolution_panels),
             'png_compress_level': args.png_compress_level,
             'warning': 'These are feature activation maps, not Grad-CAM.',
         })
@@ -899,10 +912,12 @@ def main() -> None:
                 panel_path, compress_level=args.png_compress_level)
         print(f'[{position + 1}/{len(rows)}] {row["file_name"]}', flush=True)
 
-    render_layer_evolution_panels(
-        out_dir, rows, models, layers, args.png_compress_level)
-    render_cross_model_5x4_panels(
-        out_dir, rows, models, layers, args.png_compress_level)
+    if not args.skip_layer_evolution_panels:
+        render_layer_evolution_panels(
+            out_dir, rows, models, layers, args.png_compress_level)
+    if not args.skip_5x4_panels:
+        render_cross_model_5x4_panels(
+            out_dir, rows, models, layers, args.png_compress_level)
 
     with (out_dir / 'activation_statistics.tsv').open(
             'w', encoding='utf-8', newline='') as handle:
@@ -962,6 +977,8 @@ def main() -> None:
         'cross_model_panels': 'panels/LAYER/IMAGE.png',
         'cross_model_5x4_panels': 'panels_5x4/IMAGE.png',
         'layer_evolution_panels': 'panels_by_model/MODEL/IMAGE.png',
+        'skip_5x4_panels': args.skip_5x4_panels,
+        'skip_layer_evolution_panels': args.skip_layer_evolution_panels,
         'warning': 'These are feature activation maps, not Grad-CAM.',
     })
     print(f'Feature activation outputs: {out_dir}')

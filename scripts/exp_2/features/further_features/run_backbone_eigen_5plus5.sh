@@ -10,6 +10,11 @@ SAMPLES="${SAMPLES:-5}"
 DATASETS="${DATASETS:-ruod uiis10k}"
 R50_DEVICE="${R50_DEVICE:-cuda:4}"
 VITS_DEVICE="${VITS_DEVICE:-cuda:5}"
+R50_BATCH_SIZE="${R50_BATCH_SIZE:-4}"
+VITS_BATCH_SIZE="${VITS_BATCH_SIZE:-2}"
+RENDER_MODEL_WORKERS="${RENDER_MODEL_WORKERS:-3}"
+PNG_COMPRESS_LEVEL="${PNG_COMPRESS_LEVEL:-1}"
+PARALLEL_ARCH="${PARALLEL_ARCH:-1}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 OUT_ROOT="${OUT_ROOT:-/media/HDD2/XCX/exp_2/backbone_eigen_5plus5_${STAMP}}"
 
@@ -29,6 +34,7 @@ run_arch() {
     local layer="$6"
     local device="$7"
     local reference="$8"
+    local batch_size="$9"
     local root="${OUT_ROOT}/${dataset}/${backbone}"
     local features="${root}/features"
     local rendered="${root}/rendered_eigen"
@@ -51,7 +57,7 @@ run_arch() {
             --out-dir "${features}" \
             --layers "${layer}" \
             --device "${device}" \
-            --batch-size 1 \
+            --batch-size "${batch_size}" \
             --pooling avg \
             --save-spatial \
             --spatial-samples 0 \
@@ -65,11 +71,17 @@ run_arch() {
             --layers "${layer}" \
             --variant clean \
             --aggregation eigen \
+            --colormap jet \
+            --smooth-sigma 0 \
+            --resize-interpolation bilinear \
             --normalization-mode reference-dataset-per-layer \
             --normalization-reference-model "${reference}" \
             --low-percentile 1 \
             --high-percentile 99 \
-            --model-workers 1 \
+            --model-workers "${RENDER_MODEL_WORKERS}" \
+            --png-compress-level "${PNG_COMPRESS_LEVEL}" \
+            --skip-5x4-panels \
+            --skip-layer-evolution-panels \
             --skip-raw-activation \
             --out-dir "${rendered}" \
             --overwrite
@@ -87,14 +99,35 @@ for dataset in ${DATASETS}; do
     manifest="${dataset_root}/manifest_${SAMPLES}.jsonl"
     head -n "${SAMPLES}" "${source_manifest}" > "${manifest}"
 
-    run_arch \
-        "${dataset}" "${manifest}" "r50" \
-        "${R50_CONFIG}" "${R50_MODELS}" "res4" \
-        "${R50_DEVICE}" "imagenet_dino100e_backbone"
-    run_arch \
-        "${dataset}" "${manifest}" "vits" \
-        "${VITS_CONFIG}" "${VITS_MODELS}" "block12" \
-        "${VITS_DEVICE}" "imagenet_vits_backbone"
+    if [[ "${PARALLEL_ARCH}" == 1 ]]; then
+        run_arch \
+            "${dataset}" "${manifest}" "r50" \
+            "${R50_CONFIG}" "${R50_MODELS}" "res4" \
+            "${R50_DEVICE}" "imagenet_dino100e_backbone" \
+            "${R50_BATCH_SIZE}" &
+        r50_pid=$!
+        run_arch \
+            "${dataset}" "${manifest}" "vits" \
+            "${VITS_CONFIG}" "${VITS_MODELS}" "block12" \
+            "${VITS_DEVICE}" "imagenet_vits_backbone" \
+            "${VITS_BATCH_SIZE}" &
+        vit_pid=$!
+        failure=0
+        wait "${r50_pid}" || failure=1
+        wait "${vit_pid}" || failure=1
+        [[ "${failure}" == 0 ]] || exit 1
+    else
+        run_arch \
+            "${dataset}" "${manifest}" "r50" \
+            "${R50_CONFIG}" "${R50_MODELS}" "res4" \
+            "${R50_DEVICE}" "imagenet_dino100e_backbone" \
+            "${R50_BATCH_SIZE}"
+        run_arch \
+            "${dataset}" "${manifest}" "vits" \
+            "${VITS_CONFIG}" "${VITS_MODELS}" "block12" \
+            "${VITS_DEVICE}" "imagenet_vits_backbone" \
+            "${VITS_BATCH_SIZE}"
+    fi
 done
 
 cat > "${OUT_ROOT}/COMPLETE.env" <<EOF
@@ -106,6 +139,14 @@ R50_LAYER=res4
 VITS_LAYER=block12
 R50_FEATURE_AGGREGATION=eigen
 VITS_FEATURE_AGGREGATION=eigen
+COLORMAP=jet
+SMOOTH_SIGMA=0
+RESIZE_INTERPOLATION=bilinear
+R50_BATCH_SIZE=${R50_BATCH_SIZE}
+VITS_BATCH_SIZE=${VITS_BATCH_SIZE}
+RENDER_MODEL_WORKERS=${RENDER_MODEL_WORKERS}
+PNG_COMPRESS_LEVEL=${PNG_COMPRESS_LEVEL}
+PARALLEL_ARCH=${PARALLEL_ARCH}
 EOF
 
 echo

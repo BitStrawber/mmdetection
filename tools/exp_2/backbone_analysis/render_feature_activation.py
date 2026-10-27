@@ -17,11 +17,11 @@ from .common import ensure_empty_or_create, parse_csv, read_jsonl, write_json
 
 
 BLUE_YELLOW_PALETTE = (
-    (0.00, (5, 16, 72)),
-    (0.28, (0, 80, 190)),
-    (0.55, (0, 190, 220)),
-    (0.78, (225, 225, 30)),
-    (1.00, (255, 250, 180)),
+    (0.00, (3, 18, 74)),
+    (0.25, (0, 72, 170)),
+    (0.50, (0, 175, 220)),
+    (0.75, (113, 219, 174)),
+    (1.00, (255, 238, 35)),
 )
 JET_PALETTE = (
     (0.00, (0, 0, 128)),
@@ -74,8 +74,10 @@ def parse_args() -> argparse.Namespace:
         help='Reference model ID required by either reference mode.')
     parser.add_argument('--box-width', type=int, default=3)
     parser.add_argument(
-        '--colormap', choices=tuple(PALETTES), default='jet',
-        help='Activation color map. jet follows the usual blue-cyan-green-yellow-red CAM view.')
+        '--colormap', choices=tuple(PALETTES), default='blue-yellow',
+        help=(
+            'Activation color map. blue-yellow exactly matches the prediction '
+            'XGradCAM renderer; jet is available as an optional alternative.'))
     parser.add_argument(
         '--png-compress-level', type=int, default=6,
         help='Lossless PNG compression level from 0 (fastest) to 9 (smallest)')
@@ -193,7 +195,7 @@ def compute_reference_ranges(
     return ranges
 
 
-def colorize(value: np.ndarray, colormap: str = 'jet') -> Image.Image:
+def colorize(value: np.ndarray, colormap: str = 'blue-yellow') -> Image.Image:
     palette = PALETTES[colormap]
     output = np.zeros(value.shape + (3,), dtype=np.float32)
     for index in range(len(palette) - 1):

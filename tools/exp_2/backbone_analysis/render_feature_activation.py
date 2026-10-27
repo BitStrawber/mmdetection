@@ -74,10 +74,10 @@ def parse_args() -> argparse.Namespace:
         help='Reference model ID required by either reference mode.')
     parser.add_argument('--box-width', type=int, default=3)
     parser.add_argument(
-        '--colormap', choices=tuple(PALETTES), default='blue-yellow',
+        '--colormap', choices=tuple(PALETTES), default='jet',
         help=(
-            'Activation color map. blue-yellow exactly matches the prediction '
-            'XGradCAM renderer; jet is available as an optional alternative.'))
+            'Activation color map. jet matches the prediction panels with '
+            'blue-cyan-green-yellow-red peaks.'))
     parser.add_argument(
         '--png-compress-level', type=int, default=6,
         help='Lossless PNG compression level from 0 (fastest) to 9 (smallest)')
@@ -195,7 +195,18 @@ def compute_reference_ranges(
     return ranges
 
 
-def colorize(value: np.ndarray, colormap: str = 'blue-yellow') -> Image.Image:
+def colorize(value: np.ndarray, colormap: str = 'jet') -> Image.Image:
+    if colormap == 'jet':
+        try:
+            import cv2
+        except ImportError:
+            pass
+        else:
+            bgr = cv2.applyColorMap(
+                np.uint8(np.clip(value, 0.0, 1.0) * 255.0),
+                cv2.COLORMAP_JET,
+            )
+            return Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
     palette = PALETTES[colormap]
     output = np.zeros(value.shape + (3,), dtype=np.float32)
     for index in range(len(palette) - 1):

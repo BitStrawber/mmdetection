@@ -37,6 +37,11 @@ PALETTES = {
     'jet': JET_PALETTE,
 }
 RESAMPLE = getattr(Image, 'Resampling', Image)
+RESAMPLE_METHODS = {
+    'bilinear': RESAMPLE.BILINEAR,
+    'bicubic': RESAMPLE.BICUBIC,
+    'nearest': RESAMPLE.NEAREST,
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -57,8 +62,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument(
-        '--smooth-sigma', type=float, default=0.8,
+        '--smooth-sigma', type=float, default=0.0,
         help='Gaussian smoothing applied to the activation map before resizing.')
+    parser.add_argument(
+        '--resize-interpolation',
+        choices=tuple(RESAMPLE_METHODS),
+        default='bilinear',
+        help='Interpolation used to resize the scalar activation before coloring.')
     parser.add_argument(
         '--normalization-mode',
         choices=(
@@ -231,6 +241,7 @@ def resize_activation(
     value: np.ndarray,
     size: Tuple[int, int],
     smooth_sigma: float = 0.0,
+    interpolation: str = 'bilinear',
 ) -> np.ndarray:
     if smooth_sigma > 0:
         radius = max(1, int(math.ceil(3.0 * smooth_sigma)))
@@ -255,7 +266,7 @@ def resize_activation(
         )
         value = filtered
     resized = Image.fromarray(value.astype(np.float32)).resize(
-        size, RESAMPLE.BICUBIC)
+        size, RESAMPLE_METHODS[interpolation])
     return np.clip(
         np.asarray(resized, dtype=np.float32), 0.0, 1.0)
 
@@ -419,6 +430,7 @@ def render_model_dataset(config: dict) -> Tuple[str, List[dict], List[dict]]:
                     display,
                     original_size,
                     config['smooth_sigma'],
+                    config['resize_interpolation'],
                 ),
                 config['colormap'])
             no_box_path = (
@@ -661,6 +673,7 @@ def main() -> None:
                     'aggregation': args.aggregation,
                     'colormap': args.colormap,
                     'smooth_sigma': args.smooth_sigma,
+                    'resize_interpolation': args.resize_interpolation,
                     'dataset_ranges': reference_ranges,
                     'sample_ranges': sample_ranges,
                     'skip_raw_activation': args.skip_raw_activation,
@@ -735,6 +748,7 @@ def main() -> None:
             'percentiles': [args.low_percentile, args.high_percentile],
             'colormap': args.colormap,
             'smooth_sigma': args.smooth_sigma,
+            'resize_interpolation': args.resize_interpolation,
             'quantitative_statistics_source': (
                 'raw activation before normalization'),
             'raw_activation_arrays_saved': not args.skip_raw_activation,
@@ -850,6 +864,7 @@ def main() -> None:
                         display,
                         original.size,
                         args.smooth_sigma,
+                        args.resize_interpolation,
                     ),
                     args.colormap)
                 no_box_path = (
@@ -940,6 +955,7 @@ def main() -> None:
         'percentiles': [args.low_percentile, args.high_percentile],
         'colormap': args.colormap,
         'smooth_sigma': args.smooth_sigma,
+        'resize_interpolation': args.resize_interpolation,
         'quantitative_statistics_source': 'raw activation before normalization',
         'raw_activation_arrays_saved': not args.skip_raw_activation,
         'png_compress_level': args.png_compress_level,

@@ -16,13 +16,26 @@ from PIL import Image, ImageDraw
 from .common import ensure_empty_or_create, parse_csv, read_jsonl, write_json
 
 
-PALETTE = (
+BLUE_YELLOW_PALETTE = (
     (0.00, (5, 16, 72)),
     (0.28, (0, 80, 190)),
     (0.55, (0, 190, 220)),
     (0.78, (225, 225, 30)),
     (1.00, (255, 250, 180)),
 )
+JET_PALETTE = (
+    (0.00, (0, 0, 128)),
+    (0.12, (0, 0, 255)),
+    (0.38, (0, 255, 255)),
+    (0.62, (0, 255, 0)),
+    (0.78, (255, 255, 0)),
+    (0.90, (255, 96, 0)),
+    (1.00, (255, 0, 0)),
+)
+PALETTES = {
+    'blue-yellow': BLUE_YELLOW_PALETTE,
+    'jet': JET_PALETTE,
+}
 RESAMPLE = getattr(Image, 'Resampling', Image)
 
 
@@ -60,6 +73,9 @@ def parse_args() -> argparse.Namespace:
         '--normalization-reference-model', default='',
         help='Reference model ID required by either reference mode.')
     parser.add_argument('--box-width', type=int, default=3)
+    parser.add_argument(
+        '--colormap', choices=tuple(PALETTES), default='jet',
+        help='Activation color map. jet follows the usual blue-cyan-green-yellow-red CAM view.')
     parser.add_argument(
         '--png-compress-level', type=int, default=6,
         help='Lossless PNG compression level from 0 (fastest) to 9 (smallest)')
@@ -177,18 +193,32 @@ def compute_reference_ranges(
     return ranges
 
 
-def colorize(value: np.ndarray) -> Image.Image:
+def colorize(value: np.ndarray, colormap: str = 'jet') -> Image.Image:
+    palette = PALETTES[colormap]
     output = np.zeros(value.shape + (3,), dtype=np.float32)
-    for index in range(len(PALETTE) - 1):
-        start, start_color = PALETTE[index]
-        end, end_color = PALETTE[index + 1]
-        mask = (value >= start) & (value <= end if index == len(PALETTE) - 2 else value < end)
+    for index in range(len(palette) - 1):
+        start, start_color = palette[index]
+        end, end_color = palette[index + 1]
+        mask = (
+            (value >= start) &
+            (value <= end if index == len(palette) - 2 else value < end)
+        )
         alpha = np.clip((value - start) / max(end - start, 1e-12), 0.0, 1.0)
         first = np.asarray(start_color, dtype=np.float32)
         second = np.asarray(end_color, dtype=np.float32)
         interpolated = first + alpha[..., None] * (second - first)
         output[mask] = interpolated[mask]
-    return Image.fromarray(np.rint(np.clip(output, 0, 255)).astype(np.uint8), mode='RGB')
+    return Image.fromarray(np.rint(np.clip(output, 0, 255)).astype(np.uint8))
+
+
+def resize_activation(
+    value: np.ndarray,
+    size: Tuple[int, int],
+) -> np.ndarray:
+    resized = Image.fromarray(value.astype(np.float32)).resize(
+        size, RESAMPLE.BICUBIC)
+    return np.clip(
+        np.asarray(resized, dtype=np.float32), 0.0, 1.0)
 
 
 def mask_from_boxes(
@@ -345,7 +375,9 @@ def render_model_dataset(config: dict) -> Tuple[str, List[dict], List[dict]]:
                 'normalized_std': float(display.std()),
             })
 
-            rendered = colorize(display).resize(original_size, RESAMPLE.BICUBIC)
+            rendered = colorize(
+                resize_activation(display, original_size),
+                config['colormap'])
             no_box_path = (
                 model_root / 'without_boxes' / layer / f'{file_stem}.png')
             with_box_path = (
@@ -582,6 +614,7 @@ def main() -> None:
                     'layers': layers,
                     'variant': args.variant,
                     'aggregation': args.aggregation,
+                    'colormap': args.colormap,
                     'dataset_ranges': reference_ranges,
                     'sample_ranges': sample_ranges,
                     'skip_raw_activation': args.skip_raw_activation,
@@ -654,6 +687,7 @@ def main() -> None:
                 if args.normalization_mode == 'reference-dataset-per-layer'
                 else 'per-sample per-layer from reference model'),
             'percentiles': [args.low_percentile, args.high_percentile],
+            'colormap': args.colormap,
             'quantitative_statistics_source': (
                 'raw activation before normalization'),
             'raw_activation_arrays_saved': not args.skip_raw_activation,
@@ -764,7 +798,9 @@ def main() -> None:
                     'normalized_mean': float(display.mean()),
                     'normalized_std': float(display.std()),
                 })
-                rendered = colorize(display).resize(original.size, RESAMPLE.BICUBIC)
+                rendered = colorize(
+                    resize_activation(display, original.size),
+                    args.colormap)
                 no_box_path = (
                     model_root / 'without_boxes' / layer / f'{file_stem}.png')
                 with_box_path = (
@@ -851,6 +887,7 @@ def main() -> None:
                 if args.normalization_mode == 'reference-per-sample-layer'
                 else 'per-sample per-layer across selected models')),
         'percentiles': [args.low_percentile, args.high_percentile],
+        'colormap': args.colormap,
         'quantitative_statistics_source': 'raw activation before normalization',
         'raw_activation_arrays_saved': not args.skip_raw_activation,
         'png_compress_level': args.png_compress_level,

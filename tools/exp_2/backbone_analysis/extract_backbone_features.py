@@ -110,10 +110,13 @@ def crop_valid_feature(
         feature_h, feature_w = int(value.shape[-2]), int(value.shape[-1])
         img_h, img_w = img_shape
         pad_h, pad_w = pad_shape
+        # A ceil crop includes feature cells only partially covered by the
+        # image. Those cells contain zero-padding convolution artifacts and
+        # create false high activations along the padded border.
         valid_h = min(feature_h, max(
-            1, int(math.ceil(img_h * feature_h / float(max(pad_h, 1))))))
+            1, int(math.floor(img_h * feature_h / float(max(pad_h, 1))))))
         valid_w = min(feature_w, max(
-            1, int(math.ceil(img_w * feature_w / float(max(pad_w, 1))))))
+            1, int(math.floor(img_w * feature_w / float(max(pad_w, 1))))))
         return value[:, :valid_h, :valid_w], (valid_h, valid_w)
     if value.ndim == 2:
         return value, (int(value.shape[0]), 1)

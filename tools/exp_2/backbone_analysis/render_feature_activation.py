@@ -57,6 +57,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument(
+        '--smooth-sigma', type=float, default=0.8,
+        help='Gaussian smoothing applied to the activation map before resizing.')
+    parser.add_argument(
         '--normalization-mode',
         choices=(
             'shared-per-sample',
@@ -227,7 +230,30 @@ def colorize(value: np.ndarray, colormap: str = 'jet') -> Image.Image:
 def resize_activation(
     value: np.ndarray,
     size: Tuple[int, int],
+    smooth_sigma: float = 0.0,
 ) -> np.ndarray:
+    if smooth_sigma > 0:
+        radius = max(1, int(math.ceil(3.0 * smooth_sigma)))
+        coordinates = np.arange(-radius, radius + 1, dtype=np.float32)
+        kernel = np.exp(
+            -0.5 * np.square(coordinates / smooth_sigma)).astype(np.float32)
+        kernel /= kernel.sum()
+        padded = np.pad(
+            value.astype(np.float32),
+            radius,
+            mode='reflect',
+        )
+        filtered = np.apply_along_axis(
+            lambda row: np.convolve(row, kernel, mode='valid'),
+            axis=1,
+            arr=padded,
+        )
+        filtered = np.apply_along_axis(
+            lambda column: np.convolve(column, kernel, mode='valid'),
+            axis=0,
+            arr=filtered,
+        )
+        value = filtered
     resized = Image.fromarray(value.astype(np.float32)).resize(
         size, RESAMPLE.BICUBIC)
     return np.clip(
@@ -389,7 +415,11 @@ def render_model_dataset(config: dict) -> Tuple[str, List[dict], List[dict]]:
             })
 
             rendered = colorize(
-                resize_activation(display, original_size),
+                resize_activation(
+                    display,
+                    original_size,
+                    config['smooth_sigma'],
+                ),
                 config['colormap'])
             no_box_path = (
                 model_root / 'without_boxes' / layer / f'{file_stem}.png')
@@ -550,6 +580,8 @@ def main() -> None:
         raise ValueError('--png-compress-level must be between 0 and 9')
     if args.model_workers < 1:
         raise ValueError('--model-workers must be at least 1')
+    if args.smooth_sigma < 0:
+        raise ValueError('--smooth-sigma cannot be negative')
     models = parse_csv(args.models)
     layers = parse_csv(args.layers)
     if not models or not layers:
@@ -628,6 +660,7 @@ def main() -> None:
                     'variant': args.variant,
                     'aggregation': args.aggregation,
                     'colormap': args.colormap,
+                    'smooth_sigma': args.smooth_sigma,
                     'dataset_ranges': reference_ranges,
                     'sample_ranges': sample_ranges,
                     'skip_raw_activation': args.skip_raw_activation,
@@ -701,6 +734,7 @@ def main() -> None:
                 else 'per-sample per-layer from reference model'),
             'percentiles': [args.low_percentile, args.high_percentile],
             'colormap': args.colormap,
+            'smooth_sigma': args.smooth_sigma,
             'quantitative_statistics_source': (
                 'raw activation before normalization'),
             'raw_activation_arrays_saved': not args.skip_raw_activation,
@@ -812,7 +846,11 @@ def main() -> None:
                     'normalized_std': float(display.std()),
                 })
                 rendered = colorize(
-                    resize_activation(display, original.size),
+                    resize_activation(
+                        display,
+                        original.size,
+                        args.smooth_sigma,
+                    ),
                     args.colormap)
                 no_box_path = (
                     model_root / 'without_boxes' / layer / f'{file_stem}.png')
@@ -901,6 +939,7 @@ def main() -> None:
                 else 'per-sample per-layer across selected models')),
         'percentiles': [args.low_percentile, args.high_percentile],
         'colormap': args.colormap,
+        'smooth_sigma': args.smooth_sigma,
         'quantitative_statistics_source': 'raw activation before normalization',
         'raw_activation_arrays_saved': not args.skip_raw_activation,
         'png_compress_level': args.png_compress_level,

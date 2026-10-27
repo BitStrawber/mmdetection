@@ -35,11 +35,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--variant', default='clean')
     parser.add_argument('--out-dir', required=True)
     parser.add_argument(
-        '--aggregation', choices=('mean-abs', 'l2'), default='mean-abs',
+        '--aggregation', choices=('mean-abs', 'l2', 'eigen'),
+        default='mean-abs',
         help=(
             'Collapse a CHW feature to one spatial map. l2 computes '
-            'sqrt(sum_c(feature_c^2)) and is usually more stable for DINO ViT '
-            'patch tokens.'))
+            'sqrt(sum_c(feature_c^2)); eigen projects features onto the first '
+            'principal component, the class-agnostic EigenCAM strategy.'))
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument(
@@ -87,6 +88,34 @@ def spatial_path(
         f'{sample_index:05d}_{image_id}' / f'{layer}.npz')
 
 
+def eigen_activation(feature: np.ndarray, iterations: int = 20) -> np.ndarray:
+    """Return a deterministic first-principal-component projection."""
+    channels = int(feature.shape[0])
+    flattened = feature.reshape(channels, -1).astype(np.float32, copy=True)
+    flattened -= flattened.mean(axis=1, keepdims=True)
+    vector = np.linalg.norm(flattened, axis=1).astype(np.float32)
+    vector -= float(vector.mean())
+    vector_norm = float(np.linalg.norm(vector))
+    if vector_norm < 1e-12:
+        vector = flattened[:, 0].copy()
+        vector_norm = float(np.linalg.norm(vector))
+    if vector_norm < 1e-12:
+        return np.zeros(feature.shape[-2:], dtype=np.float32)
+    vector /= vector_norm
+    for _ in range(iterations):
+        updated = flattened @ (flattened.T @ vector)
+        updated_norm = float(np.linalg.norm(updated))
+        if updated_norm < 1e-12:
+            break
+        vector = updated / updated_norm
+    projection = vector @ flattened
+    peak = int(np.argmax(np.abs(projection)))
+    if projection[peak] < 0:
+        projection = -projection
+    projection = np.maximum(projection, 0.0)
+    return projection.reshape(feature.shape[-2:]).astype(np.float32)
+
+
 def load_activation(path: Path, aggregation: str = 'mean-abs') -> np.ndarray:
     if not path.is_file():
         raise FileNotFoundError(
@@ -99,6 +128,8 @@ def load_activation(path: Path, aggregation: str = 'mean-abs') -> np.ndarray:
         return np.abs(feature).mean(axis=0).astype(np.float32)
     if aggregation == 'l2':
         return np.sqrt(np.square(feature).sum(axis=0)).astype(np.float32)
+    if aggregation == 'eigen':
+        return eigen_activation(feature)
     raise ValueError(f'Unknown activation aggregation: {aggregation}')
 
 
@@ -610,10 +641,11 @@ def main() -> None:
             'models': models,
             'layers': layers,
             'variant': args.variant,
-            'aggregation': (
-                'mean(abs(feature), channel)'
-                if args.aggregation == 'mean-abs'
-                else 'sqrt(sum(feature^2, channel))'),
+            'aggregation': {
+                'mean-abs': 'mean(abs(feature), channel)',
+                'l2': 'sqrt(sum(feature^2, channel))',
+                'eigen': 'first principal component projection',
+            }[args.aggregation],
             'foreground_definition': 'union of COCO GT bounding boxes',
             'normalization': args.normalization_mode,
             'normalization_reference_model': reference_model,
@@ -802,10 +834,11 @@ def main() -> None:
         'models': models,
         'layers': layers,
         'variant': args.variant,
-        'aggregation': (
-            'mean(abs(feature), channel)'
-            if args.aggregation == 'mean-abs'
-            else 'sqrt(sum(feature^2, channel))'),
+        'aggregation': {
+            'mean-abs': 'mean(abs(feature), channel)',
+            'l2': 'sqrt(sum(feature^2, channel))',
+            'eigen': 'first principal component projection',
+        }[args.aggregation],
         'foreground_definition': 'union of COCO GT bounding boxes',
         'normalization': args.normalization_mode,
         'normalization_reference_model': (

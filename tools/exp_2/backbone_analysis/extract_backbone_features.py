@@ -77,12 +77,31 @@ def crop_valid_feature(
     img_shape: Tuple[int, int],
     pad_shape: Tuple[int, int],
     layout: str = 'channels_first',
+    feature_stride: int | None = None,
 ) -> Tuple[torch.Tensor, Tuple[int, int]]:
     value = feature.detach().float().cpu()
     if value.ndim == 4:
         if value.shape[0] != 1:
             raise ValueError(f'Expected batch size 1, got {tuple(value.shape)}')
         value = value[0]
+    if layout == 'channels_last' and value.ndim == 2:
+        if feature_stride is None or feature_stride <= 0:
+            raise ValueError(
+                'channels_last token features require a positive feature_stride')
+        pad_h, pad_w = pad_shape
+        full_h = int(math.ceil(pad_h / float(feature_stride)))
+        full_w = int(math.ceil(pad_w / float(feature_stride)))
+        patch_tokens = full_h * full_w
+        if value.shape[0] == patch_tokens + 1:
+            value = value[1:]
+        elif value.shape[0] != patch_tokens:
+            raise ValueError(
+                'Cannot reshape channels-last token sequence: '
+                f'tokens={value.shape[0]}, expected={patch_tokens} or '
+                f'{patch_tokens + 1}, grid={full_h}x{full_w}, '
+                f'stride={feature_stride}')
+        value = value.reshape(full_h, full_w, value.shape[-1]).permute(
+            2, 0, 1).contiguous()
     if layout == 'channels_last' and value.ndim == 3:
         value = value.permute(2, 0, 1).contiguous()
     elif layout not in ('channels_first', 'channels_last'):
@@ -192,6 +211,11 @@ def main() -> None:
         feature_layout = str(spec.get('feature_layout', 'channels_first'))
         if feature_layout not in ('channels_first', 'channels_last'):
             raise ValueError(f'{loaded.model_id}: invalid feature_layout')
+        feature_stride = spec.get('feature_stride')
+        if feature_stride is not None:
+            feature_stride = int(feature_stride)
+            if feature_stride <= 0:
+                raise ValueError(f'{loaded.model_id}: invalid feature_stride')
         extraction_reports[loaded.model_id] = loaded.load_report
         write_json(
             out_dir / 'metadata' / loaded.model_id / 'extraction_provenance.json',
@@ -200,6 +224,7 @@ def main() -> None:
                 'config_sha256': file_sha256(spec['config']),
                 'pooling': args.pooling,
                 'feature_layout': feature_layout,
+                'feature_stride': feature_stride,
                 'variants': variants,
                 'model_load_report': loaded.load_report,
             })
@@ -251,7 +276,7 @@ def main() -> None:
                         for layer_id in layer_ids:
                             valid, _ = crop_valid_feature(
                                 captures[layer_id][offset:offset + 1], img_shape, pad_shape,
-                                feature_layout)
+                                feature_layout, feature_stride)
                             pooled = pool_feature(valid, args.pooling)
                             pooled_by_layer[layer_id].append(
                                 pooled.numpy().astype(np.float32, copy=False))
@@ -282,6 +307,7 @@ def main() -> None:
                             'image_path': str(image_path),
                             'variant': variant,
                             'feature_layout': feature_layout,
+                            'feature_stride': feature_stride,
                             'img_shape': list(img_shape),
                             'pad_shape': list(pad_shape),
                             'ori_shape': list(shape_pair(

@@ -34,6 +34,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--layers', required=True)
     parser.add_argument('--variant', default='clean')
     parser.add_argument('--out-dir', required=True)
+    parser.add_argument(
+        '--aggregation', choices=('mean-abs', 'l2'), default='mean-abs',
+        help=(
+            'Collapse a CHW feature to one spatial map. l2 computes '
+            'sqrt(sum_c(feature_c^2)) and is usually more stable for DINO ViT '
+            'patch tokens.'))
     parser.add_argument('--low-percentile', type=float, default=1.0)
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument(
@@ -81,7 +87,7 @@ def spatial_path(
         f'{sample_index:05d}_{image_id}' / f'{layer}.npz')
 
 
-def load_activation(path: Path) -> np.ndarray:
+def load_activation(path: Path, aggregation: str = 'mean-abs') -> np.ndarray:
     if not path.is_file():
         raise FileNotFoundError(
             f'Missing spatial feature {path}. Re-run extraction with --save-spatial.')
@@ -89,7 +95,11 @@ def load_activation(path: Path) -> np.ndarray:
         feature = payload['feature'].astype(np.float32)
     if feature.ndim != 3 or not np.isfinite(feature).all():
         raise ValueError(f'Invalid CHW spatial feature: {path}, shape={feature.shape}')
-    return np.abs(feature).mean(axis=0).astype(np.float32)
+    if aggregation == 'mean-abs':
+        return np.abs(feature).mean(axis=0).astype(np.float32)
+    if aggregation == 'l2':
+        return np.sqrt(np.square(feature).sum(axis=0)).astype(np.float32)
+    raise ValueError(f'Unknown activation aggregation: {aggregation}')
 
 
 def normalize_shared(
@@ -115,7 +125,7 @@ def normalize_with_bounds(
 def compute_reference_ranges(
     feature_root: Path, rows: Sequence[dict], reference_model: str,
     variant: str, layers: Sequence[str], low_percentile: float,
-    high_percentile: float,
+    high_percentile: float, aggregation: str,
 ) -> Dict[str, Tuple[float, float]]:
     ranges = {}
     for layer in layers:
@@ -124,7 +134,7 @@ def compute_reference_ranges(
             path = spatial_path(
                 feature_root, reference_model, variant, position,
                 int(row['image_id']), layer)
-            flattened.append(load_activation(path).reshape(-1))
+            flattened.append(load_activation(path, aggregation).reshape(-1))
         values = np.concatenate(flattened)
         low = float(np.percentile(values, low_percentile))
         high = float(np.percentile(values, high_percentile))
@@ -202,7 +212,7 @@ def image_path(row: dict) -> Path:
 def compute_per_sample_reference_ranges(
     feature_root: Path, rows: Sequence[dict], reference_model: str,
     variant: str, layers: Sequence[str], low_percentile: float,
-    high_percentile: float,
+    high_percentile: float, aggregation: str,
 ) -> Dict[Tuple[int, str], Tuple[float, float]]:
     ranges = {}
     for position, row in enumerate(rows):
@@ -210,7 +220,7 @@ def compute_per_sample_reference_ranges(
             path = spatial_path(
                 feature_root, reference_model, variant, position,
                 int(row['image_id']), layer)
-            reference = load_activation(path)
+            reference = load_activation(path, aggregation)
             low = float(np.percentile(reference, low_percentile))
             high = float(np.percentile(reference, high_percentile))
             if high <= low:
@@ -249,7 +259,7 @@ def render_model_dataset(config: dict) -> Tuple[str, List[dict], List[dict]]:
             path = spatial_path(
                 feature_root, model, variant, position,
                 int(row['image_id']), layer)
-            raw = load_activation(path)
+            raw = load_activation(path, config['aggregation'])
             if dataset_ranges:
                 low, high = dataset_ranges[layer]
             else:
@@ -488,7 +498,7 @@ def main() -> None:
         if args.normalization_mode == 'reference-dataset-per-layer':
             reference_ranges = compute_reference_ranges(
                 feature_root, rows, reference_model, args.variant, layers,
-                args.low_percentile, args.high_percentile)
+                args.low_percentile, args.high_percentile, args.aggregation)
             write_json(out_dir / 'reference_normalization.json', {
                 'normalization_mode': args.normalization_mode,
                 'reference_model': reference_model,
@@ -511,7 +521,7 @@ def main() -> None:
         if args.normalization_mode == 'reference-per-sample-layer':
             sample_ranges = compute_per_sample_reference_ranges(
                 feature_root, rows, reference_model, args.variant, layers,
-                args.low_percentile, args.high_percentile)
+                args.low_percentile, args.high_percentile, args.aggregation)
         for position, row in enumerate(rows):
             for layer in layers:
                 if reference_ranges:
@@ -540,6 +550,7 @@ def main() -> None:
                     'rows': rows,
                     'layers': layers,
                     'variant': args.variant,
+                    'aggregation': args.aggregation,
                     'dataset_ranges': reference_ranges,
                     'sample_ranges': sample_ranges,
                     'skip_raw_activation': args.skip_raw_activation,
@@ -599,7 +610,10 @@ def main() -> None:
             'models': models,
             'layers': layers,
             'variant': args.variant,
-            'aggregation': 'mean(abs(feature), channel)',
+            'aggregation': (
+                'mean(abs(feature), channel)'
+                if args.aggregation == 'mean-abs'
+                else 'sqrt(sum(feature^2, channel))'),
             'foreground_definition': 'union of COCO GT bounding boxes',
             'normalization': args.normalization_mode,
             'normalization_reference_model': reference_model,
@@ -633,7 +647,7 @@ def main() -> None:
                 path = spatial_path(
                     feature_root, model, args.variant, position,
                     int(row['image_id']), layer)
-                raw_values.append(load_activation(path))
+                raw_values.append(load_activation(path, args.aggregation))
             if args.normalization_mode == 'reference-dataset-per-layer':
                 low, high = reference_ranges[layer]
                 normalized = [
@@ -788,7 +802,10 @@ def main() -> None:
         'models': models,
         'layers': layers,
         'variant': args.variant,
-        'aggregation': 'mean(abs(feature), channel)',
+        'aggregation': (
+            'mean(abs(feature), channel)'
+            if args.aggregation == 'mean-abs'
+            else 'sqrt(sum(feature^2, channel))'),
         'foreground_definition': 'union of COCO GT bounding boxes',
         'normalization': args.normalization_mode,
         'normalization_reference_model': (

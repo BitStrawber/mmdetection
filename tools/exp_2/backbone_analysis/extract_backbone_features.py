@@ -148,13 +148,42 @@ def variant_path(row: Mapping[str, Any], variant: str) -> Path:
     return existing_file(variants[variant]['image_path'])
 
 
-def batch_predictions(model: Any, pipeline: Any, paths: List[Path]) -> list[Any]:
+def batch_forward(
+    loaded: Any,
+    pipeline: Any,
+    paths: List[Path],
+) -> list[Any]:
+    """Run only the requested path and return per-image metadata.
+
+    Bare-backbone experiments must not execute random detector heads merely to
+    obtain image metadata. Detector experiments keep the full test_step path
+    because their requested hooks may live in the neck or ROI pipeline.
+    """
     from mmengine.dataset import pseudo_collate
 
     data = [pipeline({'img_path': str(path), 'img_id': index})
             for index, path in enumerate(paths)]
+    data = pseudo_collate(data)
+    if loaded.load_report.get('kind') != 'backbone':
+        with torch.no_grad():
+            return loaded.model.test_step(data)
+
+    data = loaded.model.data_preprocessor(data, training=False)
+    if isinstance(data, dict):
+        inputs = data['inputs']
+        data_samples = data.get('data_samples')
+    elif isinstance(data, (tuple, list)) and len(data) == 2:
+        inputs, data_samples = data
+    else:
+        raise TypeError(
+            f'Unexpected data preprocessor output: {type(data).__name__}')
     with torch.no_grad():
-        return model.test_step(pseudo_collate(data))
+        loaded.model.backbone(inputs)
+    if data_samples is None:
+        raise RuntimeError('Data preprocessor returned no data samples')
+    if not isinstance(data_samples, (list, tuple)):
+        data_samples = [data_samples]
+    return list(data_samples)
 
 
 def main() -> None:
@@ -256,7 +285,7 @@ def main() -> None:
                     batch_rows = rows[start:start + batch_size]
                     captures.clear()
                     image_paths = [variant_path(row, variant) for row in batch_rows]
-                    predictions = batch_predictions(loaded.model, pipeline, image_paths)
+                    predictions = batch_forward(loaded, pipeline, image_paths)
                     if len(predictions) != len(batch_rows):
                         raise RuntimeError('Prediction count differs from batch size')
                     missing_layers = set(layer_ids) - set(captures)

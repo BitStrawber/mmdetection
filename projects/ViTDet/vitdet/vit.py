@@ -365,10 +365,12 @@ class ViT(BaseModule):
                  window_block_indexes=(0, 1, 3, 4, 6, 7, 9, 10),
                  pretrain_img_size=224,
                  pretrain_use_cls_token=True,
+                 frozen_stages=-1,
                  init_cfg=None):
 
         super().__init__()
         self.pretrain_use_cls_token = pretrain_use_cls_token
+        self.frozen_stages = frozen_stages
         self.init_cfg = init_cfg
 
         self.patch_embed = PatchEmbed(
@@ -407,6 +409,31 @@ class ViT(BaseModule):
 
         if self.pos_embed is not None:
             nn.init.trunc_normal_(self.pos_embed, std=0.02)
+
+        self._freeze_stages()
+
+    def _freeze_stages(self):
+        """Freeze the requested ViT stages while keeping the head trainable."""
+        if self.frozen_stages < 0:
+            return
+
+        self.patch_embed.eval()
+        for param in self.patch_embed.parameters():
+            param.requires_grad = False
+
+        if self.pos_embed is not None:
+            self.pos_embed.requires_grad = False
+
+        num_blocks = min(self.frozen_stages, len(self.blocks))
+        for block in self.blocks[:num_blocks]:
+            block.eval()
+            for param in block.parameters():
+                param.requires_grad = False
+
+    def train(self, mode=True):
+        super().train(mode)
+        self._freeze_stages()
+        return self
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):

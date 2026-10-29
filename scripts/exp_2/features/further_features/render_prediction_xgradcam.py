@@ -184,7 +184,7 @@ def main() -> None:
 
     # Optional common scale: one dataset-wide range per layer, estimated only
     # from the declared ImageNet-reference detector's prediction CAMs.
-    reference_ranges: Dict[str, Tuple[float, float]] = {}
+    reference_prediction_ranges: Dict[str, Tuple[float, float]] = {}
     if args.reference_model:
         for layer in layers:
             flattened = [
@@ -192,7 +192,7 @@ def main() -> None:
                 for row in records if row['model'] == args.reference_model
             ]
             if flattened:
-                reference_ranges[layer] = finite_percentiles(
+                reference_prediction_ranges[layer] = finite_percentiles(
                     np.concatenate(flattened),
                     args.low_percentile, args.high_percentile)
 
@@ -206,7 +206,7 @@ def main() -> None:
     if args.strategy in {'independent', 'both'}:
         strategies.append('independent_p1_p99')
     if args.strategy in {'reference', 'both'}:
-        if not reference_ranges:
+        if not reference_prediction_ranges:
             raise ValueError(
                 'Reference normalization requires --reference-model '
                 'with valid reference predictions')
@@ -231,8 +231,10 @@ def main() -> None:
             independent = finite_percentiles(
                 cam, args.low_percentile, args.high_percentile)
             bounds = {'independent_p1_p99': independent}
-            if layer in reference_ranges:
-                bounds['imagenet_reference_dataset_p1_p99'] = reference_ranges[layer]
+            if layer in reference_prediction_ranges:
+                bounds['imagenet_reference_dataset_p1_p99'] = (
+                    reference_prediction_ranges[layer]
+                )
             resized_union = None
             for strategy, (low, high) in bounds.items():
                 if strategy not in strategies:
@@ -326,6 +328,25 @@ def main() -> None:
         )
 
     # One image-level map per model/layer: pixelwise maximum across predictions.
+    reference_union_ranges: Dict[str, Tuple[float, float]] = {}
+    if args.strategy in {'reference', 'both'}:
+        for layer in layers:
+            reference_maps = [
+                values[0].reshape(-1)
+                for key, values in rendered_for_union.items()
+                if key[0] == 'imagenet_reference_dataset_p1_p99'
+                and key[2] == args.reference_model
+                and key[3] == layer
+            ]
+            if not reference_maps:
+                raise ValueError(
+                    f'No reference union maps for layer {layer}')
+            reference_union_ranges[layer] = finite_percentiles(
+                np.concatenate(reference_maps),
+                args.low_percentile,
+                args.high_percentile,
+            )
+
     union_paths: Dict[Tuple[str, int, str, str], Path] = {}
     union_source_paths: Dict[int, str] = {}
     cached_union_image_id = None
@@ -335,7 +356,7 @@ def main() -> None:
         raw_union, union_rows = values
         sample_row = union_rows[0]
         union_source_paths[image_id] = str(sample_row['image_path'])
-        if cached_union_image_id != image_id:
+        if args.overlay_original and cached_union_image_id != image_id:
             cached_union_image = load_rgb(sample_row['image_path'])
             cached_union_image_id = image_id
         image = cached_union_image
@@ -343,7 +364,7 @@ def main() -> None:
             low, high = finite_percentiles(
                 raw_union, args.low_percentile, args.high_percentile)
         else:
-            low, high = reference_ranges[layer]
+            low, high = reference_union_ranges[layer]
         normalized_union = normalize_with_limits(raw_union, low, high)
         heat = (
             jet_rgb(normalized_union, args.gamma)

@@ -104,7 +104,10 @@ sources = ("imagenet", "realuw", "synthetic5")
 for dataset in ("ruod", "uiis10k"):
     for arch, layer_id, module, layout in (
         ("r50", "res4", "layer3", "channels_first"),
-        ("vits", "block12", "blocks.11", "channels_last"),
+        # Hook the ViT backbone output after its final BHWC -> BCHW
+        # conversion. This is the block12 representation that actually
+        # enters SimpleFPN and preserves the ROI autograd path.
+        ("vits", "block12", "backbone", "channels_first"),
     ):
         entries = []
         for source in sources:
@@ -148,6 +151,18 @@ run_cam_background() {
     local reference="$6"
     local name="${dataset}_${arch}"
     local log="${CAM_BASE}/logs/${name}.runner.log"
+
+    if [[ -s "${CAM_BASE}/output/${name}/COMPLETE.env" ]]; then
+        echo "SKIP completed group=${name}"
+        return
+    fi
+    if [[ -s "${CAM_BASE}/logs/${name}.pid" ]]; then
+        old_pid="$(cat "${CAM_BASE}/logs/${name}.pid")"
+        if kill -0 "${old_pid}" 2>/dev/null; then
+            echo "SKIP running group=${name} pid=${old_pid}"
+            return
+        fi
+    fi
 
     echo "START dataset=${dataset} arch=${arch} layer=${layer} gpu=${device}"
 

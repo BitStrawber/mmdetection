@@ -25,6 +25,7 @@ from cam_common import (  # noqa: E402
     compose_grid,
     draw_box,
     finite_percentiles,
+    jet_rgb,
     labeled_tile,
     load_rgb,
     normalize_with_limits,
@@ -48,6 +49,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--high-percentile', type=float, default=99.0)
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--overlay-alpha', type=float, default=0.48)
+    parser.add_argument(
+        '--colormap',
+        choices=('jet', 'blue_yellow'),
+        default='jet',
+    )
+    parser.add_argument(
+        '--draw-boxes',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument('--panel-limit', type=int, default=0)
     parser.add_argument('--png-compress-level', type=int, default=3)
     parser.add_argument(
@@ -99,11 +110,19 @@ def render_map(
     high: float,
     gamma: float,
     alpha: float,
+    colormap: str,
+    draw_boxes: bool,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     resized = resize_map(cam, image.shape[1], image.shape[0])
     normalized = normalize_with_limits(resized, low, high)
-    heat = blue_yellow_rgb(normalized, gamma)
+    heat = (
+        jet_rgb(normalized, gamma)
+        if colormap == 'jet'
+        else blue_yellow_rgb(normalized, gamma)
+    )
     overlay = overlay_heatmap(image, heat, alpha)
+    if not draw_boxes:
+        return heat, overlay, overlay
     with_boxes = draw_box(
         overlay, prediction_box, prediction_label, color=(255, 230, 20), width=3)
     if matched_gt_box is not None:
@@ -198,7 +217,8 @@ def main() -> None:
                 if args.save_prediction_images:
                     heat, overlay, with_boxes = render_map(
                         cam, image, pred_box, pred_label, gt_box,
-                        low, high, args.gamma, args.overlay_alpha)
+                        low, high, args.gamma, args.overlay_alpha,
+                        args.colormap, args.draw_boxes)
                     save_rgb(output_path(
                         out_dir, strategy, model, layer, image_id, rank, 'heatmap'),
                         heat, args.png_compress_level)
@@ -300,14 +320,20 @@ def main() -> None:
                 raw_union, args.low_percentile, args.high_percentile)
         else:
             low, high = reference_ranges[layer]
-        heat = blue_yellow_rgb(normalize_with_limits(raw_union, low, high), args.gamma)
+        normalized_union = normalize_with_limits(raw_union, low, high)
+        heat = (
+            jet_rgb(normalized_union, args.gamma)
+            if args.colormap == 'jet'
+            else blue_yellow_rgb(normalized_union, args.gamma)
+        )
         overlay = overlay_heatmap(image, heat, args.overlay_alpha)
-        for row in union_rows:
-            overlay = draw_box(
-                overlay,
-                row['bbox_xyxy_original'],
-                f'{int(row["prediction_rank"])}:{row["prediction_category_name"]}',
-                color=(255, 230, 20), width=2)
+        if args.draw_boxes:
+            for row in union_rows:
+                overlay = draw_box(
+                    overlay,
+                    row['bbox_xyxy_original'],
+                    f'{int(row["prediction_rank"])}:{row["prediction_category_name"]}',
+                    color=(255, 230, 20), width=2)
         destination = (
             out_dir / strategy / 'image_union' / model / layer /
             f'image_{image_id:08d}.png')
@@ -350,6 +376,8 @@ def main() -> None:
         'prediction_layer_rows': len(metric_rows),
         'save_prediction_images': args.save_prediction_images,
         'compute_cam_metrics': args.compute_cam_metrics,
+        'colormap': args.colormap,
+        'draw_boxes': args.draw_boxes,
         'panels': panel_count,
         'panels_5x4': panel_count,
         'panel_layout': (

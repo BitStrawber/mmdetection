@@ -27,6 +27,8 @@ LOW_PERCENTILE="${LOW_PERCENTILE:-1}"
 HIGH_PERCENTILE="${HIGH_PERCENTILE:-99}"
 DISPLAY_GAMMA="${DISPLAY_GAMMA:-1.0}"
 OVERLAY_ALPHA="${OVERLAY_ALPHA:-0.48}"
+COLORMAP="${COLORMAP:-jet}"
+DRAW_PREDICTION_BOXES="${DRAW_PREDICTION_BOXES:-0}"
 PANEL_LIMIT="${PANEL_LIMIT:-0}"
 SAVE_PREDICTION_IMAGES="${SAVE_PREDICTION_IMAGES:-1}"
 COMPUTE_CAM_METRICS="${COMPUTE_CAM_METRICS:-1}"
@@ -148,13 +150,16 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         --low-percentile "${LOW_PERCENTILE}"
         --high-percentile "${HIGH_PERCENTILE}"
         --gamma "${DISPLAY_GAMMA}"
-        --overlay-alpha "${OVERLAY_ALPHA}"
+        --overlay-alpha "${OVERLAY_ALPHA}" \
+        --colormap "${COLORMAP}" \
         --panel-limit "${PANEL_LIMIT}"
     )
     [[ "${SAVE_PREDICTION_IMAGES}" == 1 ]] || \
         render_args+=(--no-save-prediction-images)
     [[ "${COMPUTE_CAM_METRICS}" == 1 ]] || \
         render_args+=(--no-compute-cam-metrics)
+    [[ "${DRAW_PREDICTION_BOXES}" == 1 ]] || \
+        render_args+=(--no-draw-boxes)
     [[ "${RESUME}" == 1 ]] && render_args+=(--overwrite)
     python "${SCRIPT_DIR}/render_prediction_xgradcam.py" \
         "${render_args[@]}" 2>&1 | tee "${LOG_ROOT}/render.log"
@@ -188,6 +193,8 @@ MODELS=${MODEL_CSV}
 LAYERS=${LAYERS}
 SAVE_PREDICTION_IMAGES=${SAVE_PREDICTION_IMAGES}
 COMPUTE_CAM_METRICS=${COMPUTE_CAM_METRICS}
+COLORMAP=${COLORMAP}
+DRAW_PREDICTION_BOXES=${DRAW_PREDICTION_BOXES}
 EOF
 
 echo "Prediction XGradCAM complete: ${OUT_ROOT}"

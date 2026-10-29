@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
+import cv2
 import numpy as np
 from PIL import Image
 
@@ -69,6 +70,12 @@ def parse_args() -> argparse.Namespace:
         choices=('both', 'reference', 'independent'),
         default='both',
     )
+    parser.add_argument(
+        '--cam-interpolation',
+        choices=('linear', 'cubic', 'lanczos'),
+        default='linear',
+    )
+    parser.add_argument('--cam-smoothing-sigma', type=float, default=0.0)
     parser.add_argument('--panel-limit', type=int, default=0)
     parser.add_argument('--png-compress-level', type=int, default=3)
     parser.add_argument(
@@ -91,6 +98,35 @@ def load_cam(path: Union[str, Path]) -> np.ndarray:
     if value.ndim != 2 or not np.isfinite(value).all():
         raise ValueError(f'Invalid raw CAM: {path}, shape={value.shape}')
     return value
+
+
+def resize_cam_map(
+    cam: np.ndarray,
+    width: int,
+    height: int,
+    interpolation: str,
+    smoothing_sigma: float,
+) -> np.ndarray:
+    if smoothing_sigma < 0:
+        raise ValueError('cam_smoothing_sigma cannot be negative')
+    value = np.asarray(cam, dtype=np.float32)
+    if smoothing_sigma > 0:
+        value = cv2.GaussianBlur(
+            value,
+            (0, 0),
+            sigmaX=float(smoothing_sigma),
+            sigmaY=float(smoothing_sigma),
+        )
+    interpolation_mode = {
+        'linear': cv2.INTER_LINEAR,
+        'cubic': cv2.INTER_CUBIC,
+        'lanczos': cv2.INTER_LANCZOS4,
+    }[interpolation]
+    return cv2.resize(
+        value,
+        (int(width), int(height)),
+        interpolation=interpolation_mode,
+    ).astype(np.float32, copy=False)
 
 
 def scan_records(cam_root: Path, models: Sequence[str], layers: Sequence[str]):
@@ -123,8 +159,16 @@ def render_map(
     colormap: str,
     draw_boxes: bool,
     overlay_original: bool,
+    interpolation: str,
+    smoothing_sigma: float,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    resized = resize_map(cam, image.shape[1], image.shape[0])
+    resized = resize_cam_map(
+        cam,
+        image.shape[1],
+        image.shape[0],
+        interpolation,
+        smoothing_sigma,
+    )
     normalized = normalize_with_limits(resized, low, high)
     heat = (
         jet_rgb(normalized, gamma)
@@ -244,7 +288,9 @@ def main() -> None:
                         cam, image, pred_box, pred_label, gt_box,
                         low, high, args.gamma, args.overlay_alpha,
                         args.colormap, args.draw_boxes,
-                        args.overlay_original)
+                        args.overlay_original,
+                        args.cam_interpolation,
+                        args.cam_smoothing_sigma)
                     save_rgb(output_path(
                         out_dir, strategy, model, layer, image_id, rank, 'heatmap'),
                         heat, args.png_compress_level)
@@ -269,7 +315,13 @@ def main() -> None:
                     'high_percentile': args.high_percentile,
                 })
                 if resized_union is None:
-                    resized_union = resize_map(cam, width, height)
+                    resized_union = resize_cam_map(
+                        cam,
+                        width,
+                        height,
+                        args.cam_interpolation,
+                        args.cam_smoothing_sigma,
+                    )
                 key = (strategy, image_id, model, layer)
                 union_state = rendered_for_union.get(key)
                 if union_state is None:
@@ -287,9 +339,7 @@ def main() -> None:
 
             if args.compute_cam_metrics:
                 resized = (
-                    resized_union
-                    if resized_union is not None
-                    else resize_map(cam, width, height)
+                    resize_map(cam, width, height)
                 )
                 pred_metrics = cam_metrics(
                     resized, pred_box, list(all_gt_boxes) + [pred_box])
@@ -429,6 +479,8 @@ def main() -> None:
         'draw_boxes': args.draw_boxes,
         'overlay_original': args.overlay_original,
         'strategy': args.strategy,
+        'cam_interpolation': args.cam_interpolation,
+        'cam_smoothing_sigma': args.cam_smoothing_sigma,
         'panels': panel_count,
         'panels_5x4': panel_count,
         'panel_layout': (

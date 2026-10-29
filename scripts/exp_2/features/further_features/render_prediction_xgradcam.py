@@ -235,6 +235,8 @@ def main() -> None:
                 bounds['imagenet_reference_dataset_p1_p99'] = reference_ranges[layer]
             resized_union = None
             for strategy, (low, high) in bounds.items():
+                if strategy not in strategies:
+                    continue
                 if args.save_prediction_images:
                     heat, overlay, with_boxes = render_map(
                         cam, image, pred_box, pred_label, gt_box,

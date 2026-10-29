@@ -50,6 +50,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--gamma', type=float, default=1.0)
     parser.add_argument('--overlay-alpha', type=float, default=0.48)
     parser.add_argument(
+        '--overlay-original',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
+    parser.add_argument(
         '--colormap',
         choices=('jet', 'blue_yellow'),
         default='jet',
@@ -58,6 +63,11 @@ def parse_args() -> argparse.Namespace:
         '--draw-boxes',
         action=argparse.BooleanOptionalAction,
         default=True,
+    )
+    parser.add_argument(
+        '--strategy',
+        choices=('both', 'reference', 'independent'),
+        default='both',
     )
     parser.add_argument('--panel-limit', type=int, default=0)
     parser.add_argument('--png-compress-level', type=int, default=3)
@@ -112,6 +122,7 @@ def render_map(
     alpha: float,
     colormap: str,
     draw_boxes: bool,
+    overlay_original: bool,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     resized = resize_map(cam, image.shape[1], image.shape[0])
     normalized = normalize_with_limits(resized, low, high)
@@ -120,7 +131,11 @@ def render_map(
         if colormap == 'jet'
         else blue_yellow_rgb(normalized, gamma)
     )
-    overlay = overlay_heatmap(image, heat, alpha)
+    overlay = (
+        overlay_heatmap(image, heat, alpha)
+        if overlay_original
+        else heat
+    )
     if not draw_boxes:
         return heat, overlay, overlay
     with_boxes = draw_box(
@@ -187,8 +202,14 @@ def main() -> None:
         Tuple[str, int, str, str],
         Tuple[np.ndarray, List[Dict[str, Any]]],
     ] = {}
-    strategies = ['independent_p1_p99']
-    if reference_ranges:
+    strategies = []
+    if args.strategy in {'independent', 'both'}:
+        strategies.append('independent_p1_p99')
+    if args.strategy in {'reference', 'both'}:
+        if not reference_ranges:
+            raise ValueError(
+                'Reference normalization requires --reference-model '
+                'with valid reference predictions')
         strategies.append('imagenet_reference_dataset_p1_p99')
 
     for position, row in enumerate(records, 1):
@@ -218,7 +239,8 @@ def main() -> None:
                     heat, overlay, with_boxes = render_map(
                         cam, image, pred_box, pred_label, gt_box,
                         low, high, args.gamma, args.overlay_alpha,
-                        args.colormap, args.draw_boxes)
+                        args.colormap, args.draw_boxes,
+                        args.overlay_original)
                     save_rgb(output_path(
                         out_dir, strategy, model, layer, image_id, rank, 'heatmap'),
                         heat, args.png_compress_level)
@@ -326,7 +348,11 @@ def main() -> None:
             if args.colormap == 'jet'
             else blue_yellow_rgb(normalized_union, args.gamma)
         )
-        overlay = overlay_heatmap(image, heat, args.overlay_alpha)
+        overlay = (
+            overlay_heatmap(image, heat, args.overlay_alpha)
+            if args.overlay_original
+            else heat
+        )
         if args.draw_boxes:
             for row in union_rows:
                 overlay = draw_box(
@@ -378,6 +404,8 @@ def main() -> None:
         'compute_cam_metrics': args.compute_cam_metrics,
         'colormap': args.colormap,
         'draw_boxes': args.draw_boxes,
+        'overlay_original': args.overlay_original,
+        'strategy': args.strategy,
         'panels': panel_count,
         'panels_5x4': panel_count,
         'panel_layout': (

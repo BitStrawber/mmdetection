@@ -29,6 +29,8 @@ DISPLAY_GAMMA="${DISPLAY_GAMMA:-1.0}"
 OVERLAY_ALPHA="${OVERLAY_ALPHA:-0.48}"
 COLORMAP="${COLORMAP:-jet}"
 DRAW_PREDICTION_BOXES="${DRAW_PREDICTION_BOXES:-0}"
+OVERLAY_ORIGINAL="${OVERLAY_ORIGINAL:-0}"
+NORMALIZATION_STRATEGY="${NORMALIZATION_STRATEGY:-reference}"
 PANEL_LIMIT="${PANEL_LIMIT:-0}"
 SAVE_PREDICTION_IMAGES="${SAVE_PREDICTION_IMAGES:-1}"
 COMPUTE_CAM_METRICS="${COMPUTE_CAM_METRICS:-1}"
@@ -152,6 +154,7 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         --gamma "${DISPLAY_GAMMA}"
         --overlay-alpha "${OVERLAY_ALPHA}" \
         --colormap "${COLORMAP}" \
+        --strategy "${NORMALIZATION_STRATEGY}" \
         --panel-limit "${PANEL_LIMIT}"
     )
     [[ "${SAVE_PREDICTION_IMAGES}" == 1 ]] || \
@@ -160,6 +163,8 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         render_args+=(--no-compute-cam-metrics)
     [[ "${DRAW_PREDICTION_BOXES}" == 1 ]] || \
         render_args+=(--no-draw-boxes)
+    [[ "${OVERLAY_ORIGINAL}" == 1 ]] || \
+        render_args+=(--no-overlay-original)
     [[ "${RESUME}" == 1 ]] && render_args+=(--overwrite)
     python "${SCRIPT_DIR}/render_prediction_xgradcam.py" \
         "${render_args[@]}" 2>&1 | tee "${LOG_ROOT}/render.log"
@@ -195,6 +200,8 @@ SAVE_PREDICTION_IMAGES=${SAVE_PREDICTION_IMAGES}
 COMPUTE_CAM_METRICS=${COMPUTE_CAM_METRICS}
 COLORMAP=${COLORMAP}
 DRAW_PREDICTION_BOXES=${DRAW_PREDICTION_BOXES}
+OVERLAY_ORIGINAL=${OVERLAY_ORIGINAL}
+NORMALIZATION_STRATEGY=${NORMALIZATION_STRATEGY}
 EOF
 
 echo "Prediction XGradCAM complete: ${OUT_ROOT}"

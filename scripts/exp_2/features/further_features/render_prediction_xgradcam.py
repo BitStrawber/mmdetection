@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
@@ -56,6 +55,11 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help='Save per-prediction heatmap/overlay/with_boxes images.')
+    parser.add_argument(
+        '--compute-cam-metrics',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='Compute full-resolution metrics for every prediction.')
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -160,7 +164,10 @@ def main() -> None:
 
     normalization_rows: List[Dict[str, Any]] = []
     metric_rows: List[Dict[str, Any]] = []
-    rendered_for_union: Dict[Tuple[str, int, str, str], List[Tuple[np.ndarray, Dict[str, Any]]]] = defaultdict(list)
+    rendered_for_union: Dict[
+        Tuple[str, int, str, str],
+        Tuple[np.ndarray, List[Dict[str, Any]]],
+    ] = {}
     strategies = ['independent_p1_p99']
     if reference_ranges:
         strategies.append('imagenet_reference_dataset_p1_p99')
@@ -169,7 +176,10 @@ def main() -> None:
         model = str(row['model'])
         image_id = int(row['image_id'])
         rank = int(row['prediction_rank'])
-        image = load_rgb(row['image_path'])
+        image = None
+        if args.save_prediction_images or args.compute_cam_metrics:
+            image = load_rgb(row['image_path'])
+        height, width = [int(value) for value in row['ori_shape']]
         pred_box = row['bbox_xyxy_original']
         gt_box = row.get('matched_bbox_xyxy_original')
         pred_label = (
@@ -183,6 +193,7 @@ def main() -> None:
             bounds = {'independent_p1_p99': independent}
             if layer in reference_ranges:
                 bounds['imagenet_reference_dataset_p1_p99'] = reference_ranges[layer]
+            resized_union = None
             for strategy, (low, high) in bounds.items():
                 if args.save_prediction_images:
                     heat, overlay, with_boxes = render_map(
@@ -211,52 +222,79 @@ def main() -> None:
                     'low_percentile': args.low_percentile,
                     'high_percentile': args.high_percentile,
                 })
-                rendered_for_union[(strategy, image_id, model, layer)].append(
-                    (resize_map(cam, image.shape[1], image.shape[0]), row))
+                if resized_union is None:
+                    resized_union = resize_map(cam, width, height)
+                key = (strategy, image_id, model, layer)
+                union_state = rendered_for_union.get(key)
+                if union_state is None:
+                    rendered_for_union[key] = (
+                        resized_union.copy(),
+                        [row],
+                    )
+                else:
+                    np.maximum(
+                        union_state[0],
+                        resized_union,
+                        out=union_state[0],
+                    )
+                    union_state[1].append(row)
 
-            pred_metrics = cam_metrics(
-                resize_map(cam, image.shape[1], image.shape[0]),
-                pred_box, list(all_gt_boxes) + [pred_box])
-            metric = {
-                'model': model,
-                'image_id': image_id,
-                'prediction_rank': rank,
-                'layer': layer,
-                'prediction_category_name': row['prediction_category_name'],
-                'prediction_score': row['prediction_score'],
-                'best_gt_iou': row['best_gt_iou'],
-                'matched': row['matched'],
-                'class_correct': row['class_correct'],
-                'tp_at_match_iou': row['tp_at_match_iou'],
-                'matched_category_name': row.get('matched_category_name'),
-                'target_logit': row['target_logit'],
-                'target_probability_recomputed': row['target_probability_recomputed'],
-                **{f'prediction_box_{key}': value for key, value in pred_metrics.items()},
-            }
-            if bool(row['matched']) and gt_box is not None:
-                gt_metrics = cam_metrics(
-                    resize_map(cam, image.shape[1], image.shape[0]),
-                    gt_box, all_gt_boxes)
-                metric.update({
-                    f'matched_gt_{key}': value for key, value in gt_metrics.items()
-                })
-            metric_rows.append(metric)
+            if args.compute_cam_metrics:
+                resized = (
+                    resized_union
+                    if resized_union is not None
+                    else resize_map(cam, width, height)
+                )
+                pred_metrics = cam_metrics(
+                    resized, pred_box, list(all_gt_boxes) + [pred_box])
+                metric = {
+                    'model': model,
+                    'image_id': image_id,
+                    'prediction_rank': rank,
+                    'layer': layer,
+                    'prediction_category_name': row['prediction_category_name'],
+                    'prediction_score': row['prediction_score'],
+                    'best_gt_iou': row['best_gt_iou'],
+                    'matched': row['matched'],
+                    'class_correct': row['class_correct'],
+                    'tp_at_match_iou': row['tp_at_match_iou'],
+                    'matched_category_name': row.get('matched_category_name'),
+                    'target_logit': row['target_logit'],
+                    'target_probability_recomputed': row['target_probability_recomputed'],
+                    **{f'prediction_box_{key}': value for key, value in pred_metrics.items()},
+                }
+                if bool(row['matched']) and gt_box is not None:
+                    gt_metrics = cam_metrics(
+                        resized, gt_box, all_gt_boxes)
+                    metric.update({
+                        f'matched_gt_{key}': value for key, value in gt_metrics.items()
+                    })
+                metric_rows.append(metric)
         print(
             f'[{position}/{len(records)}] {model} image={image_id} pred={rank}',
             flush=True)
 
     write_tsv(out_dir / 'normalization_scales.tsv', normalization_rows)
-    write_tsv(out_dir / 'metrics' / 'prediction_layer_metrics.tsv', metric_rows)
+    if metric_rows:
+        write_tsv(
+            out_dir / 'metrics' / 'prediction_layer_metrics.tsv',
+            metric_rows,
+        )
 
     # One image-level map per model/layer: pixelwise maximum across predictions.
     union_paths: Dict[Tuple[str, int, str, str], Path] = {}
     union_source_paths: Dict[int, str] = {}
+    cached_union_image_id = None
+    cached_union_image = None
     for key, values in rendered_for_union.items():
         strategy, image_id, model, layer = key
-        raw_union = np.maximum.reduce([item[0] for item in values])
-        sample_row = values[0][1]
+        raw_union, union_rows = values
+        sample_row = union_rows[0]
         union_source_paths[image_id] = str(sample_row['image_path'])
-        image = load_rgb(sample_row['image_path'])
+        if cached_union_image_id != image_id:
+            cached_union_image = load_rgb(sample_row['image_path'])
+            cached_union_image_id = image_id
+        image = cached_union_image
         if strategy == 'independent_p1_p99':
             low, high = finite_percentiles(
                 raw_union, args.low_percentile, args.high_percentile)
@@ -264,7 +302,7 @@ def main() -> None:
             low, high = reference_ranges[layer]
         heat = blue_yellow_rgb(normalize_with_limits(raw_union, low, high), args.gamma)
         overlay = overlay_heatmap(image, heat, args.overlay_alpha)
-        for _, row in values:
+        for row in union_rows:
             overlay = draw_box(
                 overlay,
                 row['bbox_xyxy_original'],
@@ -311,6 +349,7 @@ def main() -> None:
         'strategies': strategies,
         'prediction_layer_rows': len(metric_rows),
         'save_prediction_images': args.save_prediction_images,
+        'compute_cam_metrics': args.compute_cam_metrics,
         'panels': panel_count,
         'panels_5x4': panel_count,
         'panel_layout': (

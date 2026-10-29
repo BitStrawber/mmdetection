@@ -28,6 +28,7 @@ HIGH_PERCENTILE="${HIGH_PERCENTILE:-99}"
 DISPLAY_GAMMA="${DISPLAY_GAMMA:-1.0}"
 OVERLAY_ALPHA="${OVERLAY_ALPHA:-0.48}"
 PANEL_LIMIT="${PANEL_LIMIT:-0}"
+SAVE_PREDICTION_IMAGES="${SAVE_PREDICTION_IMAGES:-1}"
 DEVICES="${DEVICES:-cuda:0}"
 PARALLEL_MODELS="${PARALLEL_MODELS:-1}"
 RUN_EXTRACT="${RUN_EXTRACT:-1}"
@@ -149,6 +150,8 @@ if [[ "${RUN_RENDER}" == 1 ]]; then
         --overlay-alpha "${OVERLAY_ALPHA}"
         --panel-limit "${PANEL_LIMIT}"
     )
+    [[ "${SAVE_PREDICTION_IMAGES}" == 1 ]] || \
+        render_args+=(--no-save-prediction-images)
     [[ "${RESUME}" == 1 ]] && render_args+=(--overwrite)
     python "${SCRIPT_DIR}/render_prediction_xgradcam.py" \
         "${render_args[@]}" 2>&1 | tee "${LOG_ROOT}/render.log"
@@ -180,6 +183,7 @@ LEGACY_AGGREGATION=${LEGACY_AGGREGATION}
 LEGACY_STYLES=${LEGACY_STYLES}
 MODELS=${MODEL_CSV}
 LAYERS=${LAYERS}
+SAVE_PREDICTION_IMAGES=${SAVE_PREDICTION_IMAGES}
 EOF
 
 echo "Prediction XGradCAM complete: ${OUT_ROOT}"

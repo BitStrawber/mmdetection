@@ -15,6 +15,7 @@ SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.05}"
 MAX_PREDICTIONS_PER_IMAGE="${MAX_PREDICTIONS_PER_IMAGE:-30}"
 RESUME="${RESUME:-1}"
 CHECK_GPU_FREE="${CHECK_GPU_FREE:-1}"
+SAVE_PREDICTION_IMAGES="${SAVE_PREDICTION_IMAGES:-0}"
 
 GPU_RUOD_R50="${GPU_RUOD_R50:-cuda:4}"
 GPU_RUOD_VITS="${GPU_RUOD_VITS:-cuda:5}"
@@ -183,6 +184,7 @@ run_cam_background() {
         REFERENCE_MODEL="${reference}" \
         DEVICES="${device}" \
         PARALLEL_MODELS=1 \
+        SAVE_PREDICTION_IMAGES="${SAVE_PREDICTION_IMAGES}" \
         RESUME="${RESUME}" \
         bash "${RUNNER}" > "${log}" 2>&1 &
 
@@ -209,6 +211,7 @@ SEED=${SEED}
 RUOD_SAMPLE=${CAM_BASE}/samples/ruod_${SAMPLES}/manifest.jsonl
 UIIS_SAMPLE=${CAM_BASE}/samples/uiis10k_${SAMPLES}/manifest.jsonl
 OUTPUT=${CAM_BASE}/output
+SAVE_PREDICTION_IMAGES=${SAVE_PREDICTION_IMAGES}
 EOF
 
 echo "Prediction CAM jobs launched: ${CAM_BASE}"

@@ -51,6 +51,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--overlay-alpha', type=float, default=0.48)
     parser.add_argument('--panel-limit', type=int, default=0)
     parser.add_argument('--png-compress-level', type=int, default=3)
+    parser.add_argument(
+        '--save-prediction-images',
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help='Save per-prediction heatmap/overlay/with_boxes images.')
     parser.add_argument('--overwrite', action='store_true')
     return parser.parse_args()
 
@@ -179,18 +184,19 @@ def main() -> None:
             if layer in reference_ranges:
                 bounds['imagenet_reference_dataset_p1_p99'] = reference_ranges[layer]
             for strategy, (low, high) in bounds.items():
-                heat, overlay, with_boxes = render_map(
-                    cam, image, pred_box, pred_label, gt_box,
-                    low, high, args.gamma, args.overlay_alpha)
-                save_rgb(output_path(
-                    out_dir, strategy, model, layer, image_id, rank, 'heatmap'),
-                    heat, args.png_compress_level)
-                save_rgb(output_path(
-                    out_dir, strategy, model, layer, image_id, rank, 'overlay'),
-                    overlay, args.png_compress_level)
-                save_rgb(output_path(
-                    out_dir, strategy, model, layer, image_id, rank, 'with_boxes'),
-                    with_boxes, args.png_compress_level)
+                if args.save_prediction_images:
+                    heat, overlay, with_boxes = render_map(
+                        cam, image, pred_box, pred_label, gt_box,
+                        low, high, args.gamma, args.overlay_alpha)
+                    save_rgb(output_path(
+                        out_dir, strategy, model, layer, image_id, rank, 'heatmap'),
+                        heat, args.png_compress_level)
+                    save_rgb(output_path(
+                        out_dir, strategy, model, layer, image_id, rank, 'overlay'),
+                        overlay, args.png_compress_level)
+                    save_rgb(output_path(
+                        out_dir, strategy, model, layer, image_id, rank, 'with_boxes'),
+                        with_boxes, args.png_compress_level)
                 normalization_rows.append({
                     'strategy': strategy,
                     'model': model,
@@ -304,6 +310,7 @@ def main() -> None:
         'reference_model': args.reference_model or None,
         'strategies': strategies,
         'prediction_layer_rows': len(metric_rows),
+        'save_prediction_images': args.save_prediction_images,
         'panels': panel_count,
         'panels_5x4': panel_count,
         'panel_layout': (

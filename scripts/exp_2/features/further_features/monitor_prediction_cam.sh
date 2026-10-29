@@ -14,6 +14,7 @@ echo
 for name in ruod_r50 ruod_vits uiis10k_r50 uiis10k_vits; do
     out="${CAM_BASE}/output/${name}"
     log="${CAM_BASE}/logs/${name}.runner.log"
+    render_log="${out}/logs/render.log"
     pid_file="${CAM_BASE}/logs/${name}.pid"
     pid=""
     if [[ -s "${pid_file}" ]]; then
@@ -30,6 +31,7 @@ for name in ruod_r50 ruod_vits uiis10k_r50 uiis10k_vits; do
     fi
 
     meta=0
+    unions=0
     panels=0
     if [[ -d "${out}/prediction_cam/raw_cam" ]]; then
         meta="$(
@@ -38,10 +40,23 @@ for name in ruod_r50 ruod_vits uiis10k_r50 uiis10k_vits; do
         )"
     fi
     if [[ -d "${out}/rendered" ]]; then
-        panels="$(find "${out}/rendered" -name '*.png' -type f | wc -l)"
+        unions="$(
+            find "${out}/rendered" \
+                -path '*/image_union/*.png' -type f | wc -l
+        )"
+        panels="$(
+            find "${out}/rendered" \
+                -path '*/panels_5x4/*.png' -type f | wc -l
+        )"
     fi
-    printf '%-16s %-18s predictions=%-6s panels=%s\n' \
-        "${name}" "${state}" "${meta}" "${panels}"
+    printf '%-16s %-18s predictions=%-6s unions=%-5s panels=%s\n' \
+        "${name}" "${state}" "${meta}" "${unions}" "${panels}"
+
+    if [[ -s "${render_log}" ]]; then
+        printf '  render: %s\n' "$(tail -n 1 "${render_log}")"
+    else
+        echo "  render: no render.log yet"
+    fi
 done
 
 echo

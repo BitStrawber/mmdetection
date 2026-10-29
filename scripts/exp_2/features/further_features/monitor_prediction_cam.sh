@@ -31,8 +31,11 @@ for name in ruod_r50 ruod_vits uiis10k_r50 uiis10k_vits; do
 
     meta=0
     panels=0
-    if [[ -d "${out}/raw" ]]; then
-        meta="$(find "${out}/raw" -name prediction.json -type f | wc -l)"
+    if [[ -d "${out}/prediction_cam/raw_cam" ]]; then
+        meta="$(
+            find "${out}/prediction_cam/raw_cam" \
+                -name prediction.json -type f | wc -l
+        )"
     fi
     if [[ -d "${out}/rendered" ]]; then
         panels="$(find "${out}/rendered" -name '*.png' -type f | wc -l)"

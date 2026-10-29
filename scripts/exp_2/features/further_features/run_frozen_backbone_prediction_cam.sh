@@ -11,12 +11,15 @@ RUOD_ROOT="${RUOD_ROOT:-/media/HDD0/XCX/exp_2_data/exp_2/RUOD/coco}"
 UIIS_ROOT="${UIIS_ROOT:-/media/HDD0/XCX/exp_2_data/exp_2/UIIS10K/coco}"
 SAMPLES="${SAMPLES:-100}"
 SEED="${SEED:-2026}"
-DEVICES="${DEVICES:-cuda:4,cuda:5,cuda:6}"
-PARALLEL_MODELS="${PARALLEL_MODELS:-3}"
 SCORE_THRESHOLD="${SCORE_THRESHOLD:-0.05}"
 MAX_PREDICTIONS_PER_IMAGE="${MAX_PREDICTIONS_PER_IMAGE:-30}"
 RESUME="${RESUME:-1}"
 CHECK_GPU_FREE="${CHECK_GPU_FREE:-1}"
+
+GPU_RUOD_R50="${GPU_RUOD_R50:-cuda:4}"
+GPU_RUOD_VITS="${GPU_RUOD_VITS:-cuda:5}"
+GPU_UIIS_R50="${GPU_UIIS_R50:-cuda:6}"
+GPU_UIIS_VITS="${GPU_UIIS_VITS:-cuda:7}"
 
 RUNNER="${SCRIPT_DIR}/run_prediction_xgradcam_analysis.sh"
 SAMPLER="${SCRIPT_DIR}/sample_fixed_gt_ruod.py"
@@ -42,8 +45,9 @@ SAMPLER="${SCRIPT_DIR}/sample_fixed_gt_ruod.py"
     exit 1
 }
 
+GPU_DEVICES="${GPU_RUOD_R50},${GPU_RUOD_VITS},${GPU_UIIS_R50},${GPU_UIIS_VITS}"
 if [[ "${CHECK_GPU_FREE}" == 1 ]]; then
-    for device in ${DEVICES//,/ }; do
+    for device in ${GPU_DEVICES//,/ }; do
         gpu_id="${device#cuda:}"
         used_mib="$(
             nvidia-smi -i "${gpu_id}" \
@@ -135,23 +139,24 @@ for dataset in ("ruod", "uiis10k"):
         print(f"MODEL_CONFIG={output}")
 PY
 
-run_cam() {
+run_cam_background() {
     local dataset="$1"
     local arch="$2"
     local layer="$3"
     local data_root="$4"
-    local reference="$5"
+    local device="$5"
+    local reference="$6"
+    local name="${dataset}_${arch}"
+    local log="${CAM_BASE}/logs/${name}.runner.log"
 
-    echo "============================================================"
-    echo "START dataset=${dataset} arch=${arch} layer=${layer}"
-    echo "============================================================"
+    echo "START dataset=${dataset} arch=${arch} layer=${layer} gpu=${device}"
 
-    env \
+    nohup env \
         RUOD_ROOT="${data_root}" \
         RUOD_ANN="${data_root}/annotations/instances_val.json" \
         SAMPLE_ROOT="${CAM_BASE}/samples/${dataset}_${SAMPLES}" \
         MODELS_CONFIG="${CAM_BASE}/configs/models.${dataset}.${arch}.json" \
-        OUT_ROOT="${CAM_BASE}/output/${dataset}_${arch}" \
+        OUT_ROOT="${CAM_BASE}/output/${name}" \
         LAYERS="${layer}" \
         CASCADE_STAGE=-1 \
         SCORE_THRESHOLD="${SCORE_THRESHOLD}" \
@@ -161,19 +166,27 @@ run_cam() {
         MATCH_IOU_THRESHOLD=0.50 \
         TARGET_MODE=bbox \
         REFERENCE_MODEL="${reference}" \
-        DEVICES="${DEVICES}" \
-        PARALLEL_MODELS="${PARALLEL_MODELS}" \
+        DEVICES="${device}" \
+        PARALLEL_MODELS=1 \
         RESUME="${RESUME}" \
-        bash "${RUNNER}"
+        bash "${RUNNER}" > "${log}" 2>&1 &
+
+    local pid=$!
+    echo "${pid}" > "${CAM_BASE}/logs/${name}.pid"
+    echo "PID=${pid} log=${log}"
 }
 
-run_cam ruod r50 res4 "${RUOD_ROOT}" ruod_imagenet_r50
-run_cam ruod vits block12 "${RUOD_ROOT}" ruod_imagenet_vits
-run_cam uiis10k r50 res4 "${UIIS_ROOT}" uiis10k_imagenet_r50
-run_cam uiis10k vits block12 "${UIIS_ROOT}" uiis10k_imagenet_vits
+run_cam_background ruod r50 res4 "${RUOD_ROOT}" \
+    "${GPU_RUOD_R50}" ruod_imagenet_r50
+run_cam_background ruod vits block12 "${RUOD_ROOT}" \
+    "${GPU_RUOD_VITS}" ruod_imagenet_vits
+run_cam_background uiis10k r50 res4 "${UIIS_ROOT}" \
+    "${GPU_UIIS_R50}" uiis10k_imagenet_r50
+run_cam_background uiis10k vits block12 "${UIIS_ROOT}" \
+    "${GPU_UIIS_VITS}" uiis10k_imagenet_vits
 
-cat > "${CAM_BASE}/COMPLETE.env" <<EOF
-STATUS=complete
+cat > "${CAM_BASE}/RUN.env" <<EOF
+STATUS=running
 METHOD=prediction_conditioned_xgradcam
 TRAINING_ROOT=${OUTPUT_ROOT}
 SAMPLES=${SAMPLES}
@@ -183,4 +196,6 @@ UIIS_SAMPLE=${CAM_BASE}/samples/uiis10k_${SAMPLES}/manifest.jsonl
 OUTPUT=${CAM_BASE}/output
 EOF
 
-echo "Prediction CAM matrix complete: ${CAM_BASE}"
+echo "Prediction CAM jobs launched: ${CAM_BASE}"
+echo "Monitor with:"
+echo "  bash ${SCRIPT_DIR}/monitor_prediction_cam.sh ${CAM_BASE}"

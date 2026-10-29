@@ -53,7 +53,21 @@ for name in ruod_r50 ruod_vits uiis10k_r50 uiis10k_vits; do
         "${name}" "${state}" "${meta}" "${unions}" "${panels}"
 
     if [[ -s "${render_log}" ]]; then
-        printf '  render: %s\n' "$(tail -n 1 "${render_log}")"
+        render_last="$(tail -n 1 "${render_log}")"
+        if [[ "${render_last}" =~ ^\[([0-9]+)/([0-9]+)\] ]]; then
+            render_current="${BASH_REMATCH[1]}"
+            render_total="${BASH_REMATCH[2]}"
+            render_percent="$(
+                awk -v current="${render_current}" \
+                    -v total="${render_total}" \
+                    'BEGIN { printf "%.2f", 100 * current / total }'
+            )"
+            printf '  render: %s/%s (%s%%) %s\n' \
+                "${render_current}" "${render_total}" \
+                "${render_percent}" "${render_last}"
+        else
+            printf '  render: %s\n' "${render_last}"
+        fi
     else
         echo "  render: no render.log yet"
     fi

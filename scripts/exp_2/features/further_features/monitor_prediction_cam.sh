@@ -29,8 +29,14 @@ for name in ruod_r50 ruod_vits uiis10k_r50 uiis10k_vits; do
         state="STOPPED_OR_FAILED"
     fi
 
-    meta="$(find "${out}/raw" -name prediction.json -type f 2>/dev/null | wc -l)"
-    panels="$(find "${out}/rendered" -name '*.png' -type f 2>/dev/null | wc -l)"
+    meta=0
+    panels=0
+    if [[ -d "${out}/raw" ]]; then
+        meta="$(find "${out}/raw" -name prediction.json -type f | wc -l)"
+    fi
+    if [[ -d "${out}/rendered" ]]; then
+        panels="$(find "${out}/rendered" -name '*.png' -type f | wc -l)"
+    fi
     printf '%-16s %-18s predictions=%-6s panels=%s\n' \
         "${name}" "${state}" "${meta}" "${panels}"
 done

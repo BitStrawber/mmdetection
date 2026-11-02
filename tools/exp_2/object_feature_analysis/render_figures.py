@@ -285,10 +285,21 @@ def main() -> None:
         )
         for category in classes
     ]
+    legend_columns = 5
+    legend_rows = [
+        handles[index:index + legend_columns]
+        for index in range(0, len(handles), legend_columns)
+    ]
+    handles = [
+        legend_rows[row][column]
+        for column in range(legend_columns)
+        for row in range(len(legend_rows))
+        if column < len(legend_rows[row])
+    ]
     fig.legend(
         handles=handles,
         loc="upper center",
-        ncol=5,
+        ncol=legend_columns,
         frameon=False,
         bbox_to_anchor=(0.5, 0.985),
         columnspacing=1.0,

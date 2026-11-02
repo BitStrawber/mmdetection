@@ -282,7 +282,7 @@ def extract_model(
     debug_samples: int,
 ) -> None:
     import torch
-    from mmdet.datasets.transforms import Compose
+    from mmengine.dataset import Compose
     from torchvision.ops import roi_align
     from ..backbone_analysis.model_adapter import load_model
 

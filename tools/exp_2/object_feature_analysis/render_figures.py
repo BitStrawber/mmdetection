@@ -13,6 +13,25 @@ from .feature_io import assert_aligned_bundles, load_feature_bundle
 from .metrics import l2_normalize
 
 
+BACKBONE_LABELS = {
+    "resnet50": "ResNet-50",
+    "vit_small": "ViT-S",
+}
+
+CATEGORY_COLORS = (
+    "#3B6EA8",
+    "#C58A32",
+    "#4E8F5B",
+    "#B84A4A",
+    "#7657A6",
+    "#8B6B52",
+    "#C45D93",
+    "#6B6F76",
+    "#A7A33A",
+    "#3B9EA6",
+)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Render object-level t-SNE panels from saved feature bundles."
@@ -174,20 +193,31 @@ def main() -> None:
             bundles[model_id],
         )
 
+    figure_options = config.get("figure", {})
     fig, axes = plt.subplots(
         len(backbones),
         len(sources),
         figsize=(
-            float(config.get("figure", {}).get("width", 12.0)),
-            float(config.get("figure", {}).get("height", 7.2)),
+            max(12.0, float(figure_options.get("width", 12.0))),
+            max(8.0, float(figure_options.get("height", 7.2))),
         ),
         squeeze=False,
-        constrained_layout=True,
+        constrained_layout=False,
+    )
+    fig.subplots_adjust(
+        left=0.025,
+        right=0.985,
+        bottom=0.065,
+        top=0.825,
+        wspace=0.08,
+        hspace=0.24,
     )
     labels = np.asarray(next(iter(bundles.values()))["labels"], dtype=np.int64)
     classes = sorted(np.unique(labels).tolist())
-    color_map = plt.get_cmap("tab10")
-    colors = {category: color_map(index % 10) for index, category in enumerate(classes)}
+    colors = {
+        category: CATEGORY_COLORS[index % len(CATEGORY_COLORS)]
+        for index, category in enumerate(classes)
+    }
     for row_index, backbone in enumerate(backbones):
         for column_index, source in enumerate(sources):
             axis = axes[row_index, column_index]
@@ -200,15 +230,30 @@ def main() -> None:
                 axis.scatter(
                     points[mask, 0],
                     points[mask, 1],
-                    s=float(config.get("figure", {}).get("point_size", 7.0)),
-                    alpha=float(config.get("figure", {}).get("point_alpha", 0.72)),
+                    s=float(figure_options.get("point_size", 7.0)),
+                    alpha=float(figure_options.get("point_alpha", 0.72)),
                     c=[colors[category]],
                     label=label,
                     linewidths=0,
                 )
             axis.set_xticks([])
             axis.set_yticks([])
-            axis.set_title(f"{backbone} / {source}", fontsize=10)
+            axis.set_title(
+                f"{BACKBONE_LABELS.get(backbone, backbone)} / {source}",
+                fontsize=10,
+                pad=8,
+            )
+            panel_index = row_index * len(sources) + column_index
+            axis.text(
+                -0.035,
+                1.025,
+                f"({chr(ord('a') + panel_index)})",
+                transform=axis.transAxes,
+                ha="left",
+                va="bottom",
+                fontsize=10,
+                fontweight="bold",
+            )
             metric = metrics[model_id]
             fdr_text = f"FDR={metric['fdr']:.3f}"
             if np.isfinite(metric["fdr_ci_low"]):
@@ -217,8 +262,8 @@ def main() -> None:
                     f"{metric['fdr_ci_high']:.3f}]"
                 )
             axis.text(
-                0.0,
-                -0.05,
+                0.02,
+                -0.045,
                 f"{fdr_text}   Macro-F1={metric['macro_f1']:.3f}",
                 transform=axis.transAxes,
                 ha="left",
@@ -243,15 +288,17 @@ def main() -> None:
     fig.legend(
         handles=handles,
         loc="upper center",
-        ncol=min(len(classes), 5),
+        ncol=5,
         frameon=False,
-        bbox_to_anchor=(0.5, 1.02),
+        bbox_to_anchor=(0.5, 0.985),
+        columnspacing=1.0,
+        handletextpad=0.45,
     )
-    stem = out_dir / str(config.get("figure", {}).get("stem", "object_feature_tsne"))
+    stem = out_dir / str(figure_options.get("stem", "object_feature_tsne"))
     for suffix in ("png", "pdf", "svg"):
         fig.savefig(
             stem.with_suffix(f".{suffix}"),
-            dpi=int(config.get("figure", {}).get("dpi", 300)),
+            dpi=int(figure_options.get("dpi", 300)),
             bbox_inches="tight",
         )
     plt.close(fig)

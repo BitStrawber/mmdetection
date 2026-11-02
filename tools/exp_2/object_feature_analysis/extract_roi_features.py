@@ -258,6 +258,7 @@ def _write_mapping_rows(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
         "roi_columns",
         "roi_mean_abs",
         "network_box_clip_overshoot",
+        "pipeline_box_max_error",
     )
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
@@ -393,16 +394,32 @@ def extract_model(
                 metainfo.get("pad_shape", metainfo.get("batch_input_shape")),
                 img_shape,
             )
-            network_boxes = _tensor_boxes(sample.gt_instances.bboxes).float()
-            if int(network_boxes.shape[0]) != len(image_rows):
+            pipeline_boxes = _tensor_boxes(sample.gt_instances.bboxes).float()
+            if int(pipeline_boxes.shape[0]) != len(image_rows):
                 raise RuntimeError(
                     f"{model_id}: transformed box count differs from manifest"
                 )
+            pipeline_network_numpy = pipeline_boxes.detach().cpu().numpy()
+            source_shape = (
+                int(image_rows[0][1]["image_height"]),
+                int(image_rows[0][1]["image_width"]),
+            )
+            manifest_boxes = np.asarray(
+                [row["bbox_xyxy"] for _, row in image_rows], dtype=np.float64
+            )
+            resized_boxes = project_boxes_to_feature(
+                manifest_boxes,
+                source_shape,
+                img_shape,
+            )
             network_numpy, network_clip_overshoot = clip_boxes_to_image(
-                network_boxes.detach().cpu().numpy(),
+                resized_boxes,
                 img_shape[0],
                 img_shape[1],
                 max_overshoot=box_clip_tolerance,
+            )
+            pipeline_box_max_error = float(
+                np.max(np.abs(pipeline_network_numpy - network_numpy))
             )
             validate_boxes(network_numpy, img_shape[0], img_shape[1])
 
@@ -478,6 +495,7 @@ def extract_model(
                             "roi_columns": output_size[1],
                             "roi_mean_abs": float(np.abs(pooled[local_index]).mean()),
                             "network_box_clip_overshoot": network_clip_overshoot,
+                            "pipeline_box_max_error": pipeline_box_max_error,
                         }
                     )
                     if manifest_index in debug_rows:

@@ -338,6 +338,8 @@ def extract_model(
         "config_sha256": file_sha256(spec["config"]),
         "checkpoint": str(spec["checkpoint"]),
         "feature_layout": feature_layout,
+        "box_coordinate_source": "manifest bbox_xyxy resized to img_shape",
+        "pipeline_box_role": "audit_only",
         "roi_align": {
             "output_size": list(output_size),
             "sampling_ratio": sampling_ratio,

@@ -85,6 +85,12 @@ qa/<model_id>/<layer>/<instance_index>.png
 Every mapping record includes the resized-image box, projected feature box,
 round-trip error, feature dimensions, and ROI statistics.
 
+ROI coordinates are derived deterministically from the manifest `bbox_xyxy`
+and the network `img_shape`. Bounding boxes returned by the MMDetection test
+pipeline are recorded as `pipeline_box_max_error` for audit only; this avoids
+using untransformed boxes when a detector config has a nonstandard test
+pipeline.
+
 The deterministic mapping smoke test runs without torch:
 
 ```bash

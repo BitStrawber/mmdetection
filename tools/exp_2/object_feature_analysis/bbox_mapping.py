@@ -26,6 +26,33 @@ def validate_boxes(
         raise ValueError("Box y2 exceeds the network input height")
 
 
+def clip_boxes_to_image(
+    boxes: np.ndarray,
+    image_height: int,
+    image_width: int,
+    max_overshoot: float = 2.0,
+) -> tuple[np.ndarray, float]:
+    values = np.asarray(boxes, dtype=np.float64).copy()
+    if values.ndim != 2 or values.shape[1] != 4:
+        raise ValueError(f"Expected N x 4 xyxy boxes, got {values.shape}")
+    if not np.isfinite(values).all():
+        raise ValueError("Boxes contain NaN or Inf")
+    overshoot = max(
+        0.0,
+        float(np.max(-values[:, [0, 1]], initial=0.0)),
+        float(np.max(values[:, [2]] - image_width, initial=0.0)),
+        float(np.max(values[:, [3]] - image_height, initial=0.0)),
+    )
+    if overshoot > float(max_overshoot):
+        raise ValueError(
+            f"Box overshoot {overshoot:.4f} exceeds tolerance {max_overshoot}"
+        )
+    values[:, [0, 2]] = np.clip(values[:, [0, 2]], 0.0, image_width)
+    values[:, [1, 3]] = np.clip(values[:, [1, 3]], 0.0, image_height)
+    validate_boxes(values, image_height, image_width)
+    return values, overshoot
+
+
 def project_boxes_to_feature(
     boxes: np.ndarray,
     image_hw: Sequence[int],

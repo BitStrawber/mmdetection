@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 from tools.exp_2.object_feature_analysis.bbox_mapping import (
+    clip_boxes_to_image,
     coordinate_feature_map,
     normalized_box_centers,
     project_boxes_to_feature,
@@ -12,6 +13,25 @@ from tools.exp_2.object_feature_analysis.bbox_mapping import (
 
 
 class BboxMappingTests(unittest.TestCase):
+    def test_small_boundary_overshoot_is_clipped(self):
+        boxes, overshoot = clip_boxes_to_image(
+            np.asarray([[10.0, 5.0, 1001.0, 501.0]]),
+            500,
+            1000,
+            max_overshoot=2.0,
+        )
+        np.testing.assert_allclose(boxes, [[10.0, 5.0, 1000.0, 500.0]])
+        self.assertEqual(overshoot, 1.0)
+
+    def test_large_boundary_overshoot_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "exceeds tolerance"):
+            clip_boxes_to_image(
+                np.asarray([[10.0, 5.0, 1010.0, 500.0]]),
+                500,
+                1000,
+                max_overshoot=2.0,
+            )
+
     def test_projection_and_roundtrip(self):
         boxes = np.asarray(
             [[0.0, 0.0, 250.0, 125.0], [100.0, 50.0, 900.0, 450.0]]

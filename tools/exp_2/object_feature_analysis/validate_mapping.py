@@ -59,7 +59,7 @@ def render_mapping_debug(
     )
 
     heatmap = _normalize_heatmap(feature_heatmap)
-    feature_image = Image.fromarray(heatmap, mode="L").convert("RGB")
+    feature_image = Image.fromarray(heatmap).convert("RGB")
     feature_image = feature_image.resize(
         (max(canvas.width, 64), max(canvas.height, 64)),
         resample=Image.Resampling.NEAREST,

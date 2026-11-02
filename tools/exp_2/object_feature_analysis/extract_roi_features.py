@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 import numpy as np
 
 from .bbox_mapping import (
+    clip_boxes_to_image,
     project_boxes_to_feature,
     roundtrip_error,
     validate_boxes,
@@ -256,6 +257,7 @@ def _write_mapping_rows(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
         "roi_rows",
         "roi_columns",
         "roi_mean_abs",
+        "network_box_clip_overshoot",
     )
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, delimiter="\t")
@@ -323,6 +325,7 @@ def extract_model(
     output_size = tuple(int(value) for value in roi_options.get("output_size", [7, 7]))
     sampling_ratio = int(roi_options.get("sampling_ratio", 2))
     aligned = bool(roi_options.get("aligned", True))
+    box_clip_tolerance = float(roi_options.get("box_clip_tolerance", 2.0))
 
     per_layer: Dict[str, List[Any]] = {layer: [None] * len(manifest_rows) for layer in layers}
     mapping_rows: List[Dict[str, Any]] = []
@@ -338,6 +341,7 @@ def extract_model(
             "output_size": list(output_size),
             "sampling_ratio": sampling_ratio,
             "aligned": aligned,
+            "box_clip_tolerance": box_clip_tolerance,
         },
         "model_load_report": loaded.load_report,
         "layers": layers,
@@ -394,7 +398,12 @@ def extract_model(
                 raise RuntimeError(
                     f"{model_id}: transformed box count differs from manifest"
                 )
-            network_numpy = network_boxes.detach().cpu().numpy()
+            network_numpy, network_clip_overshoot = clip_boxes_to_image(
+                network_boxes.detach().cpu().numpy(),
+                img_shape[0],
+                img_shape[1],
+                max_overshoot=box_clip_tolerance,
+            )
             validate_boxes(network_numpy, img_shape[0], img_shape[1])
 
             for layer_id in layers:
@@ -468,6 +477,7 @@ def extract_model(
                             "roi_rows": output_size[0],
                             "roi_columns": output_size[1],
                             "roi_mean_abs": float(np.abs(pooled[local_index]).mean()),
+                            "network_box_clip_overshoot": network_clip_overshoot,
                         }
                     )
                     if manifest_index in debug_rows:

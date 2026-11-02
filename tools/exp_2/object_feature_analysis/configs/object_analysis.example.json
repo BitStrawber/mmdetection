@@ -148,7 +148,8 @@
   "roi_align": {
     "output_size": [7, 7],
     "sampling_ratio": 2,
-    "aligned": true
+    "aligned": true,
+    "box_clip_tolerance": 2.0
   },
   "analysis": {
     "main_layers": {

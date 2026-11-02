@@ -347,7 +347,13 @@ def extract_model(
                     ],
                 }
             )
-            batch = loaded.model.data_preprocessor(packed, training=False)
+            batch = loaded.model.data_preprocessor(
+                {
+                    "inputs": [packed["inputs"]],
+                    "data_samples": [packed["data_samples"]],
+                },
+                training=False,
+            )
             samples = batch["data_samples"]
             with torch.no_grad():
                 _call_extract_feat(loaded.model, batch["inputs"], samples)

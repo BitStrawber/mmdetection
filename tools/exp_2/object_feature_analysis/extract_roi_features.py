@@ -418,14 +418,9 @@ def extract_model(
                 boxes_tensor = torch.as_tensor(
                     feature_boxes, dtype=feature_tensor.dtype, device=feature_tensor.device
                 )
-                batch_index = torch.zeros(
-                    (boxes_tensor.shape[0], 1),
-                    dtype=boxes_tensor.dtype,
-                    device=boxes_tensor.device,
-                )
                 roi = roi_align(
                     feature_tensor,
-                    [torch.cat([batch_index, boxes_tensor], dim=1)],
+                    [boxes_tensor],
                     output_size=output_size,
                     spatial_scale=1.0,
                     sampling_ratio=sampling_ratio,

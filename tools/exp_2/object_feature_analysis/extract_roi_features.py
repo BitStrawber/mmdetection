@@ -138,6 +138,29 @@ def _infer_token_grid(
     return best[1], best[2]
 
 
+def _resolve_token_grid(
+    token_count: int,
+    pad_shape: Sequence[int],
+    patch_size: int,
+    drop_tokens: int,
+) -> tuple[int, int, int]:
+    candidate_h = int(math.ceil(int(pad_shape[0]) / float(patch_size)))
+    candidate_w = int(math.ceil(int(pad_shape[1]) / float(patch_size)))
+    expected_count = candidate_h * candidate_w
+    if token_count == expected_count:
+        return candidate_h, candidate_w, 0
+    if drop_tokens and token_count - drop_tokens == expected_count:
+        return candidate_h, candidate_w, drop_tokens
+    accepted = [count for count in (token_count, token_count - drop_tokens) if count > 0]
+    for count in accepted:
+        grid_h, grid_w = _infer_token_grid(count, pad_shape, patch_size)
+        if grid_h * grid_w == count:
+            return grid_h, grid_w, token_count - count
+    raise ValueError(
+        f"Cannot map {token_count} tokens to a patch grid for pad_shape={tuple(pad_shape)}"
+    )
+
+
 def _feature_to_chw(
     value: Any,
     layout: str,
@@ -154,12 +177,12 @@ def _feature_to_chw(
     if output_kind == "patch_tokens" or (
         output_kind == "auto" and tensor.ndim == 2
     ):
-        if drop_tokens:
-            if int(tensor.shape[0]) <= drop_tokens:
-                raise ValueError("Feature token tensor is too small after dropping tokens")
-            tensor = tensor[drop_tokens:]
         token_count, channels = int(tensor.shape[0]), int(tensor.shape[1])
-        grid_h, grid_w = _infer_token_grid(token_count, pad_shape, patch_size)
+        grid_h, grid_w, tokens_to_drop = _resolve_token_grid(
+            token_count, pad_shape, patch_size, drop_tokens
+        )
+        if tokens_to_drop:
+            tensor = tensor[tokens_to_drop:]
         return tensor.reshape(grid_h, grid_w, channels).permute(2, 0, 1).contiguous()
     if layout == "channels_last":
         if tensor.ndim != 3:

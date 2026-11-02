@@ -3,6 +3,7 @@ import unittest
 from tools.exp_2.object_feature_analysis.sampling import (
     allocate_quota,
     select_balanced_instances,
+    summarize_manifest,
 )
 
 
@@ -40,6 +41,26 @@ class SamplingTests(unittest.TestCase):
             self.assertEqual(
                 sum(row["category_id"] == category for row in first), 12
             )
+
+    def test_summary_keeps_split_image_groups_distinct(self):
+        rows = [
+            {
+                "category_id": 1,
+                "image_id": 10,
+                "split": "train",
+                "size_bin": 0,
+            },
+            {
+                "category_id": 2,
+                "image_id": 10,
+                "split": "val",
+                "size_bin": 1,
+            },
+        ]
+        summary = summarize_manifest(rows, {1: "a", 2: "b"}, [0.1, 0.2, 0.3])
+        self.assertEqual(summary["image_id_values"], 1)
+        self.assertEqual(summary["split_image_groups"], 2)
+        self.assertEqual(summary["images"], 2)
 
 
 if __name__ == "__main__":

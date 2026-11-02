@@ -215,10 +215,15 @@ def summarize_manifest(
     category_counts = Counter(int(row["category_id"]) for row in rows)
     split_counts = Counter(str(row["split"]) for row in rows)
     size_counts = Counter(int(row["size_bin"]) for row in rows)
-    image_count = len({int(row["image_id"]) for row in rows})
+    image_id_values = len({int(row["image_id"]) for row in rows})
+    split_image_groups = len(
+        {(str(row["split"]), int(row["image_id"])) for row in rows}
+    )
     return {
         "instances": len(rows),
-        "images": image_count,
+        "images": split_image_groups,
+        "image_id_values": image_id_values,
+        "split_image_groups": split_image_groups,
         "category_counts": {
             str(category): category_counts[category] for category in sorted(category_counts)
         },

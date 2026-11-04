@@ -150,21 +150,26 @@ if [[ "${RUN_PREPARE}" == 1 ]]; then
 fi
 
 if [[ "${RUN_TRAIN}" == 1 ]]; then
-    # R50 jobs are intentionally serial; each job uses both GPUs in R50_GPUS.
-    run_train_job ruod_dfui_r50 "${R50_GPUS}" 29510
-    run_train_job uiis10k_sfui_r50 "${R50_GPUS}" 29511
+    run_r50_serial() {
+        # Both R50 jobs use the same GPU pair and are intentionally serial.
+        run_train_job ruod_dfui_r50 "${R50_GPUS}" 29510
+        run_train_job uiis10k_sfui_r50 "${R50_GPUS}" 29511
+    }
 
-    # ViT jobs run in parallel on independent GPU pairs.
+    # Start the R50 serial queue and both ViT jobs at the same time.
+    run_r50_serial &
+    r50_pid=$!
+
     run_train_job ruod_dfui_vits "${VITS_RUOD_GPUS}" 29512 &
     vit_ruod_pid=$!
     run_train_job uiis10k_sfui_vits "${VITS_UIIS_GPUS}" 29513 &
     vit_uiis_pid=$!
 
-    if ! wait "${vit_ruod_pid}"; then
-        kill "${vit_uiis_pid}" 2>/dev/null || true
-        exit 1
-    fi
-    if ! wait "${vit_uiis_pid}"; then
+    failed=0
+    wait "${r50_pid}" || failed=1
+    wait "${vit_ruod_pid}" || failed=1
+    wait "${vit_uiis_pid}" || failed=1
+    if [[ "${failed}" -ne 0 ]]; then
         exit 1
     fi
 fi

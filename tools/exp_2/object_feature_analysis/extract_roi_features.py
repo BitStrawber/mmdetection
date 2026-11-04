@@ -236,6 +236,7 @@ def _build_manifest_groups(
 
 
 def _write_mapping_rows(path: Path, rows: Sequence[Dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
     fields = (
         "model_id",
         "layer",

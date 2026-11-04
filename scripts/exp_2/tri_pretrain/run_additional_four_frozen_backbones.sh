@@ -22,10 +22,10 @@ R50_UIIS_CONFIG="${R50_UIIS_CONFIG:-configs/exp_2/mask-rcnn_r50_dino_fpn_2x_uiis
 VITS_RUOD_CONFIG="${VITS_RUOD_CONFIG:-configs/exp_2/tri_pretrain/cascade-rcnn_vit-small_dino_fpn_24e_ruod_control100k.py}"
 VITS_UIIS_CONFIG="${VITS_UIIS_CONFIG:-configs/exp_2/tri_pretrain/mask-rcnn_vit-small_dino_fpn_24e_uiis10k_control100k.py}"
 
-DFUI_R50="${DFUI_R50:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best/realuw_random_task_best/dfui_realuw_task/imagenet_r50/DFUI/weights/best_coco_bbox_mAP_epoch_38.pth}"
-SFUI_R50="${SFUI_R50:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best/realuw_random_task_best/sfui_realuw_random/imagenet_r50/SFUI/weights/best_coco_segm_mAP_epoch_38.pth}"
-SFUI_VITS="${SFUI_VITS:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best/realuw_random_task_best/sfui_realuw_random/imagenet_vits/SFUI/weights/best_coco_segm_mAP_epoch_40.pth}"
-DFUI_VITS="${DFUI_VITS:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best/realuw_random_task_best/dfui_realuw_random/imagenet_vits/DFUI/weights/best_coco_bbox_mAP_epoch_36.pth}"
+DFUI_R50="${DFUI_R50:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best_fuping/realuw_random_task_best/dfui_realuw_task/imagenet_r50/DFUI/weights/best_coco_bbox_mAP_epoch_38.pth}"
+SFUI_R50="${SFUI_R50:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best_fuping/realuw_random_task_best/sfui_realuw_random/imagenet_r50/SFUI/weights/best_coco_segm_mAP_epoch_38.pth}"
+SFUI_VITS="${SFUI_VITS:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best_fuping/realuw_random_task_best/sfui_realuw_random/imagenet_vits/SFUI/weights/best_coco_segm_mAP_epoch_40.pth}"
+DFUI_VITS="${DFUI_VITS:-/media/HDD2/XCX/exp_2/hf_downloads/realuw_selected_best_fuping/realuw_random_task_best/dfui_realuw_random/imagenet_vits/DFUI/weights/best_coco_bbox_mAP_epoch_36.pth}"
 
 RUN_PREPARE="${RUN_PREPARE:-1}"
 RUN_TRAIN="${RUN_TRAIN:-1}"

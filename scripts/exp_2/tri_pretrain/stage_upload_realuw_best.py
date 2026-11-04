@@ -219,7 +219,7 @@ def infer_stage(work_dir: Path, scope: Path) -> Optional[str]:
 
     if "dfui48e" in text or "det48e" in text or "cascade48e" in text:
         return "DFUI"
-    if "backbone_ruod" in text or "ruod24e_det" in text:
+    if "ruod24e" in text:
         return "RUOD"
     if "uiis" in text and "mask" in text:
         return "UIIS"

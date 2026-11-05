@@ -146,6 +146,24 @@ def scan_records(cam_root: Path, models: Sequence[str], layers: Sequence[str]):
     return records
 
 
+def scan_empty_prediction_images(cam_root: Path, models: Sequence[str]):
+    rows: List[Dict[str, Any]] = []
+    for model in models:
+        base = cam_root / 'raw_cam' / clean_name(model)
+        if not base.is_dir():
+            raise FileNotFoundError(f'Missing prediction CAM model directory: {base}')
+        for path in sorted(base.glob('image_*/image_predictions.json')):
+            row = read_json(path)
+            predictions = row.get('predictions', [])
+            if int(row.get('prediction_count', len(predictions))) == 0 or not predictions:
+                rows.append({
+                    'model': model,
+                    'image_id': int(row['image_id']),
+                    'image_path': str(row['image_path']),
+                })
+    return rows
+
+
 def render_map(
     cam: np.ndarray,
     image: np.ndarray,
@@ -215,6 +233,7 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     records = scan_records(cam_root, models, layers)
+    empty_images = scan_empty_prediction_images(cam_root, models)
     records.sort(key=lambda row: (
         int(row['image_id']), str(row['model']), int(row['prediction_rank'])))
     atomic_write_jsonl(cam_root / 'raw_cam_index.jsonl', records)
@@ -369,6 +388,25 @@ def main() -> None:
         print(
             f'[{position}/{len(records)}] {model} image={image_id} pred={rank}',
             flush=True)
+
+    for empty in empty_images:
+        image = load_rgb(empty['image_path'])
+        height, width = image.shape[:2]
+        zero = np.zeros((height, width), dtype=np.float32)
+        sample_row = {
+            'model': empty['model'],
+            'image_id': empty['image_id'],
+            'image_path': empty['image_path'],
+            'prediction_rank': -1,
+            'bbox_xyxy_original': [],
+            'prediction_category_name': '',
+            'prediction_score': 0.0,
+        }
+        for layer in layers:
+            for strategy in strategies:
+                key = (strategy, empty['image_id'], empty['model'], layer)
+                if key not in rendered_for_union:
+                    rendered_for_union[key] = (zero.copy(), [sample_row])
 
     write_tsv(out_dir / 'normalization_scales.tsv', normalization_rows)
     if metric_rows:
